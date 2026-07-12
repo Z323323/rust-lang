@@ -1,0 +1,198 @@
+---
+title: "Reference Cycles and Memory Leaks with Rc<T> in Rust"
+sidebarTitle: "Reference Cycles"
+description: "Avoid memory leaks from Rc<T> reference cycles using Weak<T>. Learn Rc::downgrade, weak reference counting, and tree structures with parent pointers."
+mode: "wide"
+---
+
+Rust's ownership system prevents most memory safety bugs, but it cannot prevent all memory leaks. When you combine `Rc<T>` and `RefCell<T>`, it's possible to create **reference cycles** — two or more values that each hold a strong reference to the other, so their reference counts never reach zero and their memory is never freed. `Weak<T>` breaks these cycles by holding a non-owning reference that doesn't prevent deallocation.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a Reference Cycle
+
+Here is a cons list where we create a cycle by having the tail of one list point back to another:
+
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+#[derive(Debug)]
+enum List {
+    Cons(i32, RefCell<Rc<List>>),
+    Nil,
+}
+
+impl List {
+    fn tail(&self) -> Option<&RefCell<Rc<List>>> {
+        match self {
+            List::Cons(_, item) => Some(item),
+            List::Nil => None,
+        }
+    }
+}
+
+fn main() {
+    let a = Rc::new(List::Cons(5, RefCell::new(Rc::new(List::Nil))));
+    println!("a initial rc count = {}", Rc::strong_count(&a));   // 1
+
+    let b = Rc::new(List::Cons(10, RefCell::new(Rc::clone(&a))));
+    println!("a rc count after b creation = {}", Rc::strong_count(&a)); // 2
+    println!("b initial rc count = {}", Rc::strong_count(&b));   // 1
+
+    // Make a's tail point to b → cycle!
+    if let Some(link) = a.tail() {
+        *link.borrow_mut() = Rc::clone(&b);
+    }
+
+    println!("b rc count after modifying a = {}", Rc::strong_count(&b)); // 2
+    println!("a rc count after modifying a = {}", Rc::strong_count(&a)); // 2
+
+    // a and b go out of scope here but their counts drop to 1, not 0 → LEAK
+}
+```
+
+When `main` ends:
+- `b` drops → `b`'s strong count: 2 → 1 (still held by `a`'s tail)
+- `a` drops → `a`'s strong count: 2 → 1 (still held by `b`'s tail)
+- Neither reaches 0 → memory is never freed → **leak**
+
+## Introducing `Weak<T>`
+
+`Weak<T>` is a reference-counted pointer that does **not** increment the strong count. It represents a "I want to observe this data if it still exists, but I don't own it" relationship.
+
+```rust
+use std::rc::{Rc, Weak};
+
+fn main() {
+    let strong = Rc::new(42);
+    let weak: Weak<i32> = Rc::downgrade(&strong);
+
+    println!("strong count: {}", Rc::strong_count(&strong)); // 1
+    println!("weak count:   {}", Rc::weak_count(&strong));   // 1
+
+    // Upgrade to access the value
+    if let Some(val) = weak.upgrade() {
+        println!("Value is still alive: {val}"); // 42
+    }
+
+    drop(strong);
+
+    // After the strong count reaches 0, upgrade returns None
+    match weak.upgrade() {
+        Some(_) => println!("Still alive"),
+        None    => println!("Value has been dropped"), // this prints
+    }
+}
+```
+
+`Rc::downgrade` creates a `Weak<T>` without incrementing the strong count. The data is freed when the strong count hits 0, regardless of how many `Weak` references exist. The `weak_count` tracks `Weak<T>` references only for bookkeeping; it doesn't affect deallocation.
+
+## The `upgrade()` Method
+
+Because the data behind a `Weak<T>` may have been freed, you cannot dereference it directly. Instead, call `.upgrade()`, which returns `Option<Rc<T>>`:
+
+```rust
+let weak_ref: Weak<String> = get_weak_ref();
+match weak_ref.upgrade() {
+    Some(rc) => println!("Data: {}", *rc),
+    None     => println!("Data was freed"),
+}
+```
+
+## Tree Structure: Parent → Child with `Weak` Back-Pointers
+
+A common real-world use of `Weak<T>` is a tree where children hold strong references to their children, but parents are referenced weakly to avoid cycles:
+
+```rust
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+#[derive(Debug)]
+struct Node {
+    value: i32,
+    parent: RefCell<Weak<Node>>,           // weak: won't prevent parent from dropping
+    children: RefCell<Vec<Rc<Node>>>,      // strong: children are owned by parent
+}
+
+fn main() {
+    let leaf = Rc::new(Node {
+        value: 3,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+
+    println!("leaf parent = {:?}", leaf.parent.borrow().upgrade());
+
+    let branch = Rc::new(Node {
+        value: 5,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![Rc::clone(&leaf)]),
+    });
+
+    // Set the leaf's parent to a weak reference to branch
+    *leaf.parent.borrow_mut() = Rc::downgrade(&branch);
+
+    println!("leaf parent value = {:?}",
+        leaf.parent.borrow().upgrade().map(|p| p.value));
+    // leaf parent value = Some(5)
+
+    println!("branch strong = {}, weak = {}",
+        Rc::strong_count(&branch),   // 1 (only `branch` variable)
+        Rc::weak_count(&branch));    // 1 (leaf's weak parent pointer)
+}
+```
+
+When `branch` is dropped:
+- `branch`'s strong count → 0 → `branch` node is freed.
+- `branch`'s `children` drops → `leaf`'s strong count → 0 → `leaf` node is freed.
+- No cycle; no leak.
+
+If `leaf.parent` were an `Rc` instead of a `Weak`, dropping `branch` wouldn't free it because `leaf` would still hold a strong reference.
+
+## `Weak::new()` — An Empty Weak
+
+`Weak::new()` creates a dangling `Weak<T>` (pointing to nothing). `weak.upgrade()` always returns `None`:
+
+```rust
+let empty: Weak<i32> = Weak::new();
+assert!(empty.upgrade().is_none());
+```
+
+Useful as a sentinel value when a node doesn't yet have a parent.
+
+## Visualizing the Counts
+
+For the tree example above, after setup:
+
+```
+branch:  strong=1, weak=1
+  ↑ weak ref from leaf.parent
+leaf:    strong=2, weak=0
+  (held by branch.children and the `leaf` variable)
+```
+
+After `drop(branch)`:
+
+```
+branch:  strong=0 → freed (along with children vec)
+leaf:    strong=1 (only `leaf` variable)
+  leaf.parent.upgrade() → None
+```
+
+After `drop(leaf)`:
+
+```
+leaf:    strong=0 → freed
+```
+
+No leak.
+
+## Summary
+
+- **Reference cycles** arise when `Rc<RefCell<T>>` nodes point to each other — strong counts never reach zero.
+- `Rc::downgrade(&rc)` creates a `Weak<T>` without incrementing the strong count.
+- `weak.upgrade()` returns `Option<Rc<T>>` — `None` if the data was already freed.
+- Use **strong references** (`Rc`) to express ownership; use **weak references** (`Weak`) for back-pointers or observing relationships.
+- The canonical pattern: tree children are `Rc`, parent back-pointers are `Weak`.
+- `Weak::new()` creates a null-like empty `Weak<T>`.

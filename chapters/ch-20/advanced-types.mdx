@@ -1,0 +1,250 @@
+---
+title: "Advanced Types in Rust: Newtypes, Aliases, Never, and DSTs"
+sidebarTitle: "Advanced Types"
+description: "Learn Rust's advanced type system features: the newtype pattern, type aliases with type, the never type !, and dynamically sized types with Sized."
+mode: "wide"
+---
+
+Rust's type system is rich with features that go beyond structs, enums, and generics. This chapter covers four important—and often misunderstood—aspects of the type system: the newtype pattern for type-level safety guarantees, `type` aliases for readability, the special `!` never type for diverging expressions, and dynamically sized types (DSTs) that don't have a compile-time-known size.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Newtype Pattern for Type Safety
+
+The newtype pattern wraps an existing type in a single-field tuple struct to create a *distinct* type at the type-system level. This prevents accidentally mixing up values that have the same underlying representation but different semantic meanings.
+
+```rust
+struct Metres(f64);
+struct Kilograms(f64);
+
+fn calculate_force(mass: Kilograms, acceleration: f64) -> f64 {
+    mass.0 * acceleration
+}
+
+fn main() {
+    let weight = Kilograms(70.0);
+    let distance = Metres(100.0);
+
+    // This compiles fine
+    let force = calculate_force(weight, 9.8);
+    println!("Force: {} N", force);
+
+    // This does NOT compile — Metres is not Kilograms
+    // let wrong = calculate_force(distance, 9.8);  // ← compile error
+}
+```
+
+The compiler catches the unit confusion at compile time rather than at runtime. At runtime, `Metres(f64)` and `Kilograms(f64)` are identical—there is zero overhead.
+
+### Newtype for Encapsulation
+
+Newtype also lets you expose a different API than the underlying type provides:
+
+```rust
+use std::collections::HashMap;
+
+pub struct PhoneBook(HashMap<String, String>);
+
+impl PhoneBook {
+    pub fn new() -> Self {
+        PhoneBook(HashMap::new())
+    }
+
+    pub fn add(&mut self, name: &str, number: &str) {
+        self.0.insert(name.to_string(), number.to_string());
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<&str> {
+        self.0.get(name).map(String::as_str)
+    }
+}
+
+fn main() {
+    let mut book = PhoneBook::new();
+    book.add("Alice", "555-1234");
+    book.add("Bob", "555-5678");
+
+    if let Some(num) = book.lookup("Alice") {
+        println!("Alice's number: {}", num);
+    }
+    // Users cannot call book.0.insert(...) — the HashMap is private
+}
+```
+
+---
+
+## Type Aliases with `type`
+
+A type alias creates a new *name* for an existing type, but unlike a newtype it does not create a new type—the alias and the original are interchangeable:
+
+```rust
+type Kilometres = i32;
+
+fn add_distances(a: Kilometres, b: Kilometres) -> Kilometres {
+    a + b
+}
+
+fn main() {
+    let x: i32 = 5;
+    let y: Kilometres = 10;
+
+    // Totally fine — Kilometres IS i32
+    println!("Sum: {}", add_distances(x, y));
+}
+```
+
+Because the alias doesn't create a distinct type, you lose the compile-time checking that newtype gives you. Type aliases are best used for **readability**, especially with long generic types:
+
+```rust
+// Without alias
+fn parse_and_map(
+    input: &str,
+    f: Box<dyn Fn(i64) -> Result<String, Box<dyn std::error::Error>>>,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    todo!()
+}
+
+// With aliases
+type ParseError = Box<dyn std::error::Error>;
+type ParseResult<T> = Result<T, ParseError>;
+type Transformer = Box<dyn Fn(i64) -> ParseResult<String>>;
+
+fn parse_and_map_clean(input: &str, f: Transformer) -> ParseResult<Vec<String>> {
+    todo!()
+}
+```
+
+The standard library uses `type Result<T> = Result<T, std::io::Error>` inside `std::io` for exactly this reason.
+
+---
+
+## The `!` Never Type
+
+The never type `!` is Rust's type for expressions that *never produce a value*. Functions that never return—because they always panic, loop forever, or terminate the process—are said to be *diverging functions* and have a return type of `!`.
+
+```rust
+fn forever() -> ! {
+    loop {
+        println!("still going...");
+    }
+}
+
+fn always_panic(msg: &str) -> ! {
+    panic!("{}", msg);
+}
+```
+
+### Why `!` Matters in `match` Arms
+
+The never type is coercible to any type. This is why you can write a `match` expression where one arm returns a value and another calls `panic!` or `continue`:
+
+```rust
+fn parse_positive(s: &str) -> u32 {
+    let n: u32 = match s.parse() {
+        Ok(num) => num,
+        // panic! has type !, which coerces to u32 — no type mismatch
+        Err(_) => panic!("'{}' is not a positive integer", s),
+    };
+    n
+}
+```
+
+The `continue` keyword also has type `!`, which is why this is valid:
+
+```rust
+fn first_even(numbers: &[i32]) -> Option<i32> {
+    for &n in numbers {
+        let _even = match n % 2 {
+            0 => n,
+            _ => continue,   // continue has type !, coerces to i32
+        };
+        return Some(n);
+    }
+    None
+}
+```
+
+The `!` type is also the return type of `std::process::exit` and the `todo!()` macro.
+
+---
+
+## Dynamically Sized Types (DSTs) and the `Sized` Trait
+
+Most Rust types have a size known at compile time—the compiler needs this to allocate stack frames and compute offsets. *Dynamically sized types* (DSTs) do not have a compile-time-known size. The two most common DSTs are:
+
+- **`str`** — a string slice whose length is only known at runtime
+- **`dyn Trait`** — a trait object whose concrete type is only known at runtime
+
+You cannot hold a DST directly on the stack. You must always use them behind a pointer: `&str`, `Box<str>`, `Arc<dyn Trait>`, etc. The pointer stores both the address *and* the size/vtable — it is a *fat pointer*.
+
+```rust
+fn print_length(s: &str) {           // &str is a fat pointer: (ptr, len)
+    println!("Length: {}", s.len());
+}
+
+fn main() {
+    let owned = String::from("hello");
+    let slice: &str = &owned;        // fat pointer, not a copy of the data
+    print_length(slice);
+}
+```
+
+### The `Sized` Trait
+
+Rust automatically implements the `Sized` trait for every type whose size is known at compile time. Every generic type parameter implicitly has a `Sized` bound:
+
+```rust
+// These are equivalent:
+fn generic<T>(t: T) {}
+fn generic_explicit<T: Sized>(t: T) {}
+```
+
+To write a function that accepts both sized and unsized types, use `?Sized`, which relaxes the implicit bound:
+
+```rust
+// T might or might not be Sized; we accept it behind a reference
+fn print_it<T: ?Sized + std::fmt::Debug>(val: &T) {
+    println!("{:?}", val);
+}
+
+fn main() {
+    print_it(&42);                              // T = i32  (Sized)
+    print_it("hello");                          // T = str  (not Sized)
+    print_it(&vec![1, 2, 3] as &dyn std::fmt::Debug); // T = dyn Debug (not Sized)
+}
+```
+
+### Box and DSTs
+
+`Box<T>` is the standard way to own a DST on the heap:
+
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Circle { radius: f64 }
+struct Rectangle { width: f64, height: f64 }
+
+impl Shape for Circle {
+    fn area(&self) -> f64 { std::f64::consts::PI * self.radius * self.radius }
+}
+impl Shape for Rectangle {
+    fn area(&self) -> f64 { self.width * self.height }
+}
+
+fn largest_shape(shapes: &[Box<dyn Shape>]) -> f64 {
+    shapes.iter().map(|s| s.area()).fold(0.0_f64, f64::max)
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Circle { radius: 3.0 }),
+        Box::new(Rectangle { width: 4.0, height: 5.0 }),
+        Box::new(Circle { radius: 1.5 }),
+    ];
+    println!("Largest area: {:.2}", largest_shape(&shapes)); // 28.27
+}
+```
+
+Understanding DSTs and `Sized` is essential when designing generic APIs that need to work with trait objects or slices, and explains many of the `T: ?Sized` bounds you will encounter in the standard library.

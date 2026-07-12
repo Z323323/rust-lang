@@ -1,0 +1,158 @@
+---
+title: "Installing Binary Crates from Crates.io with cargo install"
+sidebarTitle: "cargo install"
+description: "Install Rust binary tools from crates.io using cargo install. Binaries land in ~/.cargo/bin, making them available system-wide from the terminal."
+mode: "wide"
+---
+
+`cargo install` lets you install binary crates from crates.io — essentially using Cargo as a package manager for CLI tools written in Rust. The installed binaries land in `~/.cargo/bin`, which is added to your `PATH` by `rustup` during installation, making the tools immediately available anywhere in your terminal. This is how you install tools like `ripgrep`, `bat`, `fd`, `cargo-edit`, and many other beloved Rust-powered utilities.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Basic Usage
+
+```bash
+cargo install ripgrep
+```
+
+Cargo downloads the source from crates.io, compiles it with `--release` optimizations, and places the resulting binary in `~/.cargo/bin/rg`. You can then run `rg` directly:
+
+```bash
+rg "fn main" src/
+```
+
+### Installing a Specific Version
+
+```bash
+cargo install ripgrep --version 13.0.0
+```
+
+### Installing from a Git Repository
+
+```bash
+cargo install --git https://github.com/BurntSushi/ripgrep
+```
+
+### Installing from a Local Path
+
+During development of a CLI tool, test the installation flow locally:
+
+```bash
+cargo install --path .
+```
+
+## Where Binaries Are Installed
+
+By default, `cargo install` places binaries in:
+
+```
+~/.cargo/bin/
+```
+
+List all installed tools:
+
+```bash
+ls ~/.cargo/bin/
+```
+
+Or check a specific tool:
+
+```bash
+which rg
+# /home/alice/.cargo/bin/rg
+```
+
+If `~/.cargo/bin` is not in your `PATH`, add it to your shell's config file:
+
+```bash
+# ~/.bashrc or ~/.zshrc
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+## Popular Tools Installable via `cargo install`
+
+| Command | Description |
+|---------|-------------|
+| `cargo install ripgrep` | Ultra-fast `grep` replacement (`rg`) |
+| `cargo install bat` | `cat` with syntax highlighting |
+| `cargo install fd-find` | Fast `find` replacement (`fd`) |
+| `cargo install tokei` | Count lines of code by language |
+| `cargo install cargo-edit` | Add `cargo add`, `cargo rm`, `cargo upgrade` |
+| `cargo install cargo-watch` | Rerun commands on file changes |
+| `cargo install cargo-expand` | Expand macros to see generated code |
+| `cargo install just` | Command runner (alternative to Make) |
+| `cargo install hyperfine` | Command-line benchmarking tool |
+
+## Listing Installed Packages
+
+Cargo doesn't have a native `cargo list` command, but you can check `~/.cargo/.crates.toml`:
+
+```bash
+cat ~/.cargo/.crates.toml
+```
+
+This TOML file records every installed binary, its version, and the source it came from.
+
+## Updating Installed Tools
+
+Cargo does not yet have a built-in `cargo update` for installed binaries (as of Rust 1.75). The simplest approach is to reinstall:
+
+```bash
+cargo install ripgrep          # overwrites the existing installation
+```
+
+For managing updates across many tools, the community-maintained `cargo-update` crate adds a dedicated subcommand:
+
+```bash
+cargo install cargo-update
+cargo install-update -a        # update all installed binaries
+cargo install-update ripgrep   # update a specific binary
+```
+
+## Installing Multiple Binaries from One Crate
+
+Some crates publish multiple binaries. Use `--bin` to install a specific one:
+
+```bash
+cargo install my_multi_bin_crate --bin specific_binary
+```
+
+Without `--bin`, all binaries in the crate are installed.
+
+## Uninstalling
+
+```bash
+cargo uninstall ripgrep
+```
+
+This removes the binary from `~/.cargo/bin/` but does not remove the downloaded source.
+
+## `CARGO_INSTALL_ROOT` — Custom Install Directory
+
+Override the installation directory with an environment variable:
+
+```bash
+CARGO_INSTALL_ROOT=/usr/local cargo install ripgrep
+# installs to /usr/local/bin/rg
+```
+
+Or set it permanently in `~/.cargo/config.toml`:
+
+```toml
+[install]
+root = "/usr/local"
+```
+
+## Limitations
+
+- `cargo install` only works for crates that publish **binaries** (have `[[bin]]` targets). Library-only crates can't be installed this way.
+- There's no sandboxing — the crate's build script (`build.rs`) runs arbitrary code on your machine during compilation. Only install crates you trust.
+- Compilation can be slow for large dependencies. Precompiled binary distributions (e.g., via GitHub Releases) are faster for end users.
+
+## Summary
+
+- `cargo install <crate>` compiles and installs a binary to `~/.cargo/bin/`.
+- `~/.cargo/bin` is in your PATH after `rustup` setup; new tools are immediately usable.
+- Install from crates.io (default), git repos (`--git`), or local paths (`--path`).
+- Reinstall to update; use `cargo-update` for bulk updates.
+- `cargo uninstall <crate>` removes the binary.

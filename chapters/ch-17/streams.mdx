@@ -1,0 +1,169 @@
+---
+title: "Async Streams in Rust: Processing Sequences of Values"
+sidebarTitle: "Streams"
+description: "Use async streams in Rust to process sequences of values lazily. Learn the Stream trait, StreamExt, and how streams combine iterators with async."
+mode: "wide"
+---
+
+A synchronous `Iterator` yields a sequence of values one at a time, but each `next()` call is blocking. An async `Stream` is the async equivalent: it yields a sequence of values, but each `next()` call is a future that may suspend while waiting for the next item. Streams are the natural model for data sources that arrive over time — network packets, file lines, sensor readings, or user events.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The `Stream` Trait
+
+The `Stream` trait (from the `futures` crate, likely to be stabilised in `std` eventually) mirrors `Iterator`:
+
+```rust
+// Simplified definition:
+pub trait Stream {
+    type Item;
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>>;
+}
+```
+
+- `Poll::Ready(Some(item))` — the next item is available.
+- `Poll::Ready(None)` — the stream is exhausted (like `Iterator` returning `None`).
+- `Poll::Pending` — no item yet; the waker will fire when one arrives.
+
+Just as with `Future`, you rarely call `poll_next` manually. Instead, you use the `StreamExt` extension trait, which provides `next()`, `map()`, `filter()`, `collect()`, and many other adapters.
+
+## Creating a Stream from an Iterator
+
+The simplest way to explore streams is to create one from a regular iterator:
+
+```rust
+use trpl::StreamExt;
+
+fn main() {
+    trpl::run(async {
+        let mut stream = trpl::stream_from_iter(0u32..10);
+
+        while let Some(value) = stream.next().await {
+            println!("got: {value}");
+        }
+    });
+}
+```
+
+`stream.next()` returns a `Future<Output = Option<u32>>`. The `while let` loop awaits each item in turn.
+
+## Producing Values with an Async Generator Pattern
+
+Real streams produce values asynchronously. Here is a stream that emulates data arriving over time:
+
+```rust
+use std::time::Duration;
+use trpl::StreamExt;
+
+fn ticker(count: u32) -> impl trpl::Stream<Item = u32> {
+    trpl::stream_from_iter(0..count).then(|i| async move {
+        trpl::sleep(Duration::from_millis(100)).await;
+        i
+    })
+}
+
+fn main() {
+    trpl::run(async {
+        let mut stream = ticker(5);
+        while let Some(tick) = stream.next().await {
+            println!("tick: {tick}");
+        }
+    });
+}
+```
+
+Each item is delayed 100 ms before being yielded, simulating a real asynchronous source.
+
+## Stream Adapters: `map`, `filter`, `take`
+
+`StreamExt` provides adapter methods that transform streams lazily, just like `Iterator`:
+
+```rust
+use trpl::StreamExt;
+
+fn main() {
+    trpl::run(async {
+        let stream = trpl::stream_from_iter(1u32..=20)
+            .filter(|n| std::future::ready(n % 2 == 0)) // keep even numbers
+            .map(|n| n * n)                              // square them
+            .take(5);                                    // stop after 5 items
+
+        let results: Vec<u32> = stream.collect().await;
+        println!("{results:?}"); // [4, 16, 36, 64, 100]
+    });
+}
+```
+
+Note that `filter` on a stream takes a closure returning a `Future<Output = bool>` — here we use `std::future::ready` to wrap a synchronous predicate into an immediately-resolving future.
+
+## Merging Two Streams
+
+You can merge two streams into one that yields items from both as they arrive:
+
+```rust
+use std::time::Duration;
+use trpl::StreamExt;
+
+fn main() {
+    trpl::run(async {
+        let stream_a = trpl::stream_from_iter(["a1", "a2", "a3"])
+            .then(|msg| async move {
+                trpl::sleep(Duration::from_millis(100)).await;
+                msg
+            });
+
+        let stream_b = trpl::stream_from_iter(["b1", "b2"])
+            .then(|msg| async move {
+                trpl::sleep(Duration::from_millis(150)).await;
+                msg
+            });
+
+        let mut merged = stream_a.merge(stream_b);
+
+        while let Some(item) = merged.next().await {
+            println!("received: {item}");
+        }
+    });
+}
+```
+
+Items from both streams appear interleaved based on their timing, not their source order.
+
+## Collecting a Stream
+
+Like an iterator, a stream can be collected into a `Vec` or other collection. The `.collect()` method on `StreamExt` returns a future that resolves to the collection once the stream is exhausted:
+
+```rust
+fn main() {
+    trpl::run(async {
+        let squares: Vec<u32> = trpl::stream_from_iter(1u32..=5)
+            .map(|n| n * n)
+            .collect()
+            .await;
+
+        println!("{squares:?}"); // [1, 4, 9, 16, 25]
+    });
+}
+```
+
+## Streams vs Iterators: The Async Difference
+
+| Feature | `Iterator` | `Stream` |
+|---|---|---|
+| `next()` | Returns `Option<Item>` synchronously | Returns `Future<Output = Option<Item>>` |
+| Blocking | Blocks the thread | Suspends the task |
+| Suitable for | In-memory data | I/O, events, real-time data |
+| Adapters | `map`, `filter`, `take`, `collect`, … | Same adapters, all async-aware |
+| Requires `.await` | No | Yes, at each `next()` call |
+
+## When to Use Streams
+
+Streams are the right abstraction whenever:
+- Data arrives incrementally (HTTP streaming, WebSocket messages, file lines).
+- You want lazy evaluation with backpressure (don't read ahead of what you can process).
+- You have a pipeline of transformations over async data.
+
+For one-shot async operations, a plain `Future` is simpler. For a fixed number of concurrent operations, `join!` or `join_all` may be more ergonomic. Streams shine when the number of items is unknown or very large.

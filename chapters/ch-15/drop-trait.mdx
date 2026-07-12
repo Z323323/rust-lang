@@ -1,0 +1,180 @@
+---
+title: "Running Cleanup Code with the Drop Trait in Rust"
+sidebarTitle: "Drop Trait"
+description: "Customize what happens when a Rust value goes out of scope with the Drop trait. Learn how drop order works and use std::mem::drop for early cleanup."
+mode: "wide"
+---
+
+Rust's ownership system guarantees that every value is cleaned up exactly once — when it goes out of scope. The `Drop` trait lets you hook into that moment to run custom cleanup code: closing file handles, releasing locks, freeing network connections, or printing debug messages. In most cases you don't need to implement `Drop` yourself (the compiler handles it), but for types managing external resources it's essential.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Implementing the `Drop` Trait
+
+```rust
+struct CustomSmartPointer {
+    data: String,
+}
+
+impl Drop for CustomSmartPointer {
+    fn drop(&mut self) {
+        println!("Dropping CustomSmartPointer with data '{}'!", self.data);
+    }
+}
+
+fn main() {
+    let c = CustomSmartPointer { data: String::from("my stuff") };
+    let d = CustomSmartPointer { data: String::from("other stuff") };
+    println!("CustomSmartPointers created.");
+}
+```
+
+Output:
+
+```
+CustomSmartPointers created.
+Dropping CustomSmartPointer with data 'other stuff'!
+Dropping CustomSmartPointer with data 'my stuff'!
+```
+
+`Drop::drop` is called automatically when each variable goes out of scope at the closing `}` of `main`. You never call `drop` manually — the compiler inserts the call.
+
+## Drop Order: Reverse of Creation
+
+Variables are dropped in **reverse order of their declaration**. In the example above, `d` was created after `c`, so `d` is dropped first. This is consistent with stack semantics: last in, first out (LIFO).
+
+```rust
+fn main() {
+    let a = CustomSmartPointer { data: String::from("a") }; // created 1st
+    let b = CustomSmartPointer { data: String::from("b") }; // created 2nd
+    let c = CustomSmartPointer { data: String::from("c") }; // created 3rd
+    println!("Created a, b, c");
+}
+// Dropped: c, then b, then a
+```
+
+Fields within a struct are dropped in declaration order (not reversed):
+
+```rust
+struct Pair {
+    first: CustomSmartPointer,  // dropped first
+    second: CustomSmartPointer, // dropped second
+}
+```
+
+## Early Drop with `std::mem::drop`
+
+You cannot call `value.drop()` directly — the compiler disallows it to prevent double-free:
+
+```rust
+let c = CustomSmartPointer { data: String::from("some data") };
+c.drop(); // ERROR: explicit use of destructor method
+```
+
+To drop a value before it goes out of scope, use the `std::mem::drop` free function (already in the prelude):
+
+```rust
+fn main() {
+    let c = CustomSmartPointer { data: String::from("some data") };
+    println!("CustomSmartPointer created.");
+    drop(c);   // c is dropped here, not at end of main
+    println!("CustomSmartPointer dropped before the end of main.");
+}
+```
+
+Output:
+
+```
+CustomSmartPointer created.
+Dropping CustomSmartPointer with data 'some data'!
+CustomSmartPointer dropped before the end of main.
+```
+
+`std::mem::drop` simply takes ownership of the value, causing it to be dropped at the end of the `drop` function's scope.
+
+## Practical Use Cases
+
+### Releasing a Mutex Lock Early
+
+```rust
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(0);
+    {
+        let mut guard = m.lock().unwrap();
+        *guard += 1;
+        // guard dropped here (end of inner block) → lock released
+    }
+    // Other code can lock `m` here
+    println!("Mutex value: {}", m.lock().unwrap());
+}
+```
+
+Alternatively, call `drop(guard)` explicitly rather than using a block.
+
+### File Handle Cleanup
+
+```rust
+use std::fs::File;
+use std::io::Write;
+
+fn main() {
+    let mut f = File::create("output.txt").unwrap();
+    writeln!(f, "Hello, file!").unwrap();
+    drop(f);  // flush and close now, before the program continues
+    // Rename or open the file again safely here
+    std::fs::rename("output.txt", "output_done.txt").unwrap();
+}
+```
+
+### RAII Guards
+
+Many Rust patterns use `Drop` to implement RAII (Resource Acquisition Is Initialization):
+
+```rust
+struct Timer {
+    name: &'static str,
+    start: std::time::Instant,
+}
+
+impl Timer {
+    fn new(name: &'static str) -> Timer {
+        Timer { name, start: std::time::Instant::now() }
+    }
+}
+
+impl Drop for Timer {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed();
+        println!("{}: {:?}", self.name, elapsed);
+    }
+}
+
+fn main() {
+    let _t = Timer::new("main function");
+    // ... do work ...
+    // Timer automatically prints elapsed time when it drops at end of scope
+}
+```
+
+## The `#[must_use]` Pattern
+
+Types that represent important operations (like `MutexGuard`, `JoinHandle`) often use `#[must_use]` to ensure callers don't accidentally drop them immediately:
+
+```rust
+#[must_use = "guards are dropped immediately if not bound to a variable"]
+struct Guard;
+```
+
+## `Drop` and Copy
+
+A type cannot implement both `Copy` and `Drop`. `Copy` semantics mean values can be duplicated bitwise (no special cleanup needed), while `Drop` implies resource ownership. The compiler enforces this exclusion.
+
+## Summary
+
+- Implement `fn drop(&mut self)` in the `Drop` trait to run cleanup code when a value goes out of scope.
+- Drop order: variables are dropped in **reverse creation order**; struct fields drop in declaration order.
+- Never call `.drop()` directly — use `std::mem::drop(value)` for early cleanup.
+- Common patterns: releasing mutexes, closing files, timing scopes, RAII guards.
+- Types cannot implement both `Copy` and `Drop`.

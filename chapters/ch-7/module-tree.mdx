@@ -1,0 +1,184 @@
+---
+title: "Paths for Referring to Items in the Rust Module Tree"
+sidebarTitle: "Module Tree"
+description: "Navigate Rust's module tree with absolute and relative paths. Use super for parent-module references and understand how path resolution works."
+mode: "wide"
+---
+
+Once your code is organized into modules, you need a way to refer to the items inside them. Rust uses *path* syntax — similar to a file-system path — to navigate the module tree. Paths can be absolute (starting from the crate root) or relative (starting from the current module), and special keywords like `self` and `super` let you express relative positions cleanly.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Absolute vs Relative Paths
+
+An **absolute path** starts at the crate root and uses `crate` as the first segment:
+
+```rust
+crate::front_of_house::hosting::add_to_waitlist();
+```
+
+A **relative path** starts from the current module, using the module's name directly:
+
+```rust
+front_of_house::hosting::add_to_waitlist();
+```
+
+Both point to the same function. Prefer absolute paths when items might be moved to different modules (the path stays valid); prefer relative paths when items are likely to move together.
+
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::add_to_waitlist();
+}
+```
+
+## `self` — Explicit Relative Reference
+
+`self` refers to the current module, making a relative path explicit:
+
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+
+        pub fn seat_at_table() {
+            self::add_to_waitlist(); // same as just add_to_waitlist()
+        }
+    }
+}
+```
+
+`self` is rarely needed inside a module's own items, but it is required in `use` statements to re-export items at the current module level:
+
+```rust
+pub use self::hosting::add_to_waitlist;
+```
+
+## `super` — Parent-Module Reference
+
+`super` moves up one level in the module tree, similar to `..` in a file path:
+
+```rust
+fn cook_order() {}
+
+mod back_of_house {
+    fn fix_incorrect_order() {
+        cook();
+        super::cook_order(); // calls function in the parent module
+    }
+
+    fn cook() {
+        println!("Cooking...");
+    }
+}
+```
+
+`super` is especially useful for test modules, which often live inside the module they test:
+
+```rust
+pub fn add_two(x: i32) -> i32 {
+    x + 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // bring everything from the parent module into scope
+
+    #[test]
+    fn it_adds_two() {
+        assert_eq!(add_two(2), 4);
+    }
+}
+```
+
+`use super::*` is idiomatic in test modules — it imports all public items from the parent without listing them individually.
+
+## Full Example: Navigating a Module Tree
+
+```rust
+// src/lib.rs
+
+mod garden {
+    pub mod vegetables {
+        pub struct Asparagus {
+            pub row: u32,
+        }
+
+        pub fn harvest(a: &Asparagus) {
+            println!("Harvesting asparagus from row {}", a.row);
+        }
+    }
+
+    mod tools {
+        fn sharpen() {}
+
+        pub fn prepare_field() {
+            sharpen();                              // sibling module item
+            super::vegetables::harvest(           // up to garden, then down
+                &super::vegetables::Asparagus { row: 3 }
+            );
+        }
+    }
+}
+
+fn main() {
+    // Absolute path
+    let a = crate::garden::vegetables::Asparagus { row: 1 };
+    crate::garden::vegetables::harvest(&a);
+
+    // Relative path from crate root (same as absolute here)
+    let b = garden::vegetables::Asparagus { row: 2 };
+    garden::vegetables::harvest(&b);
+}
+```
+
+## `pub use` — Re-exporting Paths
+
+Sometimes you want to expose an item at a higher level of the module tree than where it is defined. `pub use` re-exports the item, creating a new public path:
+
+```rust
+// src/lib.rs
+
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+// Re-export so callers can use `crate::add_to_waitlist`
+// instead of `crate::front_of_house::hosting::add_to_waitlist`
+pub use crate::front_of_house::hosting::add_to_waitlist;
+
+pub fn eat_at_restaurant() {
+    add_to_waitlist(); // works via the re-export
+}
+```
+
+External callers can now write `my_crate::add_to_waitlist()` — the internal module structure is hidden. Re-exporting is how library authors present a clean public API that differs from the private internal organization.
+
+## Path Resolution Summary
+
+| Syntax | Meaning |
+|--------|---------|
+| `crate::a::b` | Absolute path from crate root |
+| `a::b` | Relative path from current module |
+| `self::a` | Explicit relative path (same module) |
+| `super::a` | Item in the parent module |
+| `pub use path` | Re-export an item under a new path |
+
+## Summary
+
+- Paths navigate the module tree using `::` between segments.
+- Absolute paths begin with `crate`; relative paths begin with the item's module name.
+- `self` refers to the current module; `super` refers to the parent.
+- `use super::*` is the idiomatic import in `#[cfg(test)]` modules.
+- `pub use` re-exports an item, allowing a clean public API that differs from the internal layout.

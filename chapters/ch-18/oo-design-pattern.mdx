@@ -1,0 +1,201 @@
+---
+title: "Implementing an OOP Design Pattern in Rust with State"
+sidebarTitle: "State Pattern"
+description: "Implement the State design pattern in Rust two ways: with trait objects (classic OOP) and with Rust types encoding state transitions at compile time."
+mode: "wide"
+---
+
+The *State* pattern is a classic OOP design pattern where an object's behaviour changes based on its internal state, and the state transitions are encapsulated in state objects rather than scattered through conditionals. Rust supports the classic OOP version using trait objects, and then goes further with a type-state variant that moves state verification to compile time — making invalid transitions literally unrepresentable.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Problem: A Blog Post Workflow
+
+We want to model a blog post with this lifecycle:
+
+```
+Draft ──request_review──> PendingReview ──approve──> Published
+```
+
+- A draft can be edited; `content()` returns empty.
+- A pending-review post cannot be edited; it awaits approval.
+- Only a published post returns its content from `content()`.
+
+## Version 1: Classic OOP with Trait Objects
+
+Define a `State` trait. Each state struct implements the transitions and behaviour.
+
+```rust
+pub struct Post {
+    state: Option<Box<dyn State>>,
+    content: String,
+}
+
+impl Post {
+    pub fn new() -> Post {
+        Post {
+            state: Some(Box::new(Draft {})),
+            content: String::new(),
+        }
+    }
+
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+
+    pub fn content(&self) -> &str {
+        self.state.as_ref().unwrap().content(self)
+    }
+
+    pub fn request_review(&mut self) {
+        if let Some(s) = self.state.take() {
+            self.state = Some(s.request_review());
+        }
+    }
+
+    pub fn approve(&mut self) {
+        if let Some(s) = self.state.take() {
+            self.state = Some(s.approve());
+        }
+    }
+}
+
+trait State {
+    fn request_review(self: Box<Self>) -> Box<dyn State>;
+    fn approve(self: Box<Self>) -> Box<dyn State>;
+    fn content<'a>(&self, _post: &'a Post) -> &'a str {
+        "" // Default: drafts and pending-review return empty content.
+    }
+}
+
+struct Draft {}
+struct PendingReview {}
+struct Published {}
+
+impl State for Draft {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        Box::new(PendingReview {})
+    }
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        self // Approving a draft has no effect.
+    }
+}
+
+impl State for PendingReview {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        self // Already in review.
+    }
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        Box::new(Published {})
+    }
+}
+
+impl State for Published {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+    fn content<'a>(&self, post: &'a Post) -> &'a str {
+        &post.content
+    }
+}
+
+fn main() {
+    let mut post = Post::new();
+    post.add_text("I ate a salad for lunch today");
+
+    assert_eq!("", post.content()); // Draft: no content visible
+
+    post.request_review();
+    assert_eq!("", post.content()); // Pending: still no content
+
+    post.approve();
+    assert_eq!("I ate a salad for lunch today", post.content()); // Published!
+
+    println!("{}", post.content());
+}
+```
+
+This faithfully implements the OOP State pattern. The state objects own the transition logic, and `Post` delegates to them via trait objects.
+
+## Version 2: Type-State Pattern — Rust-Idiomatic
+
+The OOP version works, but it has a flaw: `approve()` on a Draft silently does nothing. The *caller* gets no compile-time help to avoid calling methods at the wrong time. The type-state pattern encodes each state as a *different type*, making wrong-order calls impossible:
+
+```rust
+pub struct Post;
+pub struct DraftPost    { content: String }
+pub struct PendingPost  { content: String }
+pub struct PublishedPost { content: String }
+
+impl Post {
+    pub fn new() -> DraftPost {
+        DraftPost { content: String::new() }
+    }
+}
+
+impl DraftPost {
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+
+    // Consumes the DraftPost and returns a PendingPost.
+    pub fn request_review(self) -> PendingPost {
+        PendingPost { content: self.content }
+    }
+}
+
+impl PendingPost {
+    // Consumes PendingPost and returns PublishedPost.
+    pub fn approve(self) -> PublishedPost {
+        PublishedPost { content: self.content }
+    }
+
+    // Optional: reject review, go back to draft.
+    pub fn reject(self) -> DraftPost {
+        DraftPost { content: self.content }
+    }
+}
+
+impl PublishedPost {
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+}
+
+fn main() {
+    let mut draft = Post::new();
+    draft.add_text("I ate a salad for lunch today");
+
+    let pending = draft.request_review();
+    // draft.add_text("more text"); // ERROR: `draft` was moved!
+
+    let published = pending.approve();
+    println!("{}", published.content());
+
+    // published.approve(); // ERROR: PublishedPost has no `approve` method.
+}
+```
+
+Each state transition *consumes* the old state value and produces a new one. The Rust compiler enforces the workflow:
+- You cannot call `add_text` on a `PendingPost` or `PublishedPost`.
+- You cannot call `approve` without first calling `request_review`.
+- You cannot call `content` on a `DraftPost` — the method simply doesn't exist.
+
+Invalid state transitions are **compile errors**, not runtime surprises.
+
+## Comparing the Two Approaches
+
+| Aspect | OOP Trait-Object Version | Type-State Version |
+|---|---|---|
+| Invalid transitions | Silently ignored at runtime | Compile-time error |
+| Single post variable | Yes — `post` is always `Post` | No — type changes at each transition |
+| Extensibility | Add a new `State` implementor | Add a new state type and its methods |
+| Runtime overhead | vtable indirection | None — types are resolved statically |
+| Familiarity | Natural for OOP programmers | More idiomatic Rust |
+
+The type-state version aligns with Rust's philosophy: *make illegal states unrepresentable*. The trade-off is that you can no longer hold a single `post` variable across state transitions — you must rebind it.
+
+Both styles are valid in Rust. Choose the OOP version when you need a homogeneous collection of posts in different states; choose the type-state version when you want the strongest compile-time guarantees for a single post's lifecycle.

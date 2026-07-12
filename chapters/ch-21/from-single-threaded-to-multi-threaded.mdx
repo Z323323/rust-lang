@@ -1,0 +1,262 @@
+---
+title: "Converting a Rust Web Server to a Thread Pool Architecture"
+sidebarTitle: "Thread Pool"
+description: "Add a thread pool to your Rust web server. Build a ThreadPool struct, Worker threads with channels, and distribute incoming connections across workers."
+mode: "wide"
+---
+
+The single-threaded server from the previous chapter handles one request at a time—a poor experience for any real-world load. Spawning a new OS thread per request would work, but it is wasteful: thread creation has overhead, and under heavy load you could exhaust system resources. The standard solution is a *thread pool*: a fixed set of pre-spawned worker threads that pick up tasks from a shared queue. In this chapter we build one from scratch using `mpsc` channels and `Arc<Mutex<T>>`.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Design Overview
+
+Our thread pool consists of three pieces:
+
+1. **`ThreadPool`** — the public API. Holds a `Vec<Worker>` and an `mpsc::Sender<Job>`.
+2. **`Worker`** — a struct that owns a `JoinHandle<()>` and an `id`. Its thread loops waiting for jobs.
+3. **`Job`** — a type alias for `Box<dyn FnOnce() + Send + 'static>`, i.e., any callable that can be sent to another thread and called exactly once.
+
+---
+
+## The `Job` Type Alias
+
+```rust
+type Job = Box<dyn FnOnce() + Send + 'static>;
+```
+
+- `FnOnce()` — can be called exactly once (sufficient for request handlers).
+- `Send` — can be transferred across thread boundaries.
+- `'static` — no non-`'static` borrows (the worker thread may outlive the caller's stack frame).
+
+---
+
+## Building `ThreadPool`
+
+```rust
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Job>,
+}
+
+impl ThreadPool {
+    /// Create a new ThreadPool with `size` worker threads.
+    ///
+    /// # Panics
+    /// Panics if `size` is zero.
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0, "Thread pool size must be at least 1");
+
+        let (sender, receiver) = mpsc::channel();
+
+        // Wrap receiver in Arc<Mutex<>> so multiple workers can share it
+        let receiver = Arc::new(Mutex::new(receiver));
+
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        ThreadPool { workers, sender }
+    }
+
+    /// Submit a job to the thread pool.
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.send(job).unwrap();
+    }
+}
+```
+
+The `mpsc::channel()` creates a *multiple-producer, single-consumer* channel. However, we want *multiple workers* to receive from the same channel. We achieve this by placing the `Receiver` behind an `Arc<Mutex<>>`:
+
+- `Arc` lets multiple workers share ownership of the receiver.
+- `Mutex` ensures only one worker acquires the receiver (and thus dequeues a job) at a time.
+
+---
+
+## Building `Worker`
+
+```rust
+struct Worker {
+    id: usize,
+    thread: thread::JoinHandle<()>,
+}
+
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let job = receiver
+                .lock()        // acquire the mutex
+                .unwrap()
+                .recv()        // block until a job is available
+                .unwrap();
+
+            println!("Worker {id} got a job; executing.");
+            job();             // run the job
+        });
+
+        Worker { id, thread }
+    }
+}
+```
+
+Each `Worker` spawns a thread that repeatedly:
+
+1. Acquires the mutex lock.
+2. Calls `recv()`, which blocks until a job arrives.
+3. Releases the lock (the `MutexGuard` drops when it goes out of the inner scope).
+4. Executes the job.
+
+One subtle point: we should release the lock *before* executing the job, so other workers can pick up new jobs concurrently. Rewriting the loop with an explicit block achieves this:
+
+```rust
+let thread = thread::spawn(move || loop {
+    let job = {
+        // Lock is acquired and released here, before job() is called
+        receiver.lock().unwrap().recv().unwrap()
+    };
+
+    println!("Worker {id} executing job.");
+    job();
+});
+```
+
+---
+
+## Integrating the Thread Pool into the Web Server
+
+Update `main.rs` to use `ThreadPool::new(4)` instead of spawning threads directly:
+
+```rust
+use std::{
+    fs,
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+mod thread_pool;
+use thread_pool::ThreadPool;
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let pool = ThreadPool::new(4);
+    println!("Serving on http://127.0.0.1:7878 with 4 worker threads");
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        pool.execute(|| {
+            handle_connection(stream);
+        });
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = buf_reader
+        .lines()
+        .next()
+        .unwrap()
+        .unwrap();
+
+    println!("Request: {}", request_line);
+
+    // Simulate slow request for testing concurrency
+    if request_line.contains("/sleep") {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+
+    let (status, filename) = if request_line == "GET / HTTP/1.1" {
+        ("200 OK", "hello.html")
+    } else {
+        ("404 NOT FOUND", "404.html")
+    };
+
+    let body = fs::read_to_string(filename)
+        .unwrap_or_else(|_| "<h1>Not Found</h1>".to_string());
+
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+Now open `/sleep` in one browser tab and `/` in another at the same time. The second request completes immediately because a different worker thread handles it.
+
+---
+
+## Full `thread_pool.rs`
+
+```rust
+// src/thread_pool.rs
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Job>,
+}
+
+impl ThreadPool {
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+        ThreadPool { workers, sender }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.send(job).unwrap();
+    }
+}
+
+struct Worker {
+    id: usize,
+    thread: thread::JoinHandle<()>,
+}
+
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let job = {
+                receiver.lock().unwrap().recv().unwrap()
+            };
+            println!("Worker {id}: executing job");
+            job();
+        });
+        Worker { id, thread }
+    }
+}
+```
+
+---
+
+## Why Not `thread::spawn` Per Request?
+
+Spawning a thread per request is simpler to write, but carries real costs:
+
+- **Unbounded resource usage** — 10,000 concurrent requests spawn 10,000 threads, each with an 8 MB default stack.
+- **Context-switching overhead** — the OS scheduler thrashes between thousands of threads.
+- **Latency spikes** — thread creation itself takes microseconds to milliseconds.
+
+A fixed-size thread pool caps resource usage and amortises thread creation cost. In the next chapter, we add graceful shutdown so the server and its workers terminate cleanly when the process exits.

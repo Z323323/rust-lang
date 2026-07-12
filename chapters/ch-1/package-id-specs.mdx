@@ -1,0 +1,68 @@
+---
+title: "Cargo Package ID Specifications – Syntax and Examples"
+sidebarTitle: "Package ID Specs"
+description: "Reference guide for Cargo Package ID Specifications: grammar, abbreviated and fully qualified forms, and examples for registry, git, and path crates."
+mode: "wide"
+---
+
+This section is included here because it directly builds upon the previous topic, but it also serves a broader purpose. It showcases the full extent of Cargo's power in locating packages specific versions, whether online or offline, and is intended to act primarily as a reference guide for custom configurations. It is entirely acceptable—and even recommended—to simply skim this section for now and move on.
+
+This section, in particular, is almost word-for-word identical to the official documentation, which can be viewed at [[doc.rust-lang.org/cargo/reference/pkgid-spec.html](https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)].
+
+>Subcommands of Cargo frequently need to refer to a particular package within a dependency graph for various operations like updating, cleaning, building, etc. To solve this problem, Cargo supports Package ID Specifications. A specification is a string which is used to uniquely refer to one package within a graph of packages.
+
+>The specification may be fully qualified, such as `registry+https://github.com/rust-lang/crates.io-index#regex@1.4.3` or it may be abbreviated, such as `regex`. The abbreviated form may be used as long as it uniquely identifies a single package in the dependency graph. If there is ambiguity, additional qualifiers can be added to make it unique. For example, if there are two versions of the `regex` package in the graph, then it can be qualified with a version to make it unique, such as `regex@1.4.3`.
+
+## Specification Grammar
+
+>The formal grammar for a Package Id Specification is:
+
+```text
+spec := pkgname |
+        [ kind "+" ] proto "://" hostname-and-path [ "?" query] [ "#" ( pkgname | semver ) ]
+query = ( "branch" | "tag" | "rev" ) "=" ref
+pkgname := name [ ("@" | ":" ) semver ]
+semver := digits [ "." digits [ "." digits [ "-" prerelease ] [ "+" build ]]]
+
+kind = "registry" | "git" | "path"
+proto := "http" | "git" | "file" | ...
+```
+
+>Here, brackets indicate that the contents are optional.
+
+## Example Specifications
+
+>The following are references to the `regex` package on [[crates.io](https://crates.io)].
+
+| Spec | Name  | Version |
+| :--- | :---: |  :---:  |
+| `regex` | `regex` | `*` |
+| `regex@1.4` | `regex` | `1.4.*` |
+| `regex@1.4.3` | `regex` | `1.4.3` |
+| `https://github.com/rust-lang/crates.io-index#regex` | `regex` | `*` |
+| `https://github.com/rust-lang/crates.io-index#regex@1.4.3` | `regex` | `1.4.3` |
+| `registry+https://github.com/rust-lang/crates.io-index#regex@1.4.3` | `regex` | `*` |
+
+>The following are some examples of specs for several different git dependencies.
+
+| Spec | Name  | Version |
+| :--- | :---: |  :---:  |
+| `https://github.com/rust-lang/cargo#0.52.0` | `cargo` | `0.52.0` |
+| `https://github.com/rust-lang/cargo#cargo-platform@0.1.2` | `cargo-platform` | `0.1.2` |
+| `ssh://git@github.com/rust-lang/regex.git#regex@1.4.3` | `regex` | `1.4.3` |
+| `git+ssh://git@github.com/rust-lang/regex.git#regex@1.4.3` | `regex` | `1.4.3` |
+| `https://github.com/rust-lang/crates.io-index#regex@1.4.3` | `regex` | `1.4.3` |
+| `git+ssh://git@github.com/rust-lang/regex.git?branch=dev#regex@1.4.3` | `regex` | `1.4.3` |
+
+>Local packages on the filesystem can use `file://` URLs to reference them.
+
+| Spec | Name  | Version |
+| :--- | :---: |  :---:  |
+| `file:///path/to/my/project/foo` | `foo` | `*` |
+| `file:///path/to/my/project/foo#1.1.8` | `foo` | `1.1.8` |
+| `path+file:///path/to/my/project/foo#1.1.8` | `foo` | `1.1.8` |
+
+## Brevity of Specifications
+
+>The goal of this is to enable both succinct and exhaustive syntaxes for referring to packages in a dependency graph. Ambiguous references may refer to one or more packages. Most commands generate an error if more than one package could be referred to with the same specification.
+

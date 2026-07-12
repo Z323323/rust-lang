@@ -1,0 +1,198 @@
+---
+title: "Traits in Rust: Defining and Implementing Shared Behavior"
+sidebarTitle: "Traits"
+description: "Define and implement Rust traits to express shared behavior. Covers default implementations, trait bounds, the + syntax, and where clauses."
+mode: "wide"
+---
+
+A trait tells the Rust compiler about functionality a particular type has and can share with other types. Traits are Rust's primary abstraction mechanism — similar to interfaces in other languages, but more powerful. They let you write generic code that works for any type satisfying a set of behavioral requirements, and they're at the heart of Rust's approach to polymorphism. You've already encountered traits like `Display`, `Debug`, `Clone`, and `PartialOrd`; this chapter shows you how to define and implement your own.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Defining a Trait
+
+A trait definition names a set of method signatures that a type must implement. Here we define a `Summary` trait for types that can produce a short summary string:
+
+```rust
+pub trait Summary {
+    fn summarize(&self) -> String;
+}
+```
+
+The body of each method in a trait definition is replaced by a semicolon. Any type that implements `Summary` must provide a concrete `summarize` method.
+
+## Implementing a Trait on a Type
+
+Use `impl TraitName for TypeName` syntax:
+
+```rust
+pub struct NewsArticle {
+    pub title: String,
+    pub author: String,
+    pub content: String,
+}
+
+impl Summary for NewsArticle {
+    fn summarize(&self) -> String {
+        format!("{}, by {} — {}", self.title, self.author, &self.content[..80])
+    }
+}
+
+pub struct Tweet {
+    pub username: String,
+    pub content: String,
+}
+
+impl Summary for Tweet {
+    fn summarize(&self) -> String {
+        format!("{}: {}", self.username, self.content)
+    }
+}
+
+fn main() {
+    let tweet = Tweet {
+        username: String::from("rustlang"),
+        content: String::from("Exciting new Rust release!"),
+    };
+
+    println!("{}", tweet.summarize());
+}
+```
+
+**Coherence rule**: you can only implement a trait on a type if either the trait or the type is defined in your crate. You cannot implement `Display` on `Vec<T>` in your own crate because both are external. This prevents two crates from providing conflicting implementations.
+
+## Default Implementations
+
+You can provide a default body for trait methods. Types that implement the trait can use the default, override it, or both:
+
+```rust
+pub trait Summary {
+    fn author(&self) -> String;
+
+    // Default implementation — calls the required method
+    fn summarize(&self) -> String {
+        format!("(Read more from {}...)", self.author())
+    }
+}
+
+pub struct Tweet {
+    pub username: String,
+    pub content: String,
+}
+
+impl Summary for Tweet {
+    fn author(&self) -> String {
+        format!("@{}", self.username)
+    }
+    // No summarize() — uses the default
+}
+
+fn main() {
+    let t = Tweet { username: String::from("rustlang"), content: String::from("Hello!") };
+    println!("{}", t.summarize()); // "(Read more from @rustlang...)"
+}
+```
+
+Default implementations can call other methods in the trait, even ones that don't have defaults — as long as the implementor provides those required methods.
+
+## Traits as Parameters: `impl Trait` Syntax
+
+You can accept any type that implements a trait using `impl Trait` in a function parameter:
+
+```rust
+pub fn notify(item: &impl Summary) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+
+This is syntactic sugar for a **trait bound** using a generic:
+
+```rust
+pub fn notify<T: Summary>(item: &T) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+
+Both are equivalent for single parameters, but the generic form is more flexible when you need multiple parameters of the *same* type.
+
+## Multiple Trait Bounds with `+`
+
+Use `+` to require a type to implement more than one trait:
+
+```rust
+use std::fmt::{Debug, Display};
+
+// item must implement both Display and Summary
+pub fn notify(item: &(impl Summary + Display)) {
+    println!("{}", item);
+    println!("{}", item.summarize());
+}
+
+// Equivalent with generic syntax:
+pub fn notify_generic<T: Summary + Display>(item: &T) {
+    println!("{}", item);
+    println!("{}", item.summarize());
+}
+```
+
+## `where` Clauses for Clarity
+
+Long lists of trait bounds in a function signature can get hard to read. Move them to a `where` clause after the return type:
+
+```rust
+use std::fmt::{Debug, Display};
+
+fn compare_and_display<T, U>(t: &T, u: &U) -> String
+where
+    T: Display + Clone,
+    U: Debug + Clone,
+{
+    format!("t = {}, u = {:?}", t, u)
+}
+```
+
+The `where` clause doesn't change semantics — it's purely a readability improvement.
+
+## Returning Types That Implement a Trait
+
+Use `impl Trait` as a return type to return some type that implements the trait without naming it:
+
+```rust
+pub fn new_summarizable() -> impl Summary {
+    Tweet {
+        username: String::from("rustbot"),
+        content: String::from("something interesting"),
+    }
+}
+```
+
+This is especially useful with closures and iterators, where the concrete type is complex or unnameable. The limitation is that you can only return *one* concrete type — you can't conditionally return a `Tweet` or a `NewsArticle` from the same function with `impl Trait` (for that, use a trait object `Box<dyn Summary>`).
+
+## Using Trait Bounds to Conditionally Implement Methods
+
+A type can conditionally have methods depending on the trait bounds its type parameter satisfies:
+
+```rust
+use std::fmt::Display;
+
+struct Wrapper<T> {
+    value: T,
+}
+
+// This method only exists when T implements Display
+impl<T: Display> Wrapper<T> {
+    fn display(&self) {
+        println!("Wrapper holds: {}", self.value);
+    }
+}
+
+fn main() {
+    let w = Wrapper { value: 42 };
+    w.display(); // works: i32 implements Display
+
+    let w2 = Wrapper { value: vec![1, 2, 3] };
+    // w2.display(); // would not compile: Vec<i32> does not implement Display
+}
+```
+
+This technique is called a *blanket implementation* when applied to all types satisfying a bound — the standard library uses it extensively, for example implementing `ToString` for every type that implements `Display`.

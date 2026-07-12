@@ -1,0 +1,239 @@
+---
+title: "Improving the I/O Project with Iterators in Rust"
+sidebarTitle: "Iterator Refactor"
+description: "Refactor the minigrep CLI project using iterators instead of explicit loops. See how iterators make Rust code more expressive and idiomatic."
+mode: "wide"
+---
+
+Now that we understand closures and iterators, we can revisit minigrep and replace imperative loops with iterator-based equivalents. The result is code that is shorter, more declarative, and often easier to read once you're comfortable with the iterator vocabulary. The compiler generates identical machine code either way — this is a matter of style and expressiveness, not performance.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Replacing `Config::build` with an Iterator
+
+The current `Config::build` takes a slice of strings and indexes into it:
+
+```rust
+// Before — imperative, uses cloning
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+```
+
+We can accept the iterator directly from `env::args()` and avoid cloning:
+
+```rust
+// After — takes ownership of the iterator
+impl Config {
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        args.next(); // discard the program name (args[0])
+
+        let query = match args.next() {
+            Some(q) => q,
+            None => return Err("Didn't get a query string"),
+        };
+
+        let file_path = match args.next() {
+            Some(f) => f,
+            None => return Err("Didn't get a file path"),
+        };
+
+        Ok(Config {
+            query,
+            file_path,
+            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+```
+
+The key differences:
+1. We accept `impl Iterator<Item = String>` instead of `&[String]`, so no slice needed.
+2. We call `args.next()` three times: once to skip the binary name, once for the query, once for the file path.
+3. No `.clone()` — the `String` values are moved directly into `Config`.
+
+### Updating `main`
+
+Pass the iterator from `env::args()` directly:
+
+```rust
+fn main() {
+    let config = Config::build(std::env::args()).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        std::process::exit(1);
+    });
+
+    if let Err(e) = minigrep::run(config) {
+        eprintln!("Application error: {e}");
+        std::process::exit(1);
+    }
+}
+```
+
+`env::args()` returns `Args`, which implements `Iterator<Item = String>`. It's passed by value and consumed inside `Config::build`.
+
+## Refactoring the `search` Function
+
+The current `search` uses a mutable `Vec` and an explicit `for` loop:
+
+```rust
+// Before
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+    results
+}
+```
+
+With iterator adaptors this becomes a one-liner:
+
+```rust
+// After
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+```
+
+The logic is identical: iterate over lines, keep those that contain the query, collect into a `Vec`. The iterator version eliminates the temporary mutable variable and makes the intent explicit at a glance.
+
+### Case-Insensitive Version
+
+```rust
+// Before
+pub fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.to_lowercase().contains(&query) {
+            results.push(line);
+        }
+    }
+    results
+}
+
+// After
+pub fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    contents
+        .lines()
+        .filter(|line| line.to_lowercase().contains(&query))
+        .collect()
+}
+```
+
+## Full Refactored `src/lib.rs`
+
+Putting it all together:
+
+```rust
+use std::env;
+use std::error::Error;
+use std::fs;
+
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
+    pub ignore_case: bool,
+}
+
+impl Config {
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        args.next(); // skip binary name
+
+        let query = args.next().ok_or("Didn't get a query string")?;
+        let file_path = args.next().ok_or("Didn't get a file path")?;
+
+        Ok(Config {
+            query,
+            file_path,
+            ignore_case: env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
+
+    let results = if config.ignore_case {
+        search_case_insensitive(&config.query, &contents)
+    } else {
+        search(&config.query, &contents)
+    };
+
+    for line in results {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents.lines().filter(|l| l.contains(query)).collect()
+}
+
+pub fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    contents
+        .lines()
+        .filter(|l| l.to_lowercase().contains(&query))
+        .collect()
+}
+```
+
+Notice we also used `Option::ok_or` to convert `None` into a `Result::Err` inline, then `?` to propagate — a compact pattern for turning iterator `None` into an error.
+
+## Tests Still Pass
+
+The refactored code doesn't change any observable behavior:
+
+```bash
+cargo test
+```
+
+```
+test tests::case_insensitive ... ok
+test tests::case_sensitive ... ok
+test tests::no_results ... ok
+test tests::one_result ... ok
+
+test result: ok. 4 passed; 0 failed
+```
+
+## Summary
+
+- `Config::build` now accepts `impl Iterator<Item = String>`, avoiding both indexing and cloning.
+- The `search` functions collapse to a `.lines().filter(...).collect()` chain.
+- `Option::ok_or` + `?` is a clean way to convert iterator exhaustion into a `Result` error.
+- Behavior is unchanged; tests confirm correctness of the refactoring.
+- Iterator-based code is more declarative and removes the need for mutable intermediate `Vec`s.
+
+Next we'll examine whether iterators actually perform as well as hand-written loops.

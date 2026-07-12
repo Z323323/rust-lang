@@ -1,0 +1,134 @@
+---
+title: "Packages and Crates in Rust's Module System"
+sidebarTitle: "Packages"
+description: "Understand Rust's crate and package system: library crates vs. binary crates, the crate root, and how Cargo organizes packages with one or more crates."
+mode: "wide"
+---
+
+Rust's module system is built around two core concepts: *crates* (the unit of compilation) and *packages* (the unit of distribution managed by Cargo). Understanding how they fit together is the foundation for organizing any Rust project beyond a single file.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## What Is a Crate?
+
+A *crate* is the smallest amount of code that the Rust compiler considers at one time. There are two kinds:
+
+| Kind | Description | Crate Root |
+|------|-------------|------------|
+| **Binary crate** | Compiles to an executable; has a `main` function | `src/main.rs` |
+| **Library crate** | Compiles to a `.rlib` that other crates can depend on; no `main` | `src/lib.rs` |
+
+The *crate root* is the source file from which the compiler starts building the crate's module tree.
+
+```
+my_project/
+├── Cargo.toml
+└── src/
+    ├── main.rs     ← binary crate root
+    └── lib.rs      ← library crate root (optional)
+```
+
+Code in `src/main.rs` can depend on the library crate in `src/lib.rs` by referring to it as `use my_project::...`.
+
+## What Is a Package?
+
+A *package* is a bundle of one or more crates, described by a single `Cargo.toml` file. Cargo's rules for packages are:
+
+- A package must contain **at least one crate**.
+- A package may contain **at most one library crate**.
+- A package may contain **any number of binary crates**.
+
+When you run `cargo new my_project`, Cargo creates:
+
+```
+my_project/
+├── Cargo.toml
+└── src/
+    └── main.rs
+```
+
+`Cargo.toml` describes the package metadata; `src/main.rs` is the implicit binary crate root. You don't need to declare these in `Cargo.toml` — Cargo follows conventions automatically.
+
+## Adding a Library Crate
+
+You can add a library crate to the same package simply by creating `src/lib.rs`:
+
+```
+my_project/
+├── Cargo.toml
+└── src/
+    ├── main.rs   ← binary crate
+    └── lib.rs    ← library crate
+```
+
+Now `cargo build` produces both an executable and a `.rlib`. Other packages can add a dependency on `my_project` in their `Cargo.toml` and use its public API.
+
+## Multiple Binary Crates
+
+Additional binaries live in `src/bin/`:
+
+```
+my_project/
+├── Cargo.toml
+└── src/
+    ├── lib.rs
+    ├── main.rs           ← default binary (cargo run)
+    └── bin/
+        ├── server.rs     ← cargo run --bin server
+        └── migrate.rs    ← cargo run --bin migrate
+```
+
+Each file in `src/bin/` is its own binary crate with its own `main` function.
+
+## The `Cargo.toml` File
+
+Here is a minimal `Cargo.toml`:
+
+```toml
+[package]
+name    = "my_project"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+```
+
+- `[package]` — name, version, edition of this package.
+- `[dependencies]` — external crates from [crates.io](https://crates.io) your code depends on.
+
+Cargo downloads, compiles, and links dependencies automatically when you run `cargo build`.
+
+## External Crates and `use`
+
+After adding a dependency to `Cargo.toml`, bring its items into scope with `use`:
+
+```rust
+// src/main.rs
+use std::collections::HashMap; // from the standard library
+
+fn main() {
+    let mut scores: HashMap<String, u32> = HashMap::new();
+    scores.insert(String::from("Alice"), 100);
+    println!("{:?}", scores);
+}
+```
+
+The standard library (`std`) is available to all crates without a `Cargo.toml` entry. Third-party crates must be listed under `[dependencies]`.
+
+## Crate vs Module vs Package — At a Glance
+
+| Term | What it is |
+|------|-----------|
+| **Crate** | Compilation unit; produces a binary or library |
+| **Module** | Namespace inside a crate for organizing code |
+| **Package** | One or more crates managed by a single `Cargo.toml` |
+| **Workspace** | Multiple packages sharing one `Cargo.lock` and output directory |
+
+## Summary
+
+- A *crate* is the compiler's unit of work: binary (has `main`) or library (no `main`).
+- The *crate root* is `src/main.rs` for binaries and `src/lib.rs` for libraries.
+- A *package* wraps one or more crates under a single `Cargo.toml`.
+- A package may have at most one library crate and any number of binary crates.
+- Cargo uses file-system conventions (`src/main.rs`, `src/lib.rs`, `src/bin/`) to discover crates automatically.

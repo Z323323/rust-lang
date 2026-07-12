@@ -1,0 +1,149 @@
+---
+title: "Using Threads to Run Code Simultaneously in Rust"
+sidebarTitle: "Threads"
+description: "Spawn OS threads in Rust with thread::spawn, wait for completion with join, and move data into threads with the move closure."
+mode: "wide"
+---
+
+Rust's standard library provides OS-level threads that allow your program to run multiple pieces of code simultaneously. Because threads run independently, the Rust ownership and type systems play a critical role in ensuring that data shared across threads is safe, catching potential data races at compile time rather than at runtime.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Spawning a Thread with `thread::spawn`
+
+The `std::thread::spawn` function creates a new OS thread. It accepts a closure that contains the code the new thread should run. The thread executes concurrently with the main thread, and both may be scheduled by the OS in any order.
+
+```rust
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    thread::spawn(|| {
+        for i in 1..10 {
+            println!("hi number {i} from the spawned thread!");
+            thread::sleep(Duration::from_millis(1));
+        }
+    });
+
+    for i in 1..5 {
+        println!("hi number {i} from the main thread!");
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+```
+
+Notice that the spawned thread prints numbers 1 through 9, but the main thread only counts to 4. When the main thread ends, the spawned thread is stopped whether it has finished or not. Run this program a few times and you'll see the interleaved output change order — that's the OS thread scheduler at work.
+
+## Waiting for Threads to Finish with `JoinHandle`
+
+`thread::spawn` returns a `JoinHandle<T>`. Calling `.join()` on it blocks the current thread until the spawned thread completes, and returns a `Result<T, Box<dyn Any + Send>>` containing either the thread's return value or the panic payload.
+
+```rust
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..10 {
+            println!("hi number {i} from the spawned thread!");
+            thread::sleep(Duration::from_millis(1));
+        }
+    });
+
+    for i in 1..5 {
+        println!("hi number {i} from the main thread!");
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    // Block here until the spawned thread finishes.
+    handle.join().unwrap();
+}
+```
+
+Now the main thread waits for the spawned thread to complete before exiting. If you move `handle.join().unwrap()` to just before the main thread's loop, you'll see the spawned thread finish entirely before the main thread prints anything — the placement of `.join()` matters greatly for how threads interleave.
+
+## Moving Ownership into Threads with `move` Closures
+
+Threads require that any data they use be valid for their entire lifetime. Rust's borrow checker enforces this: if a spawned thread tries to borrow a value from the parent thread's stack, the compiler rejects it because the parent might exit before the thread finishes.
+
+```rust
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    // The `move` keyword forces the closure to take ownership of `v`.
+    let handle = thread::spawn(move || {
+        println!("Here's a vector: {v:?}");
+    });
+
+    // `v` has been moved into the thread — using it here would be a compile error.
+    // drop(v); // error[E0382]: use of moved value
+
+    handle.join().unwrap();
+}
+```
+
+The `move` keyword before the closure forces it to take ownership of every captured variable. Without `move`, Rust would infer borrowing, which the borrow checker rejects because the thread could outlive the enclosing scope. With `move`, the thread now fully owns `v`, so there is no lifetime concern.
+
+## Spawning Multiple Threads and Collecting Handles
+
+A common pattern is to spawn several threads, collect their `JoinHandle`s into a `Vec`, and then join them all.
+
+```rust
+use std::thread;
+
+fn main() {
+    let handles: Vec<_> = (0..5)
+        .map(|i| {
+            thread::spawn(move || {
+                println!("Thread {i} is running");
+                i * i  // Each thread returns a value.
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        let result = handle.join().unwrap();
+        println!("Thread returned: {result}");
+    }
+}
+```
+
+Each spawned closure captures `i` by move (possible because `i` is `Copy`). After all threads are spawned, we iterate over the handles and join each one, collecting the squared value each thread computed. This pattern scales cleanly to any number of worker threads.
+
+## Thread Naming and Builder
+
+For production code, `thread::Builder` lets you set a thread name and stack size before spawning. Named threads produce more informative panic messages.
+
+```rust
+use std::thread;
+
+fn main() {
+    let builder = thread::Builder::new()
+        .name("worker-1".into())
+        .stack_size(4 * 1024 * 1024); // 4 MB stack
+
+    let handle = builder
+        .spawn(|| {
+            println!(
+                "Running in thread: {}",
+                thread::current().name().unwrap_or("unnamed")
+            );
+        })
+        .unwrap();
+
+    handle.join().unwrap();
+}
+```
+
+## Key Takeaways
+
+| Concept | API | Purpose |
+|---|---|---|
+| Spawn a thread | `thread::spawn(closure)` | Start concurrent execution |
+| Wait for completion | `handle.join()` | Synchronise thread lifetimes |
+| Transfer ownership | `move \|\| { … }` | Give the thread its own data |
+| Name a thread | `thread::Builder::new().name(…)` | Better diagnostics |
+
+Threads are the foundation of Rust's concurrency story, but sharing data between them requires either message passing (channels) or shared-state primitives (`Mutex<T>`, `Arc<T>`), both covered in subsequent sections.

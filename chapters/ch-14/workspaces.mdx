@@ -1,0 +1,195 @@
+---
+title: "Cargo Workspaces: Managing Multiple Crates Together"
+sidebarTitle: "Workspaces"
+description: "Use Cargo workspaces to manage multiple related crates in one repository. Share dependencies, run tests across crates, and maintain a single Cargo.lock."
+mode: "wide"
+---
+
+As a Rust project grows, you'll often want to split it into multiple crates — a library crate for core logic, a binary crate for the CLI, and perhaps additional helper crates. A **Cargo workspace** groups these crates into one repository, giving them a single `Cargo.lock` file, a shared `target/` directory, and the ability to cross-reference each other with simple path dependencies.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a Workspace
+
+Start with a root `Cargo.toml` that has only a `[workspace]` section (no `[package]`):
+
+```toml
+# /Cargo.toml  (workspace root)
+[workspace]
+members = [
+    "adder",
+    "add_one",
+]
+```
+
+Then create the member crates:
+
+```bash
+cargo new adder          # binary crate
+cargo new add_one --lib  # library crate
+```
+
+Your directory layout:
+
+```
+my_workspace/
+├── Cargo.toml          ← workspace root
+├── Cargo.lock          ← single shared lock file
+├── target/             ← single shared build directory
+├── adder/
+│   ├── Cargo.toml
+│   └── src/
+│       └── main.rs
+└── add_one/
+    ├── Cargo.toml
+    └── src/
+        └── lib.rs
+```
+
+## Adding a Path Dependency
+
+`adder` depends on `add_one`. In `adder/Cargo.toml`:
+
+```toml
+[package]
+name = "adder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+add_one = { path = "../add_one" }
+```
+
+`add_one/src/lib.rs`:
+
+```rust
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(add_one(5), 6);
+    }
+}
+```
+
+`adder/src/main.rs`:
+
+```rust
+use add_one::add_one;
+
+fn main() {
+    let num = 10;
+    println!("{num} plus one is {}!", add_one(num));
+}
+```
+
+Build and run from the workspace root:
+
+```bash
+cargo build
+cargo run -p adder    # -p selects a specific package
+```
+
+## Shared `Cargo.lock`
+
+All member crates share a single `Cargo.lock` at the workspace root. This means if `adder` and `add_one` both depend on `rand`, Cargo ensures they use the **same version**, preventing the "diamond dependency" problem that would arise if each had its own lock file.
+
+However, each crate still has its own `Cargo.toml` — dependency *specifications* are per-crate, but *resolved versions* are shared.
+
+## External Dependencies in Member Crates
+
+Add an external dependency to `add_one/Cargo.toml`:
+
+```toml
+[dependencies]
+rand = "0.8"
+```
+
+`adder` does not automatically get `rand` in scope — it must add it to its own `Cargo.toml` if needed. But both crates will resolve to the same version of `rand` because of the shared lock file.
+
+## Running Tests Across the Workspace
+
+Run all tests in all member crates:
+
+```bash
+cargo test
+```
+
+Run tests in a specific crate:
+
+```bash
+cargo test -p add_one
+```
+
+The output clearly labels which crate each test result comes from:
+
+```
+Running tests/integration_test.rs (target/debug/deps/add_one-...)
+test tests::it_works ... ok
+
+Running src/main.rs (target/debug/adder-...)
+(no tests)
+```
+
+## Shared `target/` Directory
+
+All build artifacts land in the workspace root's `target/` directory. This means:
+
+1. You don't have multiple `target/` directories consuming disk space.
+2. Incremental compilation is shared — if `add_one` is already compiled, `adder` doesn't recompile it.
+
+## Workspace-wide Settings
+
+Since Cargo 1.64, you can define shared dependency versions in the workspace root to keep member crates in sync:
+
+```toml
+# Workspace root Cargo.toml
+[workspace]
+members = ["adder", "add_one"]
+
+[workspace.dependencies]
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+```
+
+Member crates inherit these with:
+
+```toml
+# add_one/Cargo.toml
+[dependencies]
+rand = { workspace = true }
+```
+
+This prevents version drift across crates in the workspace.
+
+## Publishing Workspace Crates
+
+Workspace crates are published individually — there is no "publish workspace" command. Each crate must have its own complete `Cargo.toml` with `description`, `license`, etc.
+
+```bash
+cd add_one && cargo publish
+cd ../adder && cargo publish
+```
+
+Publish dependencies first (e.g., `add_one` before `adder`), or use path-plus-version dependencies:
+
+```toml
+add_one = { path = "../add_one", version = "0.1.0" }
+```
+
+This allows `adder` to work locally via the path and from crates.io in published form.
+
+## Summary
+
+- A workspace root `Cargo.toml` lists `members`; it has no `[package]`.
+- All members share one `Cargo.lock` (consistent dependency versions) and one `target/` (shared build cache).
+- Add member-to-member dependencies with `{ path = "../crate_name" }`.
+- `cargo test` runs all workspace tests; `cargo test -p name` targets one crate.
+- `cargo run -p name` and `cargo build -p name` scope commands to a single member.
+- Workspace dependencies (`[workspace.dependencies]`) centralize version management.

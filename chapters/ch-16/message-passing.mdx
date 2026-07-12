@@ -1,0 +1,173 @@
+---
+title: "Message Passing Between Threads with Channels in Rust"
+sidebarTitle: "Channels"
+description: "Use Rust channels (mpsc) for safe message passing between threads. Learn tx/rx, send, recv, and multiple producers with channel cloning."
+mode: "wide"
+---
+
+One increasingly popular approach to safe concurrency is *message passing*, where threads communicate by sending data to one another rather than sharing memory directly. Rust's standard library provides channels in `std::sync::mpsc` for exactly this purpose, ensuring that ownership of data is transferred when a message is sent — so two threads never hold a mutable reference to the same value simultaneously.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a Channel
+
+`std::sync::mpsc::channel` returns a tuple of a *transmitter* (`tx`) and a *receiver* (`rx`). The name `mpsc` stands for **multiple producer, single consumer**: many transmitters can send into the same channel, but only one receiver reads from it.
+
+```rust
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    // `tx` is the Sender<T>, `rx` is the Receiver<T>.
+    // The type `T` is inferred from what you first send.
+    drop((tx, rx)); // just to silence unused-variable warnings
+}
+```
+
+## Sending and Receiving a Single Message
+
+Move the transmitter into a spawned thread and send a value with `tx.send(value)`. In the main thread, call `rx.recv()` to block until a message arrives.
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let msg = String::from("hello from the spawned thread");
+        tx.send(msg).unwrap();
+        // `msg` has been moved into the channel — using it here is a compile error.
+    });
+
+    // `recv()` blocks until a message arrives, then returns Result<T, RecvError>.
+    let received = rx.recv().unwrap();
+    println!("Got: {received}");
+}
+```
+
+`send` returns `Err` if the receiver has been dropped. `recv` returns `Err` if the channel is empty *and* all transmitters have been dropped. Both errors are typically handled with `.unwrap()` in examples, but real applications should handle them gracefully.
+
+## Sending Multiple Messages
+
+Treat `rx` as an iterator to receive messages one by one until the channel is closed (all `tx` clones dropped).
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let messages = vec![
+            String::from("hello"),
+            String::from("from"),
+            String::from("the"),
+            String::from("thread"),
+        ];
+
+        for msg in messages {
+            tx.send(msg).unwrap();
+            thread::sleep(Duration::from_millis(200));
+        }
+        // When `tx` is dropped here, `rx` iteration ends.
+    });
+
+    // Iterating over `rx` blocks on each `recv()` call.
+    for received in rx {
+        println!("Got: {received}");
+    }
+}
+```
+
+The output is printed one line roughly every 200 ms as the spawned thread sends each message.
+
+## Multiple Producers with `tx.clone()`
+
+Because the module is named *multiple producer*, single consumer, you can clone the transmitter to give multiple threads their own sending handle. All clones share the same underlying channel.
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    // Clone `tx` before moving the original into the first thread.
+    let tx1 = tx.clone();
+
+    thread::spawn(move || {
+        let msgs = ["a1", "a2", "a3"];
+        for msg in msgs {
+            tx1.send(msg).unwrap();
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    thread::spawn(move || {
+        let msgs = ["b1", "b2", "b3"];
+        for msg in msgs {
+            tx.send(msg).unwrap();
+            thread::sleep(Duration::from_millis(150));
+        }
+    });
+
+    for received in rx {
+        println!("Got: {received}");
+    }
+}
+```
+
+Both threads send into the same `rx`. The order you see messages arrive depends on timing, demonstrating real concurrency.
+
+## Non-Blocking Receive with `try_recv`
+
+`rx.recv()` blocks the calling thread. If you need to keep doing other work while checking for messages, use `rx.try_recv()`, which returns immediately with `Ok(value)` or `Err(TryRecvError::Empty)`.
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<String>();
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(500));
+        tx.send(String::from("delayed message")).unwrap();
+    });
+
+    loop {
+        match rx.try_recv() {
+            Ok(msg) => {
+                println!("Received: {msg}");
+                break;
+            }
+            Err(_) => {
+                println!("No message yet, doing other work…");
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+    }
+}
+```
+
+## Ownership and Channel Safety
+
+When you call `tx.send(value)`, ownership of `value` moves into the channel. This prevents you from using the value in the sender thread after sending — the type system guarantees the receiver has exclusive access. There is no possibility of a data race because Rust's move semantics make shared mutable state physically impossible here.
+
+## Summary
+
+| Operation | Method | Blocks? |
+|---|---|---|
+| Send a value | `tx.send(val)` | No (returns immediately) |
+| Receive, blocking | `rx.recv()` | Yes, until message arrives |
+| Receive, non-blocking | `rx.try_recv()` | No (returns `Err` if empty) |
+| Iterate all messages | `for msg in rx { … }` | Blocks per message |
+| Add a producer | `tx.clone()` | — |
+
+Channels offer a clean model for thread communication where the type system enforces safe ownership transfer. For situations where multiple threads truly need to *share* the same data rather than pass it around, `Mutex<T>` and `Arc<T>` provide the alternative covered in the next section.

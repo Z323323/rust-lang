@@ -1,0 +1,160 @@
+---
+title: "Customizing Cargo Release Profiles for Build Optimization"
+sidebarTitle: "Release Profiles"
+description: "Customize Cargo's dev and release build profiles in Cargo.toml. Set opt-level, debug info, and other compiler settings per profile."
+mode: "wide"
+---
+
+Cargo ships with two built-in build profiles: **dev** (used by `cargo build`) and **release** (used by `cargo build --release`). Each profile is a named collection of compiler flags that trades off between compilation speed, binary size, and runtime performance. You can override any setting in `Cargo.toml` to tune your builds for development productivity or production efficiency.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Built-in Profiles
+
+### `dev` Profile
+
+Used every time you run `cargo build` or `cargo run` without `--release`. Its defaults prioritize **fast compilation**:
+
+```toml
+# Cargo defaults — you don't need to write this
+[profile.dev]
+opt-level = 0      # No optimization; fastest compile
+debug = true       # Full debug symbols
+```
+
+- `opt-level = 0`: The compiler skips nearly all optimizations, so the binary is much slower at runtime but compiles quickly.
+- `debug = true`: Debug symbols are embedded so `gdb`/`lldb` can show you source-level stack traces.
+
+### `release` Profile
+
+Used with `cargo build --release`. Its defaults prioritize **fast runtime**:
+
+```toml
+# Cargo defaults
+[profile.release]
+opt-level = 3      # Maximum optimization
+debug = false      # No debug symbols (smaller binary)
+```
+
+- `opt-level = 3`: Full optimization, including inlining, vectorization, and dead-code elimination.
+- A release binary is often 10–50× faster than a dev binary for CPU-bound workloads.
+
+## Overriding Defaults in `Cargo.toml`
+
+Add a `[profile.*]` section to your `Cargo.toml` to override specific settings:
+
+```toml
+[profile.dev]
+opt-level = 1    # A little optimization, still fast to compile
+```
+
+```toml
+[profile.release]
+opt-level = "z"  # Optimize for binary size ("s" = size, "z" = extreme size)
+debug = true     # Keep debug symbols even in release (useful for profiling)
+```
+
+Cargo merges your overrides with its defaults — you only need to specify the keys you want to change.
+
+## `opt-level` Values
+
+| Value | Meaning |
+|-------|---------|
+| `0` | No optimization (default for dev) |
+| `1` | Basic optimizations |
+| `2` | More optimizations |
+| `3` | All optimizations (default for release) |
+| `"s"` | Optimize for small binary size |
+| `"z"` | Optimize aggressively for size |
+
+For a WebAssembly deployment, `opt-level = "z"` can dramatically reduce download size. For a microcontroller, `"s"` is often the right choice.
+
+## Debug Information Settings
+
+```toml
+[profile.release]
+debug = true          # Full debug info
+# debug = "line-tables-only"  # Smaller: only line numbers
+# debug = false       # No debug info (default)
+```
+
+Keeping `debug = true` in release doesn't hurt runtime performance — it only increases binary size. It's very useful for profiling with tools like `perf` or `Instruments`.
+
+## `lto` (Link-Time Optimization)
+
+LTO lets the linker optimize across crate boundaries, potentially removing more dead code and improving inlining:
+
+```toml
+[profile.release]
+lto = true     # Full LTO (slow to link, smaller/faster binary)
+# lto = "thin" # Thin LTO: much faster link, most of the benefit
+```
+
+Thin LTO is usually the best practical default for release builds.
+
+## `codegen-units`
+
+Cargo splits compilation into parallel units to speed up incremental builds. For a final release binary, using one unit lets LLVM see everything:
+
+```toml
+[profile.release]
+codegen-units = 1   # Maximum optimization opportunity, slower compile
+```
+
+Combined with `lto = true`, this produces the fastest possible binary.
+
+## `panic` Strategy
+
+```toml
+[profile.release]
+panic = "abort"   # Terminate immediately on panic instead of unwinding
+```
+
+`panic = "abort"` produces smaller binaries because the panic unwinding runtime is excluded. It's appropriate for systems where you don't need stack-unwinding cleanup (e.g., embedded or WebAssembly).
+
+## Custom Profiles
+
+Cargo 1.57+ supports custom named profiles:
+
+```toml
+[profile.bench-dev]
+inherits = "dev"
+opt-level = 2
+```
+
+Build with: `cargo build --profile bench-dev`.
+
+## Full Example
+
+A typical `Cargo.toml` for a production CLI tool:
+
+```toml
+[package]
+name = "myapp"
+version = "1.0.0"
+edition = "2021"
+
+[profile.dev]
+opt-level = 1        # Slightly faster runtime in dev without much cost
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = false
+strip = "debuginfo"  # Strip debug info post-link (Rust 1.59+)
+```
+
+## Summary
+
+| Setting | dev default | release default | Purpose |
+|---------|-------------|-----------------|---------|
+| `opt-level` | 0 | 3 | Optimization intensity |
+| `debug` | true | false | Debug symbols |
+| `lto` | false | false | Link-time optimization |
+| `codegen-units` | 16 | 16 | Parallelism vs optimization |
+| `panic` | "unwind" | "unwind" | Panic strategy |
+
+- Override only what you need; Cargo merges your settings with its defaults.
+- For deployment: `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`.
+- For development: `opt-level = 1` is a common sweet spot for quick iteration.

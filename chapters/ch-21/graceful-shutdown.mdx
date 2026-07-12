@@ -1,0 +1,308 @@
+---
+title: "Graceful Shutdown and Cleanup for a Rust Web Server"
+sidebarTitle: "Graceful Shutdown"
+description: "Implement graceful shutdown for your Rust thread pool web server. Use a Drop impl to send shutdown messages, join worker threads, and clean up resources."
+mode: "wide"
+---
+
+When a process receives a signal (e.g., `Ctrl+C`) or reaches the end of `main`, all threads are killed immediately unless you explicitly wait for them. For a web server this means in-flight requests get cut off mid-response, files may be partially written, and database connections may be dropped without releasing locks. *Graceful shutdown* means: stop accepting new work, let current work finish, then exit cleanly. In this chapter we implement that for our thread pool using Rust's `Drop` trait and a `Message` enum.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Problem with Our Current Loop
+
+Worker threads currently loop forever waiting on `recv()`:
+
+```rust
+loop {
+    let job = receiver.lock().unwrap().recv().unwrap();
+    job();
+}
+```
+
+When `recv()` returns `Err`, it means the sender has been dropped—there are no more senders. We can exploit this: if we drop the `ThreadPool`'s sender, all worker threads will see a `recv()` error and can exit cleanly. But we also need the main thread to *wait* for workers to finish their current jobs before the process exits. That is the role of `thread.join()`.
+
+---
+
+## Step 1: A `Message` Enum
+
+Instead of sending only `Job` values, we send a `Message` that can either carry a job or tell the worker to terminate:
+
+```rust
+enum Message {
+    NewJob(Job),
+    Terminate,
+}
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+```
+
+Update the channel type to use `Message`:
+
+```rust
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Message>,
+}
+```
+
+---
+
+## Step 2: Update `Worker` to Handle the `Message`
+
+Workers now match on the received message:
+
+```rust
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let message = {
+                receiver.lock().unwrap().recv().unwrap()
+            };
+
+            match message {
+                Message::NewJob(job) => {
+                    println!("Worker {id}: executing job");
+                    job();
+                }
+                Message::Terminate => {
+                    println!("Worker {id}: terminating");
+                    break;  // exit the loop → thread ends
+                }
+            }
+        });
+
+        Worker { id, thread: Some(thread) }
+    }
+}
+```
+
+Notice that `thread` is now `Option<thread::JoinHandle<()>>`. We need `Option` because `thread.join()` takes ownership of the `JoinHandle`, and `Drop::drop` only receives a `&mut self` reference. Using `Option::take()` lets us move the `JoinHandle` out of the `Option`:
+
+```rust
+struct Worker {
+    id: usize,
+    thread: Option<thread::JoinHandle<()>>,
+}
+```
+
+---
+
+## Step 3: Implement `Drop` for `ThreadPool`
+
+The `Drop` implementation does two things in sequence:
+
+1. **Send a `Terminate` message to every worker.** We send *all* the messages first so workers can finish their current jobs concurrently.
+2. **Join every worker thread.** This blocks until each thread has exited.
+
+```rust
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        println!("Sending terminate message to all workers.");
+
+        // Phase 1: send Terminate to every worker
+        for _ in &self.workers {
+            self.sender.send(Message::Terminate).unwrap();
+        }
+
+        // Phase 2: wait for each worker to finish
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+            }
+        }
+    }
+}
+```
+
+If we sent *and* joined in the same loop, we would block on worker 0 before sending `Terminate` to workers 1, 2, and 3—defeating the purpose of concurrent termination.
+
+---
+
+## Step 4: Limit Requests in `main` for Testing
+
+To observe graceful shutdown, we limit `main` to accepting only a handful of requests before the `ThreadPool` goes out of scope:
+
+```rust
+use std::{
+    fs,
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+mod thread_pool;
+use thread_pool::ThreadPool;
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let pool = ThreadPool::new(4);
+
+    // Accept only 5 requests, then shut down
+    for stream in listener.incoming().take(5) {
+        let stream = stream.unwrap();
+        pool.execute(|| handle_connection(stream));
+    }
+
+    println!("Shutting down server after 5 requests.");
+    // pool is dropped here → Drop runs → workers terminate gracefully
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
+
+    let body = match request_line.as_str() {
+        "GET / HTTP/1.1" => fs::read_to_string("hello.html")
+            .unwrap_or_else(|_| "<h1>Hello!</h1>".to_string()),
+        _ => "<h1>404 Not Found</h1>".to_string(),
+    };
+
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+---
+
+## Complete `thread_pool.rs` with Graceful Shutdown
+
+```rust
+// src/thread_pool.rs
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+enum Message {
+    NewJob(Job),
+    Terminate,
+}
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Message>,
+}
+
+impl ThreadPool {
+    /// Create a thread pool with `size` worker threads.
+    /// # Panics
+    /// Panics if `size` is 0.
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        ThreadPool { workers, sender }
+    }
+
+    /// Send a closure to the pool for execution.
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.sender.send(Message::NewJob(Box::new(f))).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        println!("ThreadPool: sending Terminate to {} workers", self.workers.len());
+
+        // Send terminate signals first
+        for _ in &self.workers {
+            self.sender.send(Message::Terminate).unwrap();
+        }
+
+        // Then join all threads
+        for worker in &mut self.workers {
+            println!("ThreadPool: joining worker {}", worker.id);
+            if let Some(handle) = worker.thread.take() {
+                handle.join().unwrap();
+            }
+        }
+
+        println!("ThreadPool: all workers shut down cleanly.");
+    }
+}
+
+struct Worker {
+    id: usize,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let message = {
+                receiver.lock().unwrap().recv().unwrap()
+            };
+
+            match message {
+                Message::NewJob(job) => {
+                    println!("Worker {id}: running job");
+                    job();
+                }
+                Message::Terminate => {
+                    println!("Worker {id}: received Terminate, exiting");
+                    break;
+                }
+            }
+        });
+
+        Worker {
+            id,
+            thread: Some(thread),
+        }
+    }
+}
+```
+
+---
+
+## Observing the Output
+
+Run `cargo run` and send five requests (e.g., by refreshing the browser five times). You should see output like:
+
+```
+Serving on http://127.0.0.1:7878 with 4 worker threads
+Worker 2: running job
+Worker 0: running job
+Worker 1: running job
+Worker 3: running job
+Worker 0: running job
+Shutting down server after 5 requests.
+ThreadPool: sending Terminate to 4 workers
+ThreadPool: joining worker 0
+Worker 0: received Terminate, exiting
+ThreadPool: joining worker 1
+Worker 1: received Terminate, exiting
+ThreadPool: joining worker 2
+Worker 2: received Terminate, exiting
+ThreadPool: joining worker 3
+Worker 3: received Terminate, exiting
+ThreadPool: all workers shut down cleanly.
+```
+
+---
+
+## What We Learned
+
+This final project brought together a wide range of Rust concepts:
+
+- **`std::net`** for low-level TCP networking.
+- **`BufReader` and `io::prelude`** for line-by-line I/O.
+- **`mpsc` channels** for cross-thread communication.
+- **`Arc<Mutex<T>>`** for shared ownership of mutable state across threads.
+- **The `Drop` trait** for deterministic cleanup when a value goes out of scope.
+- **`Option::take()`** to move values out of a struct during `Drop`.
+
+Graceful shutdown is a pattern you will encounter again whenever you write servers, background workers, or any long-running concurrent system in Rust. The same principles—signal workers through channels, then join their handles—apply whether you're building an HTTP server, a database connection pool, or an event-driven processing pipeline.

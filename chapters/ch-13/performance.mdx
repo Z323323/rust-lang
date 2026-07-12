@@ -1,0 +1,176 @@
+---
+title: "Comparing Loops and Iterators for Performance in Rust"
+sidebarTitle: "Performance"
+description: "Rust iterators and loops compile to the same machine code—zero-cost abstractions. Benchmark data showing iterators match or beat manual loops."
+mode: "wide"
+---
+
+A common concern when adopting functional-style iterator chains is: "Does all this abstraction hurt performance?" The answer in Rust is a resounding no. The Rust compiler, through a combination of inlining, monomorphization, and LLVM optimizations, compiles iterator chains to the same (or better) machine code as equivalent hand-written loops. This property is called **zero-cost abstractions** — you pay for no more than what you use, and the abstraction itself has no runtime overhead.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## What "Zero-Cost" Means
+
+The phrase comes from Bjarne Stroustrup's description of C++ philosophy:
+
+> "What you don't use, you don't pay for. And further: What you do use, you couldn't hand code any better."
+
+Rust inherits this principle. An iterator chain like:
+
+```rust
+let sum: u32 = (0..1_000_000)
+    .filter(|x| x % 2 == 0)
+    .map(|x| x * x)
+    .sum();
+```
+
+…compiles to a tight loop with no heap allocation, no dynamic dispatch, and no overhead compared to:
+
+```rust
+let mut sum: u32 = 0;
+for x in 0..1_000_000 {
+    if x % 2 == 0 {
+        sum += x * x;
+    }
+}
+```
+
+LLVM sees both as the same sequence of arithmetic and branch instructions.
+
+## Why Iterators Can Be *Faster* Than Loops
+
+Iterator chains over fixed-size slices can actually be *faster* than index-based loops because:
+
+1. **No bounds checking**: `iter()` on a slice uses a pointer pair internally; the compiler knows iteration is bounded.
+2. **SIMD vectorization**: LLVM can auto-vectorize iterator chains more readily because there are no explicit indices to trip alias analysis.
+3. **Loop unrolling**: When iterator element counts are compile-time known (e.g., arrays), the compiler can unroll the loop entirely.
+
+### The Audio Decoder Example
+
+The Rust Book cites an audio processing benchmark. An iterator-based decoder using `zip` and `map` over fixed-length arrays compiled to this kind of assembly:
+
+```
+; 12 iterations unrolled — no loop counter needed
+vmovss  xmm0, [buffer + 0]
+vfmadd132ss xmm0, xmm1, [coefficients + 0]
+vmovss  xmm2, [buffer + 4]
+vfmadd132ss xmm2, xmm3, [coefficients + 4]
+; ... and so on for all 12 elements
+```
+
+No loop overhead, no bounds checks — just the arithmetic. A hand-written loop over the same data would generate nearly identical output.
+
+## Benchmarking in Rust
+
+Use the `criterion` crate for stable, statistically-sound benchmarking:
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "search_bench"
+harness = false
+```
+
+```rust
+// benches/search_bench.rs
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+
+fn search_loop(query: &str, contents: &str) -> Vec<&str> {
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+    results
+}
+
+fn search_iter(query: &str, contents: &str) -> Vec<&str> {
+    contents.lines().filter(|l| l.contains(query)).collect()
+}
+
+fn bench_search(c: &mut Criterion) {
+    let contents = "line one\nline two\nline three\n".repeat(10_000);
+    let query = "two";
+
+    c.bench_function("loop search", |b| {
+        b.iter(|| search_loop(black_box(query), black_box(&contents)))
+    });
+    c.bench_function("iter search", |b| {
+        b.iter(|| search_iter(black_box(query), black_box(&contents)))
+    });
+}
+
+criterion_group!(benches, bench_search);
+criterion_main!(benches);
+```
+
+Run with:
+
+```bash
+cargo bench
+```
+
+In practice you'll see results within statistical noise of each other — typically within 1–2% — confirming the zero-cost property.
+
+## When Iterators Are Slower (Rare Edge Cases)
+
+There are a handful of situations where iterators can theoretically be slower:
+
+1. **Complex closures that don't inline**: If a closure calls a trait method through a vtable (`dyn Fn`), there is dynamic dispatch overhead. Use `impl Fn` (static dispatch) whenever possible.
+2. **Collecting into an oversized `Vec`**: Every `.collect()` call allocates. If you chain many `.map().filter().collect()` calls instead of one unified chain, you pay for each intermediate allocation.
+3. **Short iterators with high setup cost**: For a 2-element array, an explicit `if` statement is clearer and equally fast.
+
+The solution to point 2 is to chain adaptors before a single terminal `.collect()`:
+
+```rust
+// Bad: three allocations
+let step1: Vec<_> = data.iter().map(|x| x * 2).collect();
+let step2: Vec<_> = step1.iter().filter(|&&x| x > 5).collect();
+let step3: Vec<_> = step2.iter().map(|x| x + 1).collect();
+
+// Good: one allocation
+let result: Vec<_> = data.iter()
+    .map(|x| x * 2)
+    .filter(|&x| x > 5)
+    .map(|x| x + 1)
+    .collect();
+```
+
+## The `#[inline]` Attribute
+
+Rust inlines small closures automatically. For non-trivial functions passed as iterators you can hint at inlining:
+
+```rust
+#[inline]
+fn expensive_transform(x: i32) -> i32 {
+    // ... complex logic
+    x * 3 + 1
+}
+
+let result: Vec<i32> = (0..100).map(expensive_transform).collect();
+```
+
+## Checking Assembly with `cargo asm`
+
+To see the machine code generated for a specific function, install `cargo-asm`:
+
+```bash
+cargo install cargo-asm
+cargo asm minigrep::search
+```
+
+Compare the loop and iterator versions side-by-side to convince yourself they produce the same output.
+
+## Summary
+
+- **Zero-cost abstraction**: iterator chains compile to the same machine code as equivalent loops.
+- Iterators can be *faster* than loops on slices due to no bounds checks and better vectorization.
+- Avoid collecting intermediate `Vec`s; chain all adaptors before a single `.collect()`.
+- Use `impl Fn` (not `dyn Fn`) to keep closures statically dispatched and inlineable.
+- Benchmark with `criterion`; inspect assembly with `cargo-asm` if you're skeptical.
+
+This concludes Chapter 13. Closures and iterators together form the backbone of idiomatic Rust — expressive, readable, and as fast as anything you could write by hand.

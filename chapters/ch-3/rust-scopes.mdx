@@ -1,0 +1,106 @@
+---
+title: "Understanding Scopes and Variable Lifetimes in Rust"
+sidebarTitle: "Scopes"
+description: "Understand how Rust scopes work—nested blocks, variable lifetimes, function scopes, and how references allow you to share data across scope boundaries."
+mode: "wide"
+---
+
+Before moving on to Rust's scalar types, let's revisit the inner scope from the previous shadowing example. We will use it as a foundation to explore how scopes work in Rust in much greater depth.
+
+You can already spot a key characteristic of scopes just by looking at that code: **the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends** (which is why we printed it while still inside).
+
+One subtle detail that might be easy to overlook in the previous example is this: **we can print the value of `x` in the outer scope after exiting the inner scope simply because shadowing a variable inside an inner block is exactly like defining a completely new variable**. Consider the following example:
+
+```rust
+fn main() {
+    let x = 5;
+
+    let x = x + 1; // 6 = 5 + 1
+
+    {
+        let a = x * 2; // 12 = 6 * 2
+        println!("The value of a in the inner scope is: {a}");
+    } // The inner scope ends here, dropping the inner 'a' as it goes out of scope.
+
+    println!("The value of x is: {x}"); // Here, the outer 'x' is bound to the value 6.
+}
+```
+
+Executing this latest snippet with `cargo run` produces the following output, demonstrating that both code examples behave exactly the same way.
+
+```text
+   Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running `target/debug/scopes`
+The value of a in the inner scope is: 12
+The value of x is: 6
+```
+
+Now, however, let's observe what happens when we try to access the value of `a` outside the inner scope. For example, by writing:
+
+```rust
+fn main() {
+    // --snip--
+    {
+       // --snip--
+    } // The inner scope ends here, dropping the inner 'a' as it goes out of scope.
+    
+    println!("The value of a in the outer scope is: {a}");
+}
+```
+
+we would encounter the following error during compilation.
+
+```text
+   Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
+error[E0425]: cannot find value `a` in this scope
+  --> src/main.rs:11:54
+   |
+11 |     println!("The value of a in the outer scope is: {a}");
+   |                                                      ^
+   |
+help: the binding `a` is available in a different scope in the same function
+  --> src/main.rs:7:13
+   |
+ 7 |         let a = x * 2; // 12 = 6 * 2
+   |             ^
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `scopes` (bin "scopes") due to 1 previous error
+```
+
+Consequently, some questions should naturally arise:
+
+- Why shadow a variable by reusing the same name if it is actually a totally separate variable?
+- Why should we even use scopes?
+- How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?
+
+We will answer each question in the following sections. Before doing so, however, we need to cover a couple of fundamental concepts and distinguish the **generic block scopes** we just explored from the **scopes introduced by functions**.
+
+While functions will be analyzed in depth later on, we can already look at a couple of basic examples.
+
+## Scope Structure
+
+You can picture nested scopes like the layers of an onion:
+
+```text
+... -> { 3rd { 2nd { 1st } 2nd } 3rd } -> ...
+```
+
+**The innermost scope (marked as `1st`) is the first to disappear when its block ends. Then the `2nd` one disappears, followed by the `3rd`, and so on. This means that the variables within each of the scopes shown will cease to exist in the exact same order.**
+
+As we saw earlier, **a simple inner scope can see variables from its outer scopes**. **This is partly because they are still 'alive'. However, the reverse is not true: outer scopes cannot see inside inner scopes.**
+
+If you think about it, this makes perfect sense. First, an outer scope cannot 'capture' values from an inner scope because **when the outer scope starts running, the inner variables haven't even been initialized yet**. Furthermore, **once the inner scope finishes executing, its variables are dropped and cease to exist**. Allowing the outer scope to access them afterward would mean referencing data that is no longer there—a scenario that Rust's safety rules strictly forbid!
+
+Finally, note that our previous example showed the simplest form of an inner scope—one created explicitly with bare `{ ... }` brackets. In general, **a new scope is created almost every time you see curly brackets**. For instance, **defining a function or calling a method introduces a new scope**. However, there is a crucial difference: **unlike bare blocks, functions and methods do not automatically see the variables of the scope that called them**. **The parameters you explicitly pass to the function are the only outer variables allowed into that new scope.**
+
+Let's dive into a simple function to see how variables are passed into its scope. Afterward, we will highlight the key differences between function scopes and the bare blocks we explored earlier.
+
+Once that's done, we will finally answer the questions raised earlier, definitively clearing up the topic of scopes—a fundamental concept in Rust. This is exactly why I dedicated an entire section to it. Grasping how scopes work right from the start will massively accelerate and improve your understanding of Rust's more complex core mechanisms, such as its famous **ownership model**.
+
+## Function Scopes
+
+
+
+**When the program exits a scope, all variables contained within it, get dropped and vanish. There is a way, however, to avoid losing variables: grabbing them with a hook if they come from outer scopes, or returning them implicitly or explicitly.** In Rust, that hook is a **reference** (`&`). **If you modify a mutable variable declared inside an outerscope, but from inside an inner scope via a reference, you are actually modifying a specific memory address that lives in the outer scope.** Because of this, **when the inner pool disappears, you don't lose your modifications (your fish), because the data is safely anchored to the outer scope by your hook**.

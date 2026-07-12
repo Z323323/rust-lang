@@ -1,0 +1,167 @@
+---
+title: "Refutable and Irrefutable Patterns in Rust"
+sidebarTitle: "Refutability"
+description: "Understand the difference between refutable and irrefutable Rust patterns. Learn which pattern contexts require irrefutable patterns and how to fix mismatches."
+mode: "wide"
+---
+
+Every pattern in Rust falls into one of two categories: *irrefutable* (always matches no matter what value is given) or *refutable* (might not match some values). The distinction matters because Rust enforces which kind is required in each binding context — using a refutable pattern where an irrefutable one is needed is a compile error, and understanding why helps you fix these errors quickly.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Irrefutable Patterns
+
+An *irrefutable* pattern is one that will always successfully match any possible value of its type. Identifier patterns and tuple patterns containing only identifier sub-patterns are irrefutable:
+
+```rust
+let x = 5;          // `x` is irrefutable — every i32 matches
+let (a, b) = (1, 2); // `(a, b)` is irrefutable — every (i32, i32) matches
+let _ = some_value;  // `_` is irrefutable — matches anything
+```
+
+These patterns are required in `let` statements, `for` loop variables, and function/closure parameters, because those contexts must bind a name for every possible input.
+
+## Refutable Patterns
+
+A *refutable* pattern is one that might fail to match certain values:
+
+```rust
+// `Some(x)` is refutable: it does NOT match `None`.
+// `Ok(x)` is refutable: it does NOT match `Err(…)`.
+// `42` is refutable: it does NOT match any other i32.
+```
+
+Refutable patterns are used in `match` arms, `if let`, `while let`, and `let … else` because those constructs are explicitly designed to handle the case where the pattern doesn't match.
+
+## What the Compiler Enforces
+
+The Rust compiler will reject a refutable pattern in an irrefutable context:
+
+```rust
+let config_max: Option<u8> = Some(3);
+
+// ERROR: refutable pattern in local binding
+// let Some(max) = config_max;
+// help: you might want to use an `if let` to ignore the variant that isn't matched
+```
+
+The compiler suggests `if let`:
+
+```rust
+if let Some(max) = config_max {
+    println!("max = {max}");
+}
+```
+
+Conversely, using an irrefutable pattern in a refutable context (like `if let`) compiles but the compiler warns you:
+
+```rust
+let x = 5i32;
+
+// WARNING: irrefutable pattern in if let — `if let` is useless here
+if let y = x {
+    println!("always true: {y}");
+}
+// The compiler suggests: use `let y = x` instead.
+```
+
+## Practical Examples of Each
+
+### Irrefutable: `let`, `for`, function params
+
+```rust
+// ✅ Irrefutable let bindings:
+let point = (3.0f64, 7.0f64);
+let (px, py) = point;               // Destructure a tuple — always matches
+println!("({px}, {py})");
+
+// ✅ Irrefutable for variable:
+let numbers = [10, 20, 30];
+for n in numbers { println!("{n}"); } // `n` always matches an i32
+
+// ✅ Irrefutable struct destructuring in parameter:
+struct Point { x: f64, y: f64 }
+fn length(Point { x, y }: Point) -> f64 {
+    (x * x + y * y).sqrt()
+}
+println!("{}", length(Point { x: 3.0, y: 4.0 })); // 5.0
+```
+
+### Refutable: `if let`, `while let`, `match`
+
+```rust
+fn describe_number(n: Option<i32>) {
+    // ✅ Refutable pattern in if let:
+    if let Some(value) = n {
+        println!("Got a value: {value}");
+    } else {
+        println!("Got nothing");
+    }
+}
+
+// ✅ Refutable pattern in match:
+let result: Result<i32, &str> = Ok(42);
+match result {
+    Ok(v)  => println!("success: {v}"),
+    Err(e) => println!("error: {e}"),
+}
+```
+
+### `let … else`: Refutable Pattern with an Irrefutable Obligation
+
+The `let … else` construct (Rust 1.65+) lets you use a refutable pattern in a `let` position, but the `else` branch must diverge (return, break, continue, or panic):
+
+```rust
+fn process(input: Option<&str>) {
+    let Some(text) = input else {
+        eprintln!("No input provided");
+        return;
+    };
+    // `text: &str` is bound here and in scope for the rest of the function.
+    println!("Processing: {text}");
+}
+
+fn parse_positive(s: &str) -> u32 {
+    let Ok(n) = s.parse::<u32>() else {
+        panic!("Expected a positive integer, got: {s}");
+    };
+    n
+}
+```
+
+`let … else` avoids deeply nested `if let` chains while still providing a binding for the rest of the scope — something a plain `if let` cannot do.
+
+## Match Arms and Exhaustiveness
+
+In a `match`, refutable patterns are fine, but the *set* of all arms must be exhaustive (irrefutable together):
+
+```rust
+fn classify(n: u8) -> &'static str {
+    match n {
+        0       => "zero",
+        1..=9   => "single digit",
+        10..=99 => "double digit",
+        _       => "triple digit or more", // Wildcard makes the set irrefutable.
+    }
+}
+```
+
+The wildcard `_` is irrefutable and "catches" all remaining values. Without it, the compiler would error:
+
+```
+error[E0004]: non-exhaustive patterns: `100u8..=u8::MAX` not covered
+```
+
+## Summary
+
+| Pattern | Refutable? | Valid in |
+|---|---|---|
+| `x` (identifier) | No | Everywhere |
+| `_` (wildcard) | No | Everywhere |
+| `(a, b)` (tuple, irrefutable sub-patterns) | No | Everywhere |
+| `Some(x)` | Yes | `match`, `if let`, `while let`, `let … else` |
+| `Ok(x)` / `Err(x)` | Yes | `match`, `if let`, `while let`, `let … else` |
+| `42` (literal) | Yes | `match`, `if let`, `while let`, `let … else` |
+| `1..=10` (range) | Yes | `match`, `if let`, `while let`, `let … else` |
+
+When you see a refutability error, the fix is almost always one of: switch to `if let`, use `let … else`, or add a wildcard arm to an existing `match`.

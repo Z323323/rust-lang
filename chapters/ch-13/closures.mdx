@@ -1,0 +1,176 @@
+---
+title: "Closures in Rust: Anonymous Functions that Capture Their Environment"
+sidebarTitle: "Closures"
+description: "Use Rust closures to write anonymous functions that capture variables from their scope. Learn Fn, FnMut, FnOnce traits and closure type inference."
+mode: "wide"
+---
+
+Closures are anonymous functions that can capture variables from the scope in which they are defined. Unlike regular functions, closures have access to values from their enclosing environment, making them ideal for callbacks, iterator adapters, and deferred computation. Rust's closure system is both powerful and zero-cost — the compiler inlines small closures entirely, producing the same machine code as a hand-written loop.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Closure Syntax
+
+A closure is written with pipes `|params|` followed by the body:
+
+```rust
+let add_one = |x| x + 1;
+println!("{}", add_one(5)); // 6
+
+// Multi-line closures use braces
+let add_two = |x| {
+    let result = x + 2;
+    result
+};
+println!("{}", add_two(5)); // 7
+```
+
+### Type Inference
+
+Closure parameter and return types are almost always inferred. You *can* annotate them explicitly, which looks similar to a function:
+
+```rust
+// Explicit annotations
+let add = |x: i32, y: i32| -> i32 { x + y };
+
+// Inferred — idiomatic for short closures
+let add = |x, y| x + y;
+```
+
+Once a closure is called with a specific type, that type is locked in:
+
+```rust
+let identity = |x| x;
+let _s = identity(String::from("hello")); // x is inferred as String
+// let _n = identity(5);                  // ERROR: expected String, found integer
+```
+
+## Capturing the Environment
+
+This is what makes closures different from functions. A closure can reference variables from the surrounding scope:
+
+```rust
+fn main() {
+    let threshold = 10;
+
+    let is_big = |n| n > threshold; // captures `threshold` by reference
+
+    println!("{}", is_big(15)); // true
+    println!("{}", is_big(5));  // false
+}
+```
+
+The variable `threshold` is captured *by reference* automatically because that's the least restrictive option that works.
+
+### Capturing by Move
+
+Use the `move` keyword to force the closure to take ownership of captured values. This is essential when the closure outlives the current scope (e.g., when spawning a thread):
+
+```rust
+use std::thread;
+
+fn main() {
+    let name = String::from("Alice");
+
+    let greet = move || println!("Hello, {name}!");
+    // `name` is moved into the closure; we can no longer use it here
+
+    thread::spawn(greet).join().unwrap();
+}
+```
+
+Without `move`, the thread closure would hold a reference to `name`, but `name` might be dropped before the thread runs — a lifetime error the compiler catches at compile time.
+
+## The `Fn`, `FnMut`, and `FnOnce` Traits
+
+Every closure automatically implements one or more of three traits depending on how it uses its captured variables:
+
+| Trait | Can call | What it does to captured values |
+|-------|----------|----------------------------------|
+| `FnOnce` | Once | Consumes (moves out of) captured values |
+| `FnMut` | Multiple times | Mutates captured values |
+| `Fn` | Multiple times | Only reads captured values |
+
+`Fn` implies `FnMut`, which implies `FnOnce` — every `Fn` is also an `FnMut` and `FnOnce`.
+
+### `FnOnce` Example
+
+```rust
+fn call_once<F: FnOnce()>(f: F) {
+    f();
+    // f();  // ERROR: cannot call `f` again; it's been consumed
+}
+
+let name = String::from("Bob");
+let goodbye = move || println!("Goodbye, {name}!"); // moves name
+call_once(goodbye);
+```
+
+### `FnMut` Example
+
+```rust
+fn apply_twice<F: FnMut(i32) -> i32>(mut f: F, x: i32) -> i32 {
+    f(f(x))
+}
+
+let mut count = 0;
+let result = apply_twice(|x| { count += 1; x + 1 }, 5);
+println!("Result: {result}, count: {count}"); // Result: 7, count: 2
+```
+
+### `Fn` Example
+
+```rust
+fn apply<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 {
+    f(x)
+}
+
+let multiplier = 3;
+let triple = |x| x * multiplier; // only reads multiplier
+println!("{}", apply(triple, 7)); // 21
+```
+
+## Closures as Function Arguments
+
+Using trait bounds, functions can accept any closure that matches a signature:
+
+```rust
+fn transform(nums: Vec<i32>, f: impl Fn(i32) -> i32) -> Vec<i32> {
+    nums.into_iter().map(f).collect()
+}
+
+let doubled = transform(vec![1, 2, 3], |x| x * 2);
+println!("{:?}", doubled); // [2, 4, 6]
+```
+
+`impl Fn(i32) -> i32` is shorthand for a generic bound. Use `Box<dyn Fn(i32) -> i32>` when you need to store a closure in a struct field or return it from a function without generics.
+
+## Returning Closures
+
+Closures have anonymous types, so you must use `impl Trait` or `Box<dyn Trait>` to return them:
+
+```rust
+// impl Trait (preferred when the concrete type is statically known)
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+
+// Box<dyn Trait> (required when returning different closure types at runtime)
+fn make_op(add: bool) -> Box<dyn Fn(i32) -> i32> {
+    if add {
+        Box::new(|x| x + 1)
+    } else {
+        Box::new(|x| x - 1)
+    }
+}
+```
+
+## Summary
+
+- Closure syntax: `|params| expression` or `|params| { block }`.
+- Types are inferred; once determined by first use, they're fixed.
+- Closures capture variables by reference by default; use `move` to capture by value.
+- `FnOnce` — called once; `FnMut` — called repeatedly, mutates captures; `Fn` — called repeatedly, only reads.
+- Use `impl Fn(...)` in generic bounds and `Box<dyn Fn(...)>` when dynamic dispatch is needed.
+
+In the next section we explore iterators, where closures become especially powerful as adapters.

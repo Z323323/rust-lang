@@ -1,0 +1,181 @@
+---
+title: "Object-Oriented Programming Characteristics in Rust"
+sidebarTitle: "OOP Concepts"
+description: "Explore how Rust supports OOP characteristics: encapsulation via pub/private, inheritance via traits, and polymorphism via trait objects."
+mode: "wide"
+---
+
+Rust is not a classical object-oriented language — it has no classes, no class hierarchy, and no `this` keyword — but it deliberately provides mechanisms that address the same design goals as OOP: grouping data and behaviour, controlling visibility, and enabling polymorphism. Understanding where Rust overlaps with OOP and where it diverges is key to writing idiomatic Rust code.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Encapsulation with `pub` and Private Fields
+
+OOP encapsulation means hiding implementation details and exposing only a controlled public interface. Rust achieves this with its module system: fields and methods are *private by default* and become public when marked `pub`.
+
+```rust
+pub struct BankAccount {
+    owner: String,      // private — callers cannot read or write directly
+    balance: f64,       // private
+}
+
+impl BankAccount {
+    pub fn new(owner: String, initial_balance: f64) -> Self {
+        assert!(initial_balance >= 0.0, "Balance cannot be negative");
+        BankAccount { owner, balance: initial_balance }
+    }
+
+    pub fn deposit(&mut self, amount: f64) {
+        assert!(amount > 0.0);
+        self.balance += amount;
+    }
+
+    pub fn withdraw(&mut self, amount: f64) -> Result<(), &'static str> {
+        if amount > self.balance {
+            return Err("Insufficient funds");
+        }
+        self.balance -= amount;
+        Ok(())
+    }
+
+    pub fn balance(&self) -> f64 {
+        self.balance
+    }
+}
+
+fn main() {
+    let mut account = BankAccount::new(String::from("Alice"), 1000.0);
+    account.deposit(250.0);
+    println!("Balance: {}", account.balance()); // 1250.0
+
+    // account.balance = 1_000_000.0; // ERROR: field `balance` is private
+}
+```
+
+External code can only interact with `BankAccount` through the public methods, which enforce invariants (no negative amounts, sufficient funds). This is identical in spirit to encapsulation in Java or C++.
+
+## Rust Has No Inheritance — But Traits Provide Code Reuse
+
+Classical OOP relies on *inheritance*: a child class inherits fields and methods from a parent class. Rust has no inheritance. Instead, it uses:
+
+1. **Trait default methods** — shared behaviour without a base class.
+2. **Trait composition** — combine multiple independent capabilities.
+
+```rust
+pub trait Summary {
+    fn author(&self) -> String;
+
+    // Default method — types can override or inherit as-is.
+    fn summarise(&self) -> String {
+        format!("(Read more from {}…)", self.author())
+    }
+}
+
+pub struct NewsArticle {
+    pub headline: String,
+    pub author: String,
+    pub content: String,
+}
+
+impl Summary for NewsArticle {
+    fn author(&self) -> String {
+        self.author.clone()
+    }
+
+    // Overrides the default implementation.
+    fn summarise(&self) -> String {
+        format!("{}, by {}", self.headline, self.author)
+    }
+}
+
+pub struct Tweet {
+    pub username: String,
+    pub content: String,
+}
+
+impl Summary for Tweet {
+    fn author(&self) -> String {
+        format!("@{}", self.username)
+    }
+    // Uses the default `summarise` implementation.
+}
+
+fn main() {
+    let article = NewsArticle {
+        headline: String::from("Rust 2024 Edition Released"),
+        author: String::from("Jane Doe"),
+        content: String::from("Details…"),
+    };
+
+    let tweet = Tweet {
+        username: String::from("rustlang"),
+        content: String::from("Exciting news!"),
+    };
+
+    println!("{}", article.summarise());
+    println!("{}", tweet.summarise()); // Uses default: "(Read more from @rustlang…)"
+}
+```
+
+Default methods give you the code-reuse benefit of inheritance without the fragile base class problem.
+
+## Polymorphism with `dyn Trait`
+
+In OOP, polymorphism lets a function accept objects of different concrete types through a common interface. Rust provides this via *trait objects*: `&dyn Trait` or `Box<dyn Trait>`.
+
+```rust
+pub trait Draw {
+    fn draw(&self);
+}
+
+pub struct Circle { pub radius: f64 }
+pub struct Rectangle { pub width: f64, pub height: f64 }
+
+impl Draw for Circle {
+    fn draw(&self) {
+        println!("Drawing circle with radius {}", self.radius);
+    }
+}
+
+impl Draw for Rectangle {
+    fn draw(&self) {
+        println!("Drawing rectangle {}×{}", self.width, self.height);
+    }
+}
+
+pub struct Screen {
+    pub components: Vec<Box<dyn Draw>>,
+}
+
+impl Screen {
+    pub fn render(&self) {
+        for component in &self.components {
+            component.draw(); // Dispatched at runtime — classic OOP polymorphism.
+        }
+    }
+}
+
+fn main() {
+    let screen = Screen {
+        components: vec![
+            Box::new(Circle { radius: 5.0 }),
+            Box::new(Rectangle { width: 10.0, height: 3.0 }),
+        ],
+    };
+    screen.render();
+}
+```
+
+The `Screen` type knows nothing about `Circle` or `Rectangle` — it only knows about `Draw`. New drawable types can be added anywhere without changing `Screen`. This is the *open/closed principle* in action.
+
+## Rust's OOP Differences in Brief
+
+| OOP Concept | Classical OOP | Rust Equivalent |
+|---|---|---|
+| Encapsulation | `private` / `public` on fields | Private-by-default fields, `pub` to expose |
+| Inheritance | `extends BaseClass` | Trait default methods, delegation |
+| Polymorphism | Virtual methods / interfaces | `dyn Trait` (dynamic) or generics (static) |
+| Constructor | `new ClassName(…)` | Associated `fn new(…) -> Self` |
+| Destructor | `~ClassName()` / finaliser | `Drop` trait |
+
+The absence of inheritance is intentional. Rust's designers found that trait composition produces more flexible, less tightly-coupled designs than deep inheritance hierarchies — a lesson the OOP community itself has been learning (hence "favour composition over inheritance").

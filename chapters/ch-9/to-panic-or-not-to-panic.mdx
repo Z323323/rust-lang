@@ -1,0 +1,170 @@
+---
+title: "When to panic! vs Return Result in Rust"
+sidebarTitle: "panic or Result?"
+description: "Guidelines for choosing between panic! and Result in Rust. When to use unwrap in tests, prototypes, and cases where failure is logically impossible."
+mode: "wide"
+---
+
+One of the most common design questions you'll face in Rust is: should this function return a `Result<T, E>`, or should it just `panic!` if something goes wrong? The answer shapes how callers interact with your code, how errors propagate through your system, and what guarantees your API makes. The general principle is that `panic!` communicates a *bug*, while `Result` communicates an *expected failure mode that callers should handle*.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Use `panic!` for Bugs, Not Expected Failures
+
+A panic says: "this situation should never happen, and if it does, the program has a bug." A `Result` says: "this operation might not succeed — here is what went wrong so you can decide what to do."
+
+Ask yourself: **is this failure the caller's fault, or is it a legitimate expected outcome?**
+
+- File not found → `Result` (the file might reasonably not exist)
+- A caller passed a `null`-equivalent value to a function that documented it must be non-null → `panic!` (the caller violated a contract)
+
+## When `unwrap` and `expect` Are Appropriate
+
+### In Examples and Prototypes
+
+When you're writing quick example code, demos, or exploring an API, `.unwrap()` is perfectly fine. Adding full error-handling machinery obscures what the example is trying to teach:
+
+```rust
+// In a quick example — unwrap is fine here
+use std::fs;
+
+fn main() {
+    let contents = fs::read_to_string("poem.txt").unwrap();
+    println!("{}", contents);
+}
+```
+
+Just remember to replace `unwrap` with proper error handling before shipping production code.
+
+### In Tests
+
+Tests are supposed to fail loudly when something goes wrong. Using `unwrap` or `expect` in a test means the test panics and marks itself as failed:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_config() {
+        // If parsing fails here, the test should blow up — that IS the failure signal
+        let config = Config::from_str("key=value").unwrap();
+        assert_eq!(config.key, "key");
+        assert_eq!(config.value, "value");
+    }
+}
+```
+
+Using `?` in tests is also valid if your test function returns `Result`.
+
+### When Logic Guarantees `Ok`
+
+Sometimes you know from the program's logic that an operation simply cannot fail, even though the compiler can't verify it:
+
+```rust
+use std::net::IpAddr;
+
+fn main() {
+    // This is a hard-coded literal — it CANNOT be an invalid IP address.
+    // Returning a Result here would force callers to handle an impossibility.
+    let home: IpAddr = "127.0.0.1"
+        .parse()
+        .expect("Hard-coded IP address should always be valid");
+
+    println!("{}", home);
+}
+```
+
+If the hard-coded value is wrong, that really is a programming bug — `panic!` is the right response.
+
+## When to Return `Result`
+
+Return `Result` whenever the failure is something your caller might reasonably want to handle:
+
+- **I/O operations**: reading files, sending network requests, writing to a database.
+- **Parsing**: converting user-provided strings to structured data.
+- **External services**: anything that could fail due to the environment, not a bug in your code.
+
+```rust
+use std::num::ParseIntError;
+
+fn double_number(s: &str) -> Result<i32, ParseIntError> {
+    // s.parse() returns Result — propagate it with ?
+    let n: i32 = s.trim().parse()?;
+    Ok(n * 2)
+}
+
+fn main() {
+    match double_number("5") {
+        Ok(n)  => println!("Double: {}", n),
+        Err(e) => println!("Failed to parse: {}", e),
+    }
+
+    match double_number("not a number") {
+        Ok(n)  => println!("Double: {}", n),
+        Err(e) => println!("Failed to parse: {}", e),
+    }
+}
+```
+
+## Using Custom Types for Validation
+
+A powerful pattern is to make illegal states *unrepresentable* using Rust's type system. Instead of checking a constraint repeatedly throughout your code, encode it once in a constructor that returns `Result` or panics:
+
+```rust
+pub struct Guess {
+    value: i32,
+}
+
+impl Guess {
+    pub fn new(value: i32) -> Guess {
+        if value < 1 || value > 100 {
+            panic!(
+                "Guess value must be between 1 and 100, got {}.",
+                value
+            );
+        }
+        Guess { value }
+    }
+
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+}
+
+fn main() {
+    let g = Guess::new(42);
+    println!("Valid guess: {}", g.value());
+
+    // This panics — the caller passed a value that violates the contract
+    let _bad = Guess::new(200);
+}
+```
+
+Because `Guess::new` panics on invalid input, any `Guess` that exists at runtime is *guaranteed* to be between 1 and 100. Code that receives a `Guess` never needs to revalidate it. This is the "make the type carry the invariant" principle.
+
+Alternatively, return a `Result` from the constructor if you want callers to handle invalid input gracefully:
+
+```rust
+impl Guess {
+    pub fn try_new(value: i32) -> Result<Guess, String> {
+        if value < 1 || value > 100 {
+            return Err(format!("Value {} is out of range 1–100", value));
+        }
+        Ok(Guess { value })
+    }
+}
+```
+
+## Decision Summary
+
+| Situation | Recommended approach |
+|---|---|
+| Caller violated a documented contract | `panic!` |
+| Logically impossible based on prior checks | `.unwrap()` / `.expect("reason")` |
+| Tests and prototypes | `.unwrap()` / `?` |
+| I/O, parsing, external calls | `Result<T, E>` |
+| Library API with recoverable failures | `Result<T, E>` |
+| Validation in a constructor | `panic!` or `Result`, based on whether invalid input is a bug or expected |
+
+When in doubt, prefer `Result`. It gives callers control, whereas a panic takes it away entirely.

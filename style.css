@@ -1,0 +1,43 @@
+/* Colore di base (Modalità Giorno) */
+:root {
+  --comment-color: #6B7280; 
+}
+
+/* Colore per la Modalità Notte */
+.dark {
+  --comment-color: #6A9955; 
+}
+
+/* Stile della lista personalizzata */
+.list-comments {
+  list-style-type: none;
+  counter-reset: step-counter;
+  padding-left: 1rem;
+}
+
+.list-comments li {
+  margin-bottom: 1rem;
+}
+
+.list-comments li::before {
+  display: block;
+  counter-increment: step-counter;
+  content: "#" counter(step-counter);
+  font-family: monospace; /* Font in stile codice */
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  color: var(--comment-color); /* Applica il colore dinamico */
+}
+
+/* Classe utility per testi in stile commento di codice */
+.code-comment {
+  color: var(--comment-color); /* Sfrutta la variabile dinamica creata prima */
+  font-family: monospace;
+  font-size: 0.875rem; /* Stessa dimensione dei blocchi di codice */
+}
+
+/* Tabelle */
+.prose th, .prose td {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}

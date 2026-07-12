@@ -1,0 +1,194 @@
+---
+title: "Controlling Test Execution with cargo test Options"
+sidebarTitle: "Running Tests"
+description: "Control how Rust tests run with cargo test. Filter tests by name, run in parallel or single-threaded, show output, and ignore specific tests."
+mode: "wide"
+---
+
+`cargo test` compiles your code in test mode and runs the resulting test binary. By default it runs all tests in parallel, captures their output, and prints a summary. However, you often need more control: running a single failing test, forcing sequential execution when tests share state, or printing debug output from a passing test. This chapter covers the command-line options and attributes that give you that control.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Understanding the Two Layers of Arguments
+
+`cargo test` accepts two sets of arguments, separated by `--`:
+
+```bash
+cargo test [cargo options] -- [test binary options]
+```
+
+Arguments *before* `--` go to `cargo` itself (e.g., `--release`). Arguments *after* `--` are forwarded to the compiled test binary.
+
+## Running Tests in Parallel
+
+By default, tests run in parallel across multiple threads, completing the full suite faster. Parallel execution is great unless tests share mutable state (such as writing to the same file or environment variable), in which case tests can interfere with each other.
+
+Force single-threaded execution with `--test-threads`:
+
+```bash
+# Run all tests one at a time
+cargo test -- --test-threads=1
+```
+
+You can also set any number of threads — for example `--test-threads=4` to limit parallelism without going fully sequential.
+
+## Showing Output from Passing Tests
+
+By default, `cargo test` captures everything printed to stdout during a passing test and suppresses it. Only output from *failing* tests is shown. To see printed output from all tests, pass `--show-output`:
+
+```bash
+cargo test -- --show-output
+```
+
+Example test with output:
+
+```rust
+fn double(x: i32) -> i32 {
+    x * 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_double() {
+        let result = double(4);
+        println!("double(4) = {}", result); // only shown with --show-output
+        assert_eq!(result, 8);
+    }
+}
+```
+
+Without `--show-output`, the `println!` is swallowed on a passing test. With it, the line appears under the test's output section.
+
+## Filtering Tests by Name
+
+Pass a substring to `cargo test` (before `--`) to run only tests whose name contains that string:
+
+```bash
+# Run only tests with "add" in their name
+cargo test add
+
+# Run a single test by its exact name
+cargo test tests::test_add_two
+```
+
+This matches against the full test name, including the module path. If you have:
+
+```rust
+#[cfg(test)]
+mod math {
+    #[test]
+    fn test_add() { /* … */ }
+
+    #[test]
+    fn test_multiply() { /* … */ }
+}
+```
+
+Then `cargo test math` runs both, while `cargo test add` runs only `test_add`.
+
+## Ignoring Expensive Tests with `#[ignore]`
+
+Mark a test with `#[ignore]` to exclude it from the normal `cargo test` run. This is useful for integration tests that take a long time or require external services:
+
+```rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fast_test() {
+        assert_eq!(2 + 2, 4);
+    }
+
+    #[test]
+    #[ignore]
+    fn slow_expensive_test() {
+        // Simulate a slow test
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        assert!(true);
+    }
+}
+```
+
+Running `cargo test` will skip `slow_expensive_test` and report it as ignored:
+
+```
+running 2 tests
+test tests::fast_test ... ok
+test tests::slow_expensive_test ... ignored
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured
+```
+
+## Running Only Ignored Tests
+
+To run *only* the ignored tests (for example, in a nightly CI job):
+
+```bash
+cargo test -- --ignored
+```
+
+To run both normal and ignored tests together:
+
+```bash
+cargo test -- --include-ignored
+```
+
+## Listing All Tests Without Running Them
+
+See every test name that would be run, without actually executing them:
+
+```bash
+cargo test -- --list
+```
+
+Output:
+
+```
+tests::fast_test: test
+tests::slow_expensive_test: test
+
+2 tests, 0 benchmarks
+```
+
+## Useful `cargo test` Combinations
+
+```bash
+# Run all tests sequentially with output shown
+cargo test -- --test-threads=1 --show-output
+
+# Run only tests matching "integration", show output
+cargo test integration -- --show-output
+
+# Run in release mode (optimizations on)
+cargo test --release
+
+# Run tests for a specific binary target
+cargo test --bin my_binary
+
+# Run tests for a specific library target
+cargo test --lib
+```
+
+## Setting Environment Variables for Tests
+
+Sometimes tests depend on environment variables. You can set them inline:
+
+```bash
+DATABASE_URL=postgres://localhost/test cargo test
+```
+
+Or in test setup code using `std::env::set_var` (be careful with parallel tests):
+
+```rust
+#[test]
+fn test_with_env() {
+    // Only safe if tests are single-threaded or this is isolated
+    std::env::set_var("MY_CONFIG", "test_value");
+    let result = read_config();
+    assert_eq!(result, "test_value");
+}
+```
+
+For parallel-safe environment manipulation in tests, consider the `temp-env` crate.

@@ -1,0 +1,217 @@
+---
+title: "Separating Rust Modules into Different Files"
+sidebarTitle: "File Modules"
+description: "Split a Rust module tree across multiple files. Learn how mod declarations, src/lib.rs, and directory conventions work together for large projects."
+mode: "wide"
+---
+
+Defining every module inline in a single file works for small programs, but as a project grows you will want to spread modules across multiple files. Rust's file-based module system uses a simple convention: a `mod name;` declaration without a body tells the compiler to look for the module's content in a separate file.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Starting Point: Everything Inline
+
+Suppose your `src/lib.rs` contains:
+
+```rust
+// src/lib.rs (inline — everything in one file)
+
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+pub use crate::front_of_house::hosting::add_to_waitlist;
+
+pub fn eat_at_restaurant() {
+    add_to_waitlist();
+}
+```
+
+This becomes unwieldy as each module grows. Let's split it out.
+
+## Step 1: Move `front_of_house` to Its Own File
+
+Replace the inline module body with a file-loading declaration:
+
+```rust
+// src/lib.rs
+mod front_of_house; // no braces — load from a file
+
+pub use crate::front_of_house::hosting::add_to_waitlist;
+
+pub fn eat_at_restaurant() {
+    add_to_waitlist();
+}
+```
+
+Create `src/front_of_house.rs` with the module's content (no extra `mod` wrapper needed):
+
+```rust
+// src/front_of_house.rs
+
+pub mod hosting {
+    pub fn add_to_waitlist() {}
+}
+```
+
+The compiler automatically links `mod front_of_house;` in `lib.rs` to the file `src/front_of_house.rs`.
+
+## Step 2: Move `hosting` to Its Own File
+
+To split `hosting` out further, change `src/front_of_house.rs` to use a file declaration:
+
+```rust
+// src/front_of_house.rs
+
+pub mod hosting; // load from a file inside the front_of_house/ directory
+```
+
+Now create the directory `src/front_of_house/` and put `hosting.rs` inside it:
+
+```rust
+// src/front_of_house/hosting.rs
+
+pub fn add_to_waitlist() {
+    println!("Added to waitlist!");
+}
+
+pub fn seat_at_table() {
+    println!("Seated!");
+}
+```
+
+The full file tree:
+
+```
+src/
+├── lib.rs
+├── front_of_house.rs
+└── front_of_house/
+    └── hosting.rs
+```
+
+The convention is: **a module at path `a::b` lives in either `src/a/b.rs` or `src/a/b/mod.rs`**.
+
+## The `mod.rs` Style (Older Convention)
+
+Before Rust 2018, the only way to have a module in its own directory was to use a `mod.rs` file:
+
+```
+src/
+├── lib.rs
+└── front_of_house/
+    ├── mod.rs       ← equivalent to src/front_of_house.rs
+    └── hosting.rs
+```
+
+Both styles work today, but the **filename style** (`front_of_house.rs` + `front_of_house/`) is preferred in modern Rust because it avoids many files all named `mod.rs` in different directories, which is confusing in editors.
+
+## A Larger Example: Garden Crate
+
+Here is a complete example from a hypothetical garden-management library:
+
+```
+garden/
+├── Cargo.toml
+└── src/
+    ├── lib.rs
+    ├── garden.rs
+    └── garden/
+        ├── vegetables.rs
+        └── flowers.rs
+```
+
+```rust
+// src/lib.rs
+mod garden;
+
+pub use garden::vegetables::Asparagus;
+pub use garden::flowers::Rose;
+```
+
+```rust
+// src/garden.rs
+pub mod vegetables;
+pub mod flowers;
+```
+
+```rust
+// src/garden/vegetables.rs
+#[derive(Debug)]
+pub struct Asparagus {
+    pub row: u32,
+}
+
+pub fn harvest(a: &Asparagus) {
+    println!("Harvesting asparagus from row {}", a.row);
+}
+```
+
+```rust
+// src/garden/flowers.rs
+#[derive(Debug)]
+pub struct Rose {
+    pub color: String,
+}
+```
+
+```rust
+// Usage from a binary crate or integration test:
+use garden_crate::{Asparagus, Rose};
+
+fn main() {
+    let a = Asparagus { row: 3 };
+    garden_crate::garden::vegetables::harvest(&a);
+
+    let r = Rose { color: String::from("red") };
+    println!("{:?}", r);
+}
+```
+
+## Inline Modules for Tests
+
+Even in a file-based project, test modules are typically kept inline in the same file as the code they test:
+
+```rust
+// src/garden/vegetables.rs
+
+pub fn is_ripe(row: u32) -> bool {
+    row > 5
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn row_6_is_ripe() {
+        assert!(is_ripe(6));
+    }
+
+    #[test]
+    fn row_3_is_not_ripe() {
+        assert!(!is_ripe(3));
+    }
+}
+```
+
+The `#[cfg(test)]` attribute ensures the test module is only compiled when running `cargo test`, keeping release binaries lean.
+
+## Rules Summary
+
+| Declaration | Where the compiler looks |
+|-------------|------------------------|
+| `mod foo;` in `src/lib.rs` or `src/main.rs` | `src/foo.rs` or `src/foo/mod.rs` |
+| `mod bar;` in `src/foo.rs` | `src/foo/bar.rs` or `src/foo/bar/mod.rs` |
+| `mod baz;` in `src/foo/mod.rs` | `src/foo/baz.rs` or `src/foo/baz/mod.rs` |
+
+## Summary
+
+- `mod name;` (no braces) loads module content from a file.
+- A module declared in `src/parent.rs` looks for its children in `src/parent/child.rs`.
+- Prefer the filename style (`parent.rs` + `parent/child.rs`) over the `mod.rs` style.
+- `pub mod` in a parent file makes a child module public.
+- Keep test modules inline (`#[cfg(test)] mod tests`) in the file being tested.
+- `pub use` at the crate root can re-export deeply nested items for a cleaner public API.

@@ -1,0 +1,179 @@
+---
+title: "RefCell<T> and the Interior Mutability Pattern in Rust"
+sidebarTitle: "RefCell<T>"
+description: "Use RefCell<T> for interior mutability in Rust—mutating data through an immutable reference. Runtime borrow checking with borrow() and borrow_mut()."
+mode: "wide"
+---
+
+Rust's borrow checker enforces its aliasing rules — at most one mutable reference OR any number of immutable references — at compile time. But sometimes you need to mutate data through a value that the rest of the code treats as immutable. This is the **interior mutability** pattern, and `RefCell<T>` is the standard way to achieve it by moving borrow checking to runtime.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## When Compile-Time Borrow Checking Is Too Strict
+
+The compiler is conservative: it rejects programs that *might* violate borrowing rules, including some that actually don't. Consider a mock object in a test that needs to record calls through an `&self` method:
+
+```rust
+trait Messenger {
+    fn send(&self, msg: &str);  // takes &self, not &mut self
+}
+```
+
+An implementation that stores messages needs to mutate `self.sent_messages` — but the trait signature only allows `&self`. `RefCell<T>` solves this exact problem.
+
+## Creating a `RefCell<T>`
+
+```rust
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+
+    // Immutable borrow — returns Ref<Vec<i32>>
+    let borrow = data.borrow();
+    println!("{:?}", *borrow); // [1, 2, 3]
+    drop(borrow); // release the borrow
+
+    // Mutable borrow — returns RefMut<Vec<i32>>
+    let mut borrow_mut = data.borrow_mut();
+    borrow_mut.push(4);
+    drop(borrow_mut); // release before borrowing again
+
+    println!("{:?}", *data.borrow()); // [1, 2, 3, 4]
+}
+```
+
+`data` is declared with `let` (not `let mut`), yet we can mutate its contents. That's interior mutability.
+
+## Runtime Borrow Checking
+
+`RefCell<T>` enforces the same rules as the compile-time borrow checker, but **at runtime**:
+- You can have any number of simultaneous immutable borrows (`borrow()`).
+- You can have at most one mutable borrow (`borrow_mut()`) and no immutable borrows at the same time.
+
+Violating these rules causes a **panic** instead of a compile error:
+
+```rust
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(42);
+    let borrow1 = data.borrow();          // OK: one immutable borrow
+    let borrow2 = data.borrow_mut();      // PANIC: already borrowed as immutable
+    println!("{} {}", *borrow1, *borrow2);
+}
+```
+
+```
+thread 'main' panicked at 'already borrowed: BorrowMutError'
+```
+
+## The Mock Object Pattern
+
+Back to our `Messenger` example — here's a mock that records messages:
+
+```rust
+use std::cell::RefCell;
+
+trait Messenger {
+    fn send(&self, msg: &str);
+}
+
+struct MockMessenger {
+    sent_messages: RefCell<Vec<String>>,
+}
+
+impl MockMessenger {
+    fn new() -> MockMessenger {
+        MockMessenger { sent_messages: RefCell::new(vec![]) }
+    }
+}
+
+impl Messenger for MockMessenger {
+    fn send(&self, message: &str) {
+        // &self is immutable, but we can mutate through RefCell
+        self.sent_messages.borrow_mut().push(String::from(message));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_sends_an_over_75_percent_warning_message() {
+        let mock = MockMessenger::new();
+        mock.send("Warning: usage at 80%");
+        assert_eq!(mock.sent_messages.borrow().len(), 1);
+    }
+}
+```
+
+## `Ref<T>` and `RefMut<T>`
+
+`borrow()` returns `Ref<T>` and `borrow_mut()` returns `RefMut<T>`. Both types implement `Deref` (and `DerefMut` for `RefMut<T>`), so you can use them just like references. They automatically release the borrow when they drop:
+
+```rust
+let data = RefCell::new(String::from("hello"));
+{
+    let mut s = data.borrow_mut();
+    s.push_str(", world");
+}   // RefMut dropped here; borrow released
+println!("{}", data.borrow()); // hello, world
+```
+
+## Using `try_borrow` and `try_borrow_mut`
+
+If you'd rather handle borrow conflicts without panicking, use the `try_` variants:
+
+```rust
+let data = RefCell::new(42);
+let b1 = data.borrow();
+match data.try_borrow_mut() {
+    Ok(mut b2) => *b2 += 1,
+    Err(e) => println!("Borrow failed: {e}"), // prints error, doesn't panic
+}
+```
+
+## `Rc<RefCell<T>>`: Shared Mutable Data
+
+Combining `Rc<T>` (shared ownership) with `RefCell<T>` (interior mutability) gives you shared, mutable data in a single-threaded context:
+
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn main() {
+    let shared = Rc::new(RefCell::new(vec![1, 2, 3]));
+
+    let clone_a = Rc::clone(&shared);
+    let clone_b = Rc::clone(&shared);
+
+    clone_a.borrow_mut().push(4);
+    clone_b.borrow_mut().push(5);
+
+    println!("{:?}", shared.borrow()); // [1, 2, 3, 4, 5]
+}
+```
+
+All three `Rc` handles point to the same `RefCell<Vec<i32>>`. Each can borrow mutably when needed (sequentially, not simultaneously).
+
+## `RefCell<T>` vs `Mutex<T>`
+
+| Feature | `RefCell<T>` | `Mutex<T>` |
+|---------|--------------|------------|
+| Thread safety | Single-threaded only | Multi-threaded safe |
+| Borrow conflict | Panics at runtime | Blocks until lock available |
+| Overhead | Very low | Lock acquisition overhead |
+| Use with | `Rc<T>` | `Arc<T>` |
+
+For multi-threaded interior mutability, use `Arc<Mutex<T>>`.
+
+## Summary
+
+- **Interior mutability**: mutating data through an immutable outer reference using `RefCell<T>`.
+- `borrow()` returns `Ref<T>`; `borrow_mut()` returns `RefMut<T>` — both are reference-like wrappers.
+- Borrow rules are checked at runtime; violations cause a panic rather than a compile error.
+- Use `try_borrow_mut()` to check without panicking.
+- `Rc<RefCell<T>>` is the standard single-threaded pattern for shared mutable state.
+- Single-threaded only; use `Arc<Mutex<T>>` for concurrent access.

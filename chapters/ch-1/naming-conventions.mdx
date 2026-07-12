@@ -1,0 +1,59 @@
+---
+title: "Rust Naming Conventions and SemVer Dependency Rules"
+sidebarTitle: "Naming Conventions"
+description: "Rust naming conventions for variables, functions, structs, enums, constants, and files. Plus SemVer versioning and Cargo dependency operators explained."
+mode: "wide"
+---
+
+Before diving back into the Rust book, we need to highlight two important concepts:
+
+- Proper **naming conventions** are essential for writing Rust code and building projects correctly.
+- The packages versions we have seen all utilize the **SemVer** (Semantic Versioning) specification.
+
+Unlike the previous section, the following content is completely original and does not appear in the official documentation.
+
+The following table outlines the naming conventions for files, directories, and all code elements required to properly build Rust projects.
+
+| Element | Style | Example |
+| :--- | :---: | :---: |
+| Vars | **snake_case** | `let user_id = 10` |
+| Funcs and Methods | **snake_case** | `fn get_data() { ... }` |
+| Structs (Classes) | **PascalCase** | `struct UserProfile { ... }` |
+| Enums | **PascalCase** | `enum WebEvent { ... }` |
+| Traits | **PascalCase** | `trait Printable { ... }` |
+| Constants | **SCREAMING_SNAKE_CASE** | `const MAX_POINTS: u32 = 100` |
+| Macros | **snake_case!** | `println!` |
+| Files and Directories | **snake_case** | `payment_manager.rs` |
+
+## SemVer
+
+SemVer is the standard convention Cargo uses to manage dependencies. In the Rust ecosystem, a version number consists of three components: `MAJOR.MINOR.PATCH`. Each **increment** signals specific information regarding backward compatibility.
+
+- **MAJOR** (`X.0.0`): Incremented for breaking changes (modifications to the API that are incompatible with previous versions). Upgrading to a new Major version means your code might require updates to compile successfully.
+
+- **MINOR** (`0.Y.0`): Incremented when new, backward-compatible functionality is added. You can leverage new features while older implementations continue to work seamlessly.
+
+- **PATCH** (`0.0.Z`): Incremented for backward-compatible bug fixes. No new features are introduced.
+
+### Initial Development Versions
+
+Early versions follow special rules because their APIs are inherently unstable:
+
+- `0.0.z`: Every patch increment is treated as a potential breaking change.
+
+- `0.y.z`: The MINOR version (`y`) acts as a MAJOR version. Upgrading from `0.1.2` to `0.2.0` is treated as a breaking change, whereas moving from `0.1.2` to `0.1.3` is safe.
+
+### Dependency Requirement Operators
+
+When you declare a dependency in your Cargo.toml file, Cargo uses specific operators to determine which updates are permitted when you run `cargo update`.
+
+| Operand | Example | <div className="text-center">Meaning</div> |
+| :--- | :---: | :--- |
+| **Caret** (`^`) | `^1.2.3` | Default choice. It allows updates which do not break compatibility (ex. from `1.2.3` to `< 2.0.0`). |
+| **Tilde** (`~`) | `~1.2.3` | It allows patch updates only (ex. from `1.2.3` to `< 1.3.0`). |
+| **Wildcard** (`*`) | `1.2.*` | Any version starting with `1.2`. |
+| **Inequality** | `>= 1.2.0` | It specifies a minimum or maximum range. |
+
+**While Cargo.toml defines the version ranges you accept, Cargo.lock pins the exact versions that were successfully downloaded and resolved.**
+
+**To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your Cargo.toml file.**

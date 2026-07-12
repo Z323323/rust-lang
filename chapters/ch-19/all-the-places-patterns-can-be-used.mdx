@@ -1,0 +1,195 @@
+---
+title: "All the Places Patterns Can Be Used in Rust"
+sidebarTitle: "Pattern Locations"
+description: "Discover every context where Rust patterns appear: match arms, if let, while let, for loops, let statements, and function parameters."
+mode: "wide"
+---
+
+Patterns are one of Rust's most pervasive features — they are not confined to `match` expressions but appear in nearly every binding form in the language. Understanding all the places you can use patterns unlocks a more expressive, concise coding style and helps you read unfamiliar Rust code confidently.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## 1. `match` Arms
+
+The `match` expression is the most familiar pattern context. Every arm of a `match` is a pattern followed by `=>` and an expression:
+
+```rust
+let x: Option<i32> = Some(42);
+
+let description = match x {
+    Some(0)       => "zero",
+    Some(n) if n < 0 => "negative",
+    Some(n)       => {
+        println!("positive: {n}");
+        "positive"
+    },
+    None          => "nothing",
+};
+println!("{description}");
+```
+
+`match` is *exhaustive*: the compiler requires that all possible values are covered. If you miss a case, you get a compile error — this is one of Rust's most valuable safety guarantees.
+
+## 2. `if let` Expressions
+
+`if let` is a shorthand for matching a single pattern, ignoring all other cases. It is refutable — the body only runs if the pattern matches:
+
+```rust
+let config_max = Some(3u8);
+
+if let Some(max) = config_max {
+    println!("Maximum is {max}");
+}
+// Equivalent to:
+// match config_max { Some(max) => println!("…{max}"), _ => {} }
+```
+
+`if let` can be chained with `else if`, `else if let`, and plain `else` for more complex logic:
+
+```rust
+let favourite_colour: Option<&str> = None;
+let is_tuesday = false;
+let age: Result<u8, _> = "34".parse();
+
+if let Some(colour) = favourite_colour {
+    println!("Using your favourite colour, {colour}");
+} else if is_tuesday {
+    println!("Tuesday is green day!");
+} else if let Ok(age) = age {
+    if age > 30 {
+        println!("Using purple as the background colour");
+    } else {
+        println!("Using orange as the background colour");
+    }
+} else {
+    println!("Using blue as the background colour");
+}
+```
+
+Note that `if let` chains do *not* check exhaustiveness — the compiler won't warn if you forget a case.
+
+## 3. `while let` Loops
+
+`while let` runs a loop as long as a pattern keeps matching. A classic use is draining a stack:
+
+```rust
+let mut stack = vec![1, 2, 3, 4, 5];
+
+while let Some(top) = stack.pop() {
+    println!("Popped: {top}");
+}
+// Loop ends when `pop()` returns None (stack is empty).
+```
+
+Another use: reading from a channel until it closes:
+
+```rust
+use std::sync::mpsc;
+
+let (tx, rx) = mpsc::channel::<i32>();
+tx.send(1).unwrap();
+tx.send(2).unwrap();
+drop(tx); // Close the sender.
+
+while let Ok(value) = rx.try_recv() {
+    println!("Received: {value}");
+}
+```
+
+## 4. `for` Loop Patterns
+
+The variable in a `for` loop is also a pattern. This is most useful for destructuring tuples produced by iterators like `enumerate()`:
+
+```rust
+let points = vec![(0, 0), (1, 5), (2, 3)];
+
+for (index, (x, y)) in points.iter().enumerate() {
+    println!("Point {index}: ({x}, {y})");
+}
+```
+
+Without the destructuring pattern, you would need to write `point.0` and `point.1` inside the loop body.
+
+## 5. `let` Statements
+
+Plain `let` also uses patterns — the variable name on the left is actually the simplest kind of pattern (an identifier pattern that always matches):
+
+```rust
+let x = 5;         // Pattern: `x` — binds the value to the name x
+let (a, b, c) = (1, 2, 3); // Pattern: tuple destructuring
+let [first, .., last] = [10, 20, 30, 40, 50]; // Slice pattern
+```
+
+Because `let` is *irrefutable* (the pattern must always match), you cannot use a `Some(x)` pattern directly in `let` without an `else` branch:
+
+```rust
+// This does NOT compile — Some(x) is refutable, let is irrefutable:
+// let Some(x) = possible_value;
+
+// Use `let … else` (stabilised in Rust 1.65) for early returns:
+let Some(x) = possible_value else {
+    return;
+};
+println!("x is {x}");
+```
+
+Tuple destructuring in `let` is extremely common for unpacking return values:
+
+```rust
+fn min_max(v: &[i32]) -> (i32, i32) {
+    (*v.iter().min().unwrap(), *v.iter().max().unwrap())
+}
+
+let (minimum, maximum) = min_max(&[3, 1, 4, 1, 5, 9, 2, 6]);
+println!("min={minimum}, max={maximum}");
+```
+
+## 6. Function and Closure Parameters
+
+Function parameters are patterns too. The most common form is just a name, but you can destructure directly in the signature:
+
+```rust
+// Destructure a tuple in the parameter list:
+fn print_point(&(x, y): &(i32, i32)) {
+    println!("({x}, {y})");
+}
+
+fn main() {
+    let point = (3, 7);
+    print_point(&point);
+}
+```
+
+Closures work the same way:
+
+```rust
+let pairs = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+
+pairs.iter().for_each(|(num, ch)| {
+    println!("{num} -> {ch}");
+});
+```
+
+Destructuring struct fields in a parameter is also valid:
+
+```rust
+struct Point { x: i32, y: i32 }
+
+fn describe(Point { x, y }: Point) {
+    println!("x={x}, y={y}");
+}
+```
+
+## Summary
+
+| Context | Example | Refutable? |
+|---|---|---|
+| `match` arm | `match val { Some(x) => … }` | Yes |
+| `if let` | `if let Some(x) = opt { … }` | Yes |
+| `while let` | `while let Some(x) = stack.pop() { … }` | Yes |
+| `for` variable | `for (i, v) in iter.enumerate()` | No (irrefutable) |
+| `let` statement | `let (a, b) = (1, 2)` | No (irrefutable) |
+| `let … else` | `let Some(x) = opt else { return; }` | Yes |
+| Function params | `fn f(&(x, y): &(i32, i32))` | No (irrefutable) |
+
+Everywhere you see a binding in Rust — variable declaration, loop variables, function parameters — you are actually using a pattern. This uniformity makes Rust's syntax elegant once you internalise it.

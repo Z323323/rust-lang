@@ -1,0 +1,182 @@
+---
+title: "Example Program Using Structs to Calculate Rectangle Area"
+sidebarTitle: "Example Program"
+description: "Walk through refactoring a Rust program to use structs, adding Debug formatting, and seeing how structs make code more meaningful and maintainable."
+mode: "wide"
+---
+
+The best way to understand the value of structs is to watch code evolve through several refactoring stages. In this chapter we build a small program that calculates the area of a rectangle, starting from bare variables and ending with a well-structured, debuggable type — demonstrating exactly why structs improve clarity and maintainability.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Version 1: Plain Variables
+
+Our first pass uses two separate variables. It works, but the relationship between the values is implicit:
+
+```rust
+fn main() {
+    let width = 30;
+    let height = 50;
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(width, height)
+    );
+}
+
+fn area(width: u32, height: u32) -> u32 {
+    width * height
+}
+```
+
+The `area` function accepts two parameters, but nothing in the code communicates that they are related. A caller could accidentally swap them, and the compiler would not complain.
+
+## Version 2: Using a Tuple
+
+Tuples group the values together, which is an improvement:
+
+```rust
+fn main() {
+    let rect = (30, 50);
+    println!("Area: {} square pixels.", area(rect));
+}
+
+fn area(dimensions: (u32, u32)) -> u32 {
+    dimensions.0 * dimensions.1
+}
+```
+
+Now `area` takes a single value, making the grouping explicit. But `.0` and `.1` are still meaningless — we've gained grouping at the cost of clarity.
+
+## Version 3: Using a Struct
+
+A struct names both the type and each field, making the code self-documenting:
+
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(&rect)
+    );
+}
+
+fn area(rectangle: &Rectangle) -> u32 {
+    rectangle.width * rectangle.height
+}
+```
+
+`area` now borrows a `Rectangle` (no ownership transfer needed), and the multiplication reads like documentation: *width times height*.
+
+## Adding `#[derive(Debug)]` for Printing
+
+Trying to print a struct with `println!("{}", rect)` fails by default because `Rectangle` does not implement the `Display` trait. For debugging purposes, we can derive the `Debug` trait instead:
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect = Rectangle { width: 30, height: 50 };
+
+    // {:?} uses Debug formatting — single line
+    println!("rect is {:?}", rect);
+
+    // {:#?} uses pretty-printed Debug formatting
+    println!("rect is {:#?}", rect);
+}
+```
+
+Output:
+```
+rect is Rectangle { width: 30, height: 50 }
+rect is Rectangle {
+    width: 30,
+    height: 50,
+}
+```
+
+The `#[derive(Debug)]` attribute instructs the compiler to auto-generate a `Debug` implementation based on the struct's fields.
+
+## Using `dbg!` for Debugging
+
+Rust also provides the `dbg!` macro, which prints the file, line number, and value to `stderr` — and returns ownership of the value:
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let scale = 2;
+    let rect = Rectangle {
+        width: dbg!(30 * scale), // prints the expression and its result
+        height: 50,
+    };
+
+    dbg!(&rect); // borrows rect so we keep ownership
+}
+```
+
+Sample output:
+```
+[src/main.rs:9] 30 * scale = 60
+[src/main.rs:13] &rect = Rectangle {
+    width: 60,
+    height: 50,
+}
+```
+
+`dbg!` is particularly useful when you need to inspect intermediate expression values inside a complex initialization.
+
+## Putting It All Together
+
+Here is the final, clean version with a `main` function that calculates and prints the area:
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn area(rect: &Rectangle) -> u32 {
+    rect.width * rect.height
+}
+
+fn main() {
+    let rect1 = Rectangle { width: 30, height: 50 };
+    let rect2 = Rectangle { width: 10, height: 40 };
+    let rect3 = Rectangle { width: 60, height: 45 };
+
+    println!("rect1 area: {}", area(&rect1));
+    println!("rect2 area: {}", area(&rect2));
+    println!("rect3 area: {}", area(&rect3));
+
+    println!("Debug: {:#?}", rect1);
+}
+```
+
+In the next section, we'll move `area` into the `Rectangle` type itself as a *method*, which is the idiomatic Rust approach.
+
+## Summary
+
+- Plain variables lack the context to express relationships between related values.
+- Tuples group values but sacrifice named clarity.
+- Structs provide both grouping **and** named fields, making code self-documenting.
+- `#[derive(Debug)]` auto-generates `Debug` formatting; use `{:?}` or `{:#?}` to print.
+- The `dbg!` macro prints the expression, file, and line number to `stderr` while returning the value.

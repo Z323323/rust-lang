@@ -1,0 +1,130 @@
+---
+title: "Unrecoverable Errors with panic! in Rust"
+sidebarTitle: "panic!"
+description: "Learn when Rust programs panic, how to trigger panic! explicitly, how backtrace helps debug panics, and the difference between panic and recoverable errors."
+mode: "wide"
+---
+
+Rust divides errors into two broad categories: *recoverable* errors (handled with `Result<T, E>`) and *unrecoverable* errors that terminate the program. When your program hits an unrecoverable error — a bug that leaves it in an invalid state that cannot be reasoned about — Rust signals this with a **panic**. Understanding when and how panics occur, and how to interpret them, is essential for writing robust Rust programs.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## What Happens When a Program Panics
+
+When the `panic!` macro executes, Rust prints an error message, unwinds the stack (cleaning up data from each function it exits), and terminates the process. The default behavior is to *unwind*, meaning Rust walks back up the call stack and frees resources. You can change this to *abort* immediately (without cleanup) in `Cargo.toml`:
+
+```toml
+[profile.release]
+panic = 'abort'
+```
+
+Aborting produces a smaller binary and is sometimes preferred in embedded or size-critical contexts, but it relies on the operating system to reclaim memory.
+
+## Calling `panic!` Explicitly
+
+You can trigger a panic directly with the `panic!` macro, passing a message string:
+
+```rust
+fn main() {
+    let config_version = 99;
+
+    if config_version > 10 {
+        panic!(
+            "Config version {} is unsupported. Maximum supported version is 10.",
+            config_version
+        );
+    }
+
+    println!("Config loaded successfully.");
+}
+```
+
+Running this produces output similar to:
+
+```
+thread 'main' panicked at 'Config version 99 is unsupported. Maximum supported version is 10.', src/main.rs:5:9
+```
+
+The message includes the file name and line number where `panic!` was called, which helps you immediately locate the problem.
+
+## Panics from the Standard Library
+
+Many standard-library operations panic when they detect that you've used them incorrectly. The most common example is out-of-bounds vector access:
+
+```rust
+fn main() {
+    let v = vec![1, 2, 3];
+
+    // Index 99 is beyond the vector's length — this panics at runtime
+    println!("{}", v[99]);
+}
+```
+
+Output:
+
+```
+thread 'main' panicked at 'index out of bounds: the len is 3 but the index is 99', src/main.rs:5:20
+```
+
+Rust panics here rather than returning garbage memory or silently accessing invalid data, which is how memory-safety bugs happen in languages like C. Rust trades a crash for undefined behavior.
+
+## Using `RUST_BACKTRACE` to Debug Panics
+
+By default, the panic message only shows where the panic occurred, not how you got there. Set the `RUST_BACKTRACE` environment variable to `1` (or `full` for more detail) to see the full call stack:
+
+```bash
+RUST_BACKTRACE=1 cargo run
+```
+
+The backtrace output lists every function call that led to the panic. Each frame includes a frame number, function name, and source location. Look for the first frame that references your own code (not standard library internals) — that's usually where the bug is.
+
+Example (abbreviated) backtrace:
+
+```
+stack backtrace:
+   0: rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::slice::index::slice_index_order_fail
+   3: myproject::main
+             at ./src/main.rs:5:20
+```
+
+Debug symbols must be present for useful backtraces; they're included by default in debug builds (`cargo build`) but stripped in release builds (`cargo build --release`).
+
+## Stack Unwinding vs. Abort
+
+| | Unwinding (default) | Abort |
+|---|---|---|
+| Behavior | Walks back up the stack, running `Drop` | Terminates immediately |
+| Binary size | Larger (unwind tables included) | Smaller |
+| Cleanup | Destructors run; resources freed | OS reclaims memory |
+| Use case | General programs | Embedded, size-critical |
+
+## When to Use `panic!`
+
+Use `panic!` when your program reaches a state that is **logically impossible** and continuing would be meaningless or dangerous:
+
+- **Invalid assumptions are violated** — a function requires its input to be non-empty, and the caller passes an empty slice.
+- **Prototype or example code** — you haven't yet decided on a proper error-handling strategy.
+- **Test code** — the test framework relies on panics to report assertion failures.
+- **Logical impossibility** — you've already validated an `Option` is `Some` earlier in the code, and calling `.unwrap()` can never actually fail.
+
+For anything a user or external system might cause — a missing file, a malformed request, a network timeout — prefer `Result<T, E>` to give callers the chance to recover. Panics should represent *bugs*, not expected failure modes.
+
+## Assertions Trigger Panics
+
+Rust's built-in assertion macros all panic when the condition fails:
+
+```rust
+fn divide(a: f64, b: f64) -> f64 {
+    assert!(b != 0.0, "Divisor must not be zero; got {}", b);
+    a / b
+}
+
+fn main() {
+    println!("{}", divide(10.0, 2.0)); // 5.0
+    println!("{}", divide(10.0, 0.0)); // panics!
+}
+```
+
+`assert!` checks a boolean condition, `assert_eq!` checks equality, and `assert_ne!` checks inequality. All three accept an optional format message.

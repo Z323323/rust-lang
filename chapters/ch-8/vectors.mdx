@@ -1,0 +1,148 @@
+---
+title: "Vectors in Rust: Storing Lists of Values with Vec<T>"
+sidebarTitle: "Vectors"
+description: "Learn to create, update, and read elements from Rust's Vec<T>. Covers push, indexing, get, iteration, and storing multiple types with enums."
+mode: "wide"
+---
+
+Vectors are one of Rust's most commonly used data structures, allowing you to store more than one value in a single data structure that puts all the values next to each other in memory. A `Vec<T>` can only store values of the same type, and it grows dynamically as you add elements. Vectors are heap-allocated, so their size doesn't need to be known at compile time.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a New Vector
+
+You can create a new, empty vector using `Vec::new()`, or you can use the convenient `vec!` macro to create a vector with initial values:
+
+```rust
+fn main() {
+    // Create an empty vector of i32
+    let mut v: Vec<i32> = Vec::new();
+
+    // Create a vector using the vec! macro (type is inferred)
+    let v2 = vec![1, 2, 3];
+
+    println!("v2 has {} elements", v2.len());
+}
+```
+
+When you use `Vec::new()` without immediately pushing values into it, you must provide a type annotation so Rust knows what kind of values you intend to store. When you use the `vec!` macro, Rust can infer the type from the values you provide.
+
+## Updating a Vector with `push`
+
+Once a vector is declared as `mut`, you can add elements to it using the `push` method:
+
+```rust
+fn main() {
+    let mut v = Vec::new();
+
+    v.push(5);
+    v.push(6);
+    v.push(7);
+    v.push(8);
+
+    println!("{:?}", v); // [5, 6, 7, 8]
+}
+```
+
+The numbers pushed here are all `i32`, so Rust infers that `v` is of type `Vec<i32>`. No explicit annotation is needed once the compiler sees the first `push` call with a concrete type.
+
+## Reading Elements: Indexing vs `.get()`
+
+There are two ways to reference a value stored in a vector: using index syntax (`[]`) or the `.get()` method. They differ significantly in how they handle out-of-bounds access:
+
+```rust
+fn main() {
+    let v = vec![10, 20, 30, 40, 50];
+
+    // Indexing: panics if out of bounds
+    let third: &i32 = &v[2];
+    println!("The third element is {}", third);
+
+    // .get(): returns an Option<&T>, safe for out-of-bounds
+    match v.get(2) {
+        Some(value) => println!("The third element is {}", value),
+        None => println!("There is no third element."),
+    }
+
+    // This would panic at runtime:
+    // let does_not_exist = &v[100];
+
+    // This returns None gracefully:
+    let does_not_exist = v.get(100);
+    println!("Out of bounds get: {:?}", does_not_exist); // None
+}
+```
+
+Use `[]` when you're confident the index is valid and you want your program to crash loudly on a bug. Use `.get()` when the index might legitimately be out of bounds, so you can handle that case gracefully.
+
+## Iterating Over a Vector
+
+You can iterate over all elements in a vector using a `for` loop. You can iterate over immutable references or, with a mutable vector, over mutable references:
+
+```rust
+fn main() {
+    let v = vec![100, 200, 300];
+
+    // Immutable iteration
+    for val in &v {
+        println!("{}", val);
+    }
+
+    let mut v2 = vec![1, 2, 3];
+
+    // Mutable iteration: dereference with * to modify
+    for val in &mut v2 {
+        *val *= 10;
+    }
+
+    println!("{:?}", v2); // [10, 20, 30]
+}
+```
+
+The dereference operator `*` is needed when modifying values through a mutable reference during iteration, because the loop variable `val` is of type `&mut i32`.
+
+## Storing Multiple Types with Enums
+
+A vector can only store values of one type — but if you define an enum whose variants hold different types, you can effectively store multiple types in a single vector:
+
+```rust
+#[derive(Debug)]
+enum SpreadsheetCell {
+    Int(i32),
+    Float(f64),
+    Text(String),
+}
+
+fn main() {
+    let row = vec![
+        SpreadsheetCell::Int(3),
+        SpreadsheetCell::Text(String::from("blue")),
+        SpreadsheetCell::Float(10.12),
+    ];
+
+    for cell in &row {
+        match cell {
+            SpreadsheetCell::Int(n)    => println!("Integer: {}", n),
+            SpreadsheetCell::Float(f)  => println!("Float: {}", f),
+            SpreadsheetCell::Text(s)   => println!("Text: {}", s),
+        }
+    }
+}
+```
+
+This pattern is powerful because Rust needs to know at compile time what types will be in the vector so it can allocate the right amount of memory on the heap. Enums encode all possible variants at compile time, giving the compiler everything it needs.
+
+## Dropping a Vector Drops Its Elements
+
+Like any other Rust value, a vector is freed when it goes out of scope, and all of its contents are dropped along with it:
+
+```rust
+fn main() {
+    {
+        let v = vec![1, 2, 3];
+        // v is valid here, do stuff with it
+    } // v goes out of scope and is freed here — all elements are dropped
+}
+```
+
+This automatic cleanup means you don't need to worry about manually managing memory, and there are no dangling pointers into a dropped vector's data.

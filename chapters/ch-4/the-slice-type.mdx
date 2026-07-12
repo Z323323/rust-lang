@@ -1,0 +1,166 @@
+---
+title: "The Slice Type in Rust: String Slices and Array Slices"
+sidebarTitle: "Slices"
+description: "Learn how Rust slice types work: string slices (&str), array slices (&[T]), and how slices let you reference a contiguous sequence without ownership."
+mode: "wide"
+---
+
+A *slice* is a reference to a contiguous sequence of elements in a collection — it lets you borrow part of a value without taking ownership of the whole thing. Slices are one of Rust's fundamental reference types and underpin both string handling and array manipulation throughout the standard library.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## String Slices (`&str`)
+
+A *string slice* is a reference to part of a `String`. You create one using range syntax inside square brackets:
+
+```rust
+fn main() {
+    let s = String::from("hello world");
+
+    let hello = &s[0..5];  // bytes 0, 1, 2, 3, 4
+    let world = &s[6..11]; // bytes 6 through 10
+
+    println!("{} {}", hello, world); // "hello world"
+}
+```
+
+The range `[start..end]` is exclusive of `end`. Rust provides convenient shortcuts:
+
+```rust
+let hello = &s[..5];  // same as &s[0..5]
+let world = &s[6..];  // same as &s[6..s.len()]
+let all   = &s[..];   // entire string as a slice
+```
+
+Under the hood, a `&str` is a fat pointer: it stores both a pointer to the first byte and a length. The data itself is not copied.
+
+### Why String Slices Matter for Safety
+
+Consider a function that finds the first word in a string. Without slices you might return an index — but that index becomes meaningless if the original `String` is later modified:
+
+```rust
+fn first_word(s: &String) -> &str {
+    let bytes = s.as_bytes();
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte == b' ' {
+            return &s[..i]; // slice up to the space
+        }
+    }
+
+    &s[..] // no space found; whole string is the word
+}
+
+fn main() {
+    let mut sentence = String::from("hello world");
+    let word = first_word(&sentence);
+
+    // sentence.clear(); // ❌ would invalidate `word` — borrow checker catches this
+    println!("First word: {}", word);
+}
+```
+
+The borrow checker sees that `word` borrows from `sentence`. If you try to mutate `sentence` while `word` is still live, the compiler rejects it — catching a whole category of invalidation bugs.
+
+## `&str` vs `String`
+
+| | `String` | `&str` |
+|---|---|---|
+| Ownership | Owned | Borrowed |
+| Allocation | Heap | Points into existing memory |
+| Mutable | Yes (if `mut`) | No |
+| Typical use | Building/owning strings | Reading strings |
+
+String literals in source code are `&str` — they are stored in the binary's read-only data segment and have a `'static` lifetime:
+
+```rust
+let literal: &str = "I am baked into the binary";
+```
+
+A best-practice rule of thumb: **accept `&str` in function parameters** — it works for both `String` references (via deref coercion) and string literals:
+
+```rust
+fn print_greeting(name: &str) {
+    println!("Hello, {}!", name);
+}
+
+fn main() {
+    let owned = String::from("Alice");
+    print_greeting(&owned);       // &String coerces to &str
+    print_greeting("Bob");        // string literal already &str
+}
+```
+
+## Array Slices (`&[T]`)
+
+Slices are not limited to strings. You can take a slice of any contiguous collection — arrays, `Vec<T>`, or existing slices — using the same `&[start..end]` syntax:
+
+```rust
+fn sum(values: &[i32]) -> i32 {
+    let mut total = 0;
+    for v in values {
+        total += v;
+    }
+    total
+}
+
+fn main() {
+    let array = [1, 2, 3, 4, 5];
+    let partial = &array[1..4]; // [2, 3, 4]
+
+    println!("Partial sum: {}", sum(partial));  // 9
+    println!("Full sum:    {}", sum(&array));   // 15
+
+    let v = vec![10, 20, 30];
+    println!("Vec sum:     {}", sum(&v));       // 60
+}
+```
+
+The type `&[i32]` is a fat pointer just like `&str`: a pointer to the first element plus a length. Because `sum` accepts `&[i32]`, it works uniformly with arrays, `Vec`s, and other slices.
+
+### Mutable Slices
+
+You can also take a mutable slice with `&mut [T]`, allowing you to modify the referenced elements:
+
+```rust
+fn double_all(values: &mut [i32]) {
+    for v in values.iter_mut() {
+        *v *= 2;
+    }
+}
+
+fn main() {
+    let mut data = [1, 2, 3, 4, 5];
+    double_all(&mut data);
+    println!("{:?}", data); // [2, 4, 6, 8, 10]
+}
+```
+
+## Common Slice Operations
+
+Slices expose a rich set of methods from the standard library:
+
+```rust
+fn main() {
+    let v = vec![3, 1, 4, 1, 5, 9, 2, 6];
+    let s = &v[..];
+
+    println!("Length:    {}", s.len());           // 8
+    println!("Is empty:  {}", s.is_empty());      // false
+    println!("Contains 9: {}", s.contains(&9));   // true
+    println!("First: {:?}", s.first());           // Some(3)
+    println!("Last:  {:?}", s.last());            // Some(6)
+
+    let mut sortable = [5, 3, 1, 4, 2];
+    sortable.sort();
+    println!("Sorted: {:?}", sortable);           // [1, 2, 3, 4, 5]
+}
+```
+
+## Summary
+
+- A slice (`&[T]` or `&str`) is a fat pointer to a contiguous sequence — no ownership, no allocation.
+- String slices (`&str`) are created from `String` with range syntax: `&s[start..end]`.
+- String literals are `&str` with `'static` lifetime.
+- Prefer `&str` over `&String` in function parameters for maximum flexibility.
+- Array/Vec slices (`&[T]`) work identically and allow writing generic, collection-agnostic functions.

@@ -1,0 +1,164 @@
+---
+title: "References and Borrowing in Rust – Borrow Checker Guide"
+sidebarTitle: "Borrowing"
+description: "Understand Rust references and borrowing: immutable and mutable references, the borrow checker rules, and how to avoid common borrowing mistakes."
+mode: "wide"
+---
+
+Rather than transferring ownership every time you pass a value to a function, Rust lets you *borrow* it through a reference. A reference is a pointer to a value you do not own; the borrow checker enforces at compile time that references never outlive the data they point to, eliminating an entire class of memory bugs.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Immutable References (`&T`)
+
+An immutable reference lets you read a value without taking ownership. You create one with the `&` operator and annotate the parameter type as `&T`:
+
+```rust
+fn calculate_length(s: &String) -> usize {
+    s.len()
+} // s goes out of scope, but it doesn't own the data — nothing is dropped
+
+fn main() {
+    let s1 = String::from("hello");
+    let len = calculate_length(&s1); // borrow s1
+
+    println!("The length of '{}' is {}.", s1, len); // s1 still valid!
+}
+```
+
+The function *borrows* `s1`; ownership never moves, so `s1` is still valid after the call. You can have **as many immutable references as you like** simultaneously:
+
+```rust
+fn main() {
+    let s = String::from("world");
+    let r1 = &s;
+    let r2 = &s;
+    let r3 = &s;
+    println!("{}, {}, {}", r1, r2, r3); // ✅ all fine
+}
+```
+
+## Mutable References (`&mut T`)
+
+If you need to modify borrowed data, use a mutable reference with `&mut`:
+
+```rust
+fn append_world(s: &mut String) {
+    s.push_str(", world");
+}
+
+fn main() {
+    let mut s = String::from("hello");
+    append_world(&mut s);
+    println!("{}", s); // "hello, world"
+}
+```
+
+Note that the *variable* must also be declared `mut` before you can take a mutable reference to it.
+
+## The Core Borrow Checker Rules
+
+Rust enforces two rules about references at compile time:
+
+1. **You can have any number of immutable references, OR exactly one mutable reference — but not both at the same time.**
+2. **References must always be valid (no dangling references).**
+
+### Rule 1: No Simultaneous Mutable and Immutable References
+
+```rust
+fn main() {
+    let mut s = String::from("hello");
+
+    let r1 = &s;     // immutable borrow
+    let r2 = &s;     // another immutable borrow — fine
+    // let r3 = &mut s; // ❌ ERROR: cannot borrow as mutable while immutable borrows exist
+
+    println!("{} and {}", r1, r2);
+    // r1 and r2 are no longer used after this point
+
+    let r3 = &mut s; // ✅ now allowed — r1, r2 are out of scope
+    r3.push_str("!");
+    println!("{}", r3);
+}
+```
+
+The borrow checker tracks the *last use* of each reference (a feature called Non-Lexical Lifetimes, or NLL). A borrow ends as soon as the reference is last used, not when the enclosing `}` is reached. This is why `r3` is allowed above.
+
+### Why This Rule Exists
+
+Two threads — or even two code paths in the same thread — mutating the same data simultaneously is a *data race*. By allowing only one mutable reference at a time, Rust eliminates data races at compile time.
+
+## Dangling References
+
+In languages with manual memory management, a *dangling pointer* refers to memory that has been freed. Rust's borrow checker makes this impossible:
+
+```rust
+fn dangle() -> &String { // ❌ lifetime error
+    let s = String::from("hello");
+    &s
+} // s is dropped here; a reference to it would dangle
+```
+
+The compiler rejects this with a lifetime error. The fix is to return the `String` directly, transferring ownership:
+
+```rust
+fn no_dangle() -> String {
+    let s = String::from("hello");
+    s // ownership moves to caller — no dangling pointer
+}
+```
+
+## Borrow Checker Mental Model
+
+Think of the borrow checker as a loan ledger:
+
+- **Immutable borrow** → multiple readers allowed, no writers.
+- **Mutable borrow** → exclusive access; no other readers or writers.
+- When the loan period ends (last use of the reference), the lock is released.
+
+```rust
+fn main() {
+    let mut data = vec![1, 2, 3];
+
+    // Immutable borrow
+    let first = &data[0];
+    println!("First element: {}", first);
+    // first's borrow ends here
+
+    // Mutable borrow is now allowed
+    data.push(4);
+    println!("Data: {:?}", data);
+}
+```
+
+## Common Mistakes and Fixes
+
+### Mistake: Modifying while holding a reference
+
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &v[0];  // immutable borrow of v
+    v.push(4);          // ❌ mutable borrow while immutable borrow exists
+    println!("{}", first);
+}
+```
+
+**Fix:** End the immutable borrow before mutating:
+
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first_value = v[0]; // copy the value, no borrow retained
+    v.push(4);              // ✅ fine
+    println!("{}", first_value);
+}
+```
+
+## Summary
+
+- Use `&T` for read-only access without taking ownership.
+- Use `&mut T` for write access; the source variable must be `mut`.
+- You can have many immutable references OR one mutable reference — never both at the same time.
+- The borrow checker prevents dangling references at compile time.
+- Non-Lexical Lifetimes (NLL) end borrows at last use, giving you flexibility without sacrificing safety.

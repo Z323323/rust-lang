@@ -1,0 +1,151 @@
+---
+title: "Ownership in Rust: Rules, Move, and Clone Explained"
+sidebarTitle: "Ownership"
+description: "Learn Rust's ownership system: the three ownership rules, how values are moved vs. copied, and why ownership enables memory safety without a GC."
+mode: "wide"
+---
+
+Ownership is Rust's most distinctive feature — a set of compile-time rules that governs how memory is managed without a garbage collector. By enforcing ownership statically, Rust guarantees that you will never have dangling pointers, double-frees, or data races, all while giving you the performance of manual memory management.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Three Ownership Rules
+
+Every value in Rust obeys three fundamental rules enforced at compile time:
+
+1. **Each value in Rust has an owner.**
+2. **There can only be one owner at a time.**
+3. **When the owner goes out of scope, the value is dropped.**
+
+These rules are simple, but their implications are deep. There is no need to call `free()` or wait for a GC pause — Rust automatically inserts a `drop` call when the owner leaves scope.
+
+```rust
+fn main() {
+    {
+        let s = String::from("hello"); // s is the owner
+        // s is valid here
+    }
+    // s goes out of scope; String memory is freed automatically
+}
+```
+
+## Move Semantics
+
+When you assign a heap-allocated value to another variable, Rust *moves* ownership rather than copying the data. The original variable becomes invalid.
+
+```rust
+fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1; // ownership moves to s2
+
+    // println!("{}", s1); // ❌ compile error: s1 has been moved
+    println!("{}", s2);    // ✅ s2 is the new owner
+}
+```
+
+This prevents a *double-free* error: if both `s1` and `s2` tried to free the same memory when they went out of scope, the program would be unsound. Rust solves this by invalidating the original binding at compile time.
+
+### Move in Function Calls
+
+Passing a value to a function also transfers ownership:
+
+```rust
+fn takes_ownership(s: String) {
+    println!("{}", s);
+} // s is dropped here
+
+fn main() {
+    let my_string = String::from("world");
+    takes_ownership(my_string);
+    // println!("{}", my_string); // ❌ moved into the function
+}
+```
+
+If you want to use the value after calling a function, you must either return it back out, or use borrowing (covered in the next section).
+
+## Clone: Explicit Deep Copy
+
+When you *do* want a full copy of heap data, call `.clone()`. This is an explicit signal that an allocation is happening:
+
+```rust
+fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1.clone(); // deep copy — both are valid
+
+    println!("s1 = {}, s2 = {}", s1, s2);
+}
+```
+
+Use `.clone()` sparingly; prefer borrowing when you only need temporary access to a value.
+
+## Copy Types: Stack-Only Data
+
+Types that live entirely on the stack — integers, booleans, floats, `char`, and tuples of `Copy` types — implement the `Copy` trait. For these types, assignment copies the bits; the original remains valid:
+
+```rust
+fn main() {
+    let x = 5;
+    let y = x; // copied, not moved
+
+    println!("x = {}, y = {}", x, y); // ✅ both valid
+}
+```
+
+`String` does **not** implement `Copy` because it owns heap memory. `&str` (a string slice) does implement `Copy` because it is just a pointer and a length living on the stack.
+
+## `String` vs `&str`
+
+Understanding the difference between `String` and `&str` is essential:
+
+| Type | Ownership | Location | Mutable |
+|------|-----------|----------|---------|
+| `String` | Owned | Heap | Yes (`mut`) |
+| `&str` | Borrowed view | Usually static / stack | No |
+
+```rust
+fn greet(name: &str) {
+    println!("Hello, {}!", name);
+}
+
+fn main() {
+    let owned: String = String::from("Alice");
+    let literal: &str = "Bob";
+
+    greet(&owned);   // &String coerces to &str
+    greet(literal);  // already a &str
+}
+```
+
+Prefer `&str` in function signatures when you only need to read the string — it accepts both `String` references and string literals, making your API more flexible.
+
+## Ownership and Returning Values
+
+A function can transfer ownership back to the caller by returning a value:
+
+```rust
+fn gives_ownership() -> String {
+    let s = String::from("hello");
+    s // ownership moves to the caller
+}
+
+fn takes_and_gives_back(s: String) -> String {
+    s // ownership moves back out
+}
+
+fn main() {
+    let s1 = gives_ownership();
+    let s2 = String::from("world");
+    let s3 = takes_and_gives_back(s2);
+    // s2 is invalid; s1 and s3 are valid
+}
+```
+
+Having to return values just to continue using them is verbose. That's why Rust also provides *references and borrowing*, which let a function use a value without taking ownership.
+
+## Summary
+
+- Every value has exactly one owner; when the owner goes out of scope the value is freed.
+- Assignment and function calls *move* heap-allocated values.
+- Use `.clone()` for an explicit deep copy.
+- Stack-only `Copy` types are copied automatically.
+- `String` is an owned, heap-allocated string; `&str` is a borrowed string slice.

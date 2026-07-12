@@ -1,0 +1,223 @@
+---
+title: "The match Control Flow Construct in Rust"
+sidebarTitle: "match"
+description: "Use Rust's match expression for exhaustive pattern matching on enums, integers, and more. Covers arms, catch-all patterns, and binding matched values."
+mode: "wide"
+---
+
+`match` is Rust's most powerful control-flow construct. It compares a value against a series of *patterns* and executes the code for the first pattern that matches. Unlike a `switch` statement in C or Java, Rust's `match` is *exhaustive* — the compiler guarantees you have handled every possible case — and each arm can bind matched values to variables.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Basic `match` Syntax
+
+```rust
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter,
+}
+
+fn value_in_cents(coin: Coin) -> u32 {
+    match coin {
+        Coin::Penny   => 1,
+        Coin::Nickel  => 5,
+        Coin::Dime    => 10,
+        Coin::Quarter => 25,
+    }
+}
+```
+
+Each *arm* has the form `pattern => expression`. The value of the matched arm becomes the value of the entire `match` expression. Arms are separated by commas; multi-line arm bodies use `{ }`.
+
+```rust
+fn value_in_cents(coin: Coin) -> u32 {
+    match coin {
+        Coin::Penny => {
+            println!("Lucky penny!");
+            1
+        }
+        Coin::Nickel  => 5,
+        Coin::Dime    => 10,
+        Coin::Quarter => 25,
+    }
+}
+```
+
+## Binding Values in Match Arms
+
+Patterns can *bind* parts of the matched value to variables. Here `Quarter` carries a `UsState` variant:
+
+```rust
+#[derive(Debug)]
+enum UsState {
+    Alaska,
+    Arizona,
+    California,
+    // ...
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState), // Quarter holds a state
+}
+
+fn value_in_cents(coin: Coin) -> u32 {
+    match coin {
+        Coin::Penny   => 1,
+        Coin::Nickel  => 5,
+        Coin::Dime    => 10,
+        Coin::Quarter(state) => {
+            println!("State quarter from {:?}!", state);
+            25
+        }
+    }
+}
+
+fn main() {
+    let c = Coin::Quarter(UsState::Alaska);
+    println!("{} cents", value_in_cents(c));
+    // "State quarter from Alaska!" then "25 cents"
+}
+```
+
+The variable `state` is bound to the `UsState` value embedded in the `Quarter` variant.
+
+## Matching `Option<T>`
+
+`match` is the natural companion to `Option<T>`:
+
+```rust
+fn increment(opt: Option<i32>) -> Option<i32> {
+    match opt {
+        None    => None,
+        Some(n) => Some(n + 1),
+    }
+}
+
+fn main() {
+    let five    = Some(5);
+    let six     = increment(five);
+    let nothing = increment(None);
+
+    println!("{:?}", six);     // Some(6)
+    println!("{:?}", nothing); // None
+}
+```
+
+This pattern is so common that `Option` provides a `.map()` method that does the same thing, but explicit `match` makes the logic crystal-clear.
+
+## Exhaustiveness: The Compiler Has Your Back
+
+If you forget a variant, the compiler refuses to compile:
+
+```rust
+fn value_in_cents(coin: Coin) -> u32 {
+    match coin {
+        Coin::Penny  => 1,
+        Coin::Nickel => 5,
+        // Coin::Dime and Coin::Quarter are not covered
+        // ❌ ERROR: non-exhaustive patterns
+    }
+}
+```
+
+This guarantee is invaluable when you add a new variant later — every `match` in your codebase that doesn't cover it becomes a compile error, forcing you to update all call sites.
+
+## Catch-All Patterns
+
+Sometimes you only care about a few specific values and want a default for everything else. Use a variable name (often `other`) or `_` as a catch-all:
+
+```rust
+fn describe_number(n: u32) -> &'static str {
+    match n {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        other => {
+            println!("Got an unhandled number: {}", other);
+            "something else"
+        }
+    }
+}
+```
+
+Use `_` when you don't need to use the caught value:
+
+```rust
+fn describe_number(n: u32) -> &'static str {
+    match n {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        _ => "something else", // discard the value
+    }
+}
+```
+
+The catch-all arm must come **last**; any arm after it would be unreachable.
+
+## Matching Ranges and Guards
+
+Patterns can include ranges (`1..=5`) and *match guards* (extra conditions with `if`):
+
+```rust
+fn classify(n: i32) -> &'static str {
+    match n {
+        i32::MIN..=-1 => "negative",
+        0             => "zero",
+        1..=9         => "small positive",
+        10..=99       => "medium positive",
+        _             => "large positive",
+    }
+}
+
+fn main() {
+    println!("{}", classify(-5));   // "negative"
+    println!("{}", classify(0));    // "zero"
+    println!("{}", classify(7));    // "small positive"
+    println!("{}", classify(42));   // "medium positive"
+    println!("{}", classify(1000)); // "large positive"
+}
+```
+
+Match guards add a condition after the pattern:
+
+```rust
+fn main() {
+    let pair = (2, -3);
+
+    match pair {
+        (x, y) if x == y   => println!("Equal"),
+        (x, y) if x + y == 0 => println!("Opposites"),
+        (x, _) if x % 2 == 0 => println!("First is even"),
+        _                   => println!("No special case"),
+    }
+}
+```
+
+## Multiple Patterns with `|`
+
+Use `|` to match multiple patterns in one arm:
+
+```rust
+fn main() {
+    let x = 3;
+    match x {
+        1 | 2 => println!("one or two"),
+        3 | 4 => println!("three or four"),
+        _     => println!("something else"),
+    }
+}
+```
+
+## Summary
+
+- `match` compares a value against a series of patterns and executes the matching arm.
+- Arms can bind matched values into named variables.
+- `match` is *exhaustive*: the compiler requires every case to be covered.
+- Use a named catch-all (`other`) to access the unmatched value, or `_` to discard it.
+- Ranges (`1..=5`), match guards (`if condition`), and OR patterns (`|`) add expressive power.

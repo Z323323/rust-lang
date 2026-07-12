@@ -1,0 +1,212 @@
+---
+title: "Traits for Async Programming: Future, Stream, and Waker"
+sidebarTitle: "Async Traits"
+description: "Deep dive into Rust's async trait system: the Future trait, Poll, Waker, Pin, and the contracts that runtimes and executors rely on."
+mode: "wide"
+---
+
+The `async`/`.await` syntax is a high-level convenience layer over a small set of low-level traits and types. Understanding the machinery underneath helps you debug tricky async issues, write custom `Future` implementations, and reason about why certain constraints (like `Pin`) exist. This chapter explores `Future::poll`, `Poll`, `Waker`, and `Pin` in depth.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The `Future` Trait in Full
+
+```rust
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+pub trait Future {
+    type Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+}
+```
+
+Key points:
+- `self: Pin<&mut Self>` — the future must be pinned before it can be polled (more on this below).
+- `cx: &mut Context<'_>` — carries a `Waker` that the future should use to signal when it is ready to make progress.
+- Returns `Poll::Ready(output)` when complete, or `Poll::Pending` when more time is needed.
+
+## `Poll<T>`: Ready or Pending
+
+```rust
+pub enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+```
+
+A runtime calls `poll` on a future. The future checks whether its result is ready:
+- If yes, it returns `Poll::Ready(value)` and the task is complete.
+- If no, it returns `Poll::Pending` — but **before returning `Pending`, it must register a waker** so the runtime knows when to poll it again.
+
+Failing to register a waker before returning `Pending` is a logic bug: the task would be parked forever.
+
+## `Waker` and `Context`
+
+`Context` is currently a thin wrapper around a `Waker`. A `Waker` is a handle that, when `.wake()` is called, tells the runtime "this task should be polled again".
+
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+
+struct TimerFuture {
+    shared: Arc<Mutex<SharedState>>,
+}
+
+struct SharedState {
+    completed: bool,
+    waker: Option<std::task::Waker>,
+}
+
+impl Future for TimerFuture {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let mut state = self.shared.lock().unwrap();
+        if state.completed {
+            Poll::Ready(())
+        } else {
+            // Register the waker so we get polled again when done.
+            state.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+
+impl TimerFuture {
+    fn new(duration: Duration) -> Self {
+        let shared = Arc::new(Mutex::new(SharedState {
+            completed: false,
+            waker: None,
+        }));
+        let shared_clone = Arc::clone(&shared);
+        thread::spawn(move || {
+            thread::sleep(duration);
+            let mut state = shared_clone.lock().unwrap();
+            state.completed = true;
+            if let Some(waker) = state.waker.take() {
+                waker.wake(); // Tell the runtime: poll me again!
+            }
+        });
+        TimerFuture { shared }
+    }
+}
+```
+
+This is a minimal but complete custom future: a background thread sleeps, then wakes the task by calling `waker.wake()`.
+
+## `Pin<P>` and Why Self-Referential Futures Need It
+
+When `async`/`.await` generates a state machine, the compiler may produce a struct where one field holds a *reference to another field*. For example:
+
+```rust
+async fn read_file() {
+    let buffer = vec![0u8; 1024];
+    let first_byte = &buffer[0]; // reference into `buffer`
+    some_async_io(&buffer).await; // state machine must remember both
+    println!("{first_byte}");
+}
+```
+
+The generated state machine stores both `buffer` and `first_byte` (a pointer into `buffer`). If this struct were moved in memory, `first_byte` would point to the wrong address. `Pin<&mut T>` prevents the future from being moved after it has been polled at least once.
+
+```rust
+// Pin semantics (simplified):
+// Once a value is pinned, you cannot get a &mut T from it without unsafe.
+// This prevents moves because moves require &mut T (via mem::replace etc.).
+use std::pin::Pin;
+
+fn poll_future(future: &mut impl Future<Output = ()>) {
+    // Must pin first — the future cannot be moved after the first poll.
+    let pinned = unsafe { Pin::new_unchecked(future) };
+    // In real code, use `pin!` macro or `Box::pin`.
+}
+```
+
+### `Unpin`: Futures That Are Safe to Move
+
+Most simple futures do not contain self-references and are safe to move at any time. They implement the `Unpin` auto-trait, which makes `Pin<&mut T>` essentially the same as `&mut T` for them. Only futures generated from `async` blocks that capture references across `.await` points are `!Unpin`.
+
+```rust
+use std::marker::Unpin;
+
+fn assert_unpin<T: Unpin>(_: T) {}
+
+// i32 is Unpin — trivially safe to move.
+assert_unpin(42i32);
+
+// Complex async state machines may be !Unpin.
+// Box::pin(future) is the standard way to handle them.
+```
+
+## The `pin!` Macro for Stack Pinning
+
+The `std::pin::pin!` macro (stabilised in Rust 1.68) pins a value to the current stack frame without heap allocation:
+
+```rust
+use std::pin::pin;
+
+fn main() {
+    trpl::run(async {
+        let my_future = async { 42u32 };
+        let pinned = pin!(my_future);
+        let value = pinned.await;
+        println!("{value}");
+    });
+}
+```
+
+Use `pin!` when you need to poll a future by hand or pass it to an API requiring `Pin<&mut F>`. Use `Box::pin(future)` when you need to store it in a struct or collection.
+
+## Implementing `Future` Without `async`
+
+Occasionally you need to implement `Future` directly — for instance, when wrapping a callback-based C library:
+
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Waker};
+
+pub struct CallbackFuture {
+    inner: Arc<Mutex<Inner>>,
+}
+
+struct Inner {
+    result: Option<String>,
+    waker: Option<Waker>,
+}
+
+impl Future for CallbackFuture {
+    type Output = String;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<String> {
+        let mut inner = self.inner.lock().unwrap();
+        match inner.result.take() {
+            Some(result) => Poll::Ready(result),
+            None => {
+                inner.waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
+        }
+    }
+}
+```
+
+The external callback would call `inner.lock().unwrap().waker.take().unwrap().wake()` when the result is available.
+
+## Summary of Key Types
+
+| Type | Role |
+|---|---|
+| `Future` | Trait for async computations; `poll` drives progress |
+| `Poll<T>` | Either `Ready(T)` or `Pending` |
+| `Context<'_>` | Passed to `poll`; holds the `Waker` |
+| `Waker` | Handle to reschedule a task when it can make progress |
+| `Pin<P>` | Prevents moving the pointee; required for self-referential futures |
+| `Unpin` | Auto-trait for types safe to move even when pinned |

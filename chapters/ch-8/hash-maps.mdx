@@ -1,0 +1,193 @@
+---
+title: "Hash Maps in Rust: Key-Value Storage with HashMap<K,V>"
+sidebarTitle: "Hash Maps"
+description: "Store key-value pairs in Rust with HashMap<K,V>. Learn to insert, access, update, and iterate over hash maps, and handle missing keys with entry()."
+mode: "wide"
+---
+
+A hash map stores a mapping of keys to values. Unlike vectors, which store values by integer index, hash maps let you look up data using a key of any type that implements `Hash` and `Eq`. They're invaluable whenever you need to associate one piece of information with another — for example, counting word occurrences in text, or building a configuration store. Rust's standard-library hash map uses [SipHash](https://en.wikipedia.org/wiki/SipHash) by default, which provides resistance to hash-flooding denial-of-service attacks.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a Hash Map
+
+`HashMap` is in the standard library's collections module. Unlike `Vec` and `String`, it is not automatically brought into scope, so you must use `use`:
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    // Create an empty hash map
+    let mut scores: HashMap<String, i32> = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    println!("{:?}", scores);
+}
+```
+
+Just like with vectors, if you insert values immediately the compiler can infer the type parameters, but an explicit annotation can improve readability.
+
+## Ownership and Hash Maps
+
+For types that implement `Copy` (like `i32`), values are copied into the hash map. For owned types (like `String`), the hash map takes ownership:
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let key   = String::from("color");
+    let value = String::from("blue");
+
+    let mut map = HashMap::new();
+    map.insert(key, value);
+
+    // key and value are MOVED into the map — these lines won't compile:
+    // println!("{}", key);
+    // println!("{}", value);
+}
+```
+
+If you want to keep using the values after inserting them, insert references instead (but then the values must live at least as long as the hash map).
+
+## Accessing Values with `get`
+
+Use the `.get()` method to look up a value by key. It returns an `Option<&V>`:
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    let team = String::from("Blue");
+
+    // .get() takes a reference and returns Option<&i32>
+    match scores.get(&team) {
+        Some(score) => println!("Blue team score: {}", score),
+        None        => println!("Blue team not found"),
+    }
+
+    // .copied() turns Option<&i32> into Option<i32>
+    let score = scores.get("Yellow").copied().unwrap_or(0);
+    println!("Yellow team score: {}", score);
+}
+```
+
+## Iterating Over a Hash Map
+
+Iterating over a `HashMap` yields `(&K, &V)` tuples in an **arbitrary order** (hash maps are unordered):
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"),   10);
+    scores.insert(String::from("Yellow"), 50);
+    scores.insert(String::from("Green"),  30);
+
+    for (key, value) in &scores {
+        println!("{}: {}", key, value);
+    }
+}
+```
+
+If you need a sorted output, collect the keys into a `Vec`, sort it, and then look up each value.
+
+## Updating a Hash Map
+
+### Overwriting a Value
+
+Inserting the same key twice simply overwrites the old value:
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Blue"), 25); // overwrites 10
+
+    println!("{:?}", scores); // {"Blue": 25}
+}
+```
+
+### Insert Only If the Key Is Absent: `entry().or_insert()`
+
+The `entry` API returns an `Entry` enum that lets you conditionally insert a value only when the key does not already exist:
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+
+    // "Yellow" doesn't exist, so 50 is inserted
+    scores.entry(String::from("Yellow")).or_insert(50);
+
+    // "Blue" already exists, so 100 is NOT inserted
+    scores.entry(String::from("Blue")).or_insert(100);
+
+    println!("{:?}", scores); // {"Blue": 10, "Yellow": 50}
+}
+```
+
+`or_insert` returns a mutable reference (`&mut V`) to the existing or newly inserted value, which leads to a very ergonomic pattern for updating values in place.
+
+### Updating a Value Based on Its Old Value
+
+A classic use case: counting occurrences of words in a string.
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let text = "hello world wonderful world hello hello";
+
+    let mut word_count: HashMap<&str, u32> = HashMap::new();
+
+    for word in text.split_whitespace() {
+        // or_insert(0) returns &mut u32 pointing to the count
+        let count = word_count.entry(word).or_insert(0);
+        *count += 1; // dereference to increment the value in place
+    }
+
+    println!("{:?}", word_count);
+    // e.g. {"hello": 3, "world": 2, "wonderful": 1}
+}
+```
+
+This pattern — `entry(key).or_insert(default)` followed by dereferencing and modifying the result — is idiomatic Rust for accumulator patterns.
+
+## Choosing a Different Hasher
+
+By default, `HashMap` uses SipHash, which is cryptographically secure but not the fastest algorithm available. You can swap in any type implementing the `BuildHasher` trait. A popular choice for performance-sensitive code (without security concerns) is the `fnv` or `ahash` crate:
+
+```rust
+// With the `ahash` crate in Cargo.toml:
+// [dependencies]
+// ahash = "0.8"
+
+// use ahash::AHashMap;
+// let mut map: AHashMap<String, i32> = AHashMap::new();
+```
+
+For most programs, the default is fine. Only reach for a custom hasher once profiling confirms that hashing is a bottleneck.
+
+## Quick Reference
+
+| Operation | Code |
+|---|---|
+| Create | `HashMap::new()` |
+| Insert | `map.insert(key, value)` |
+| Access | `map.get(&key)` → `Option<&V>` |
+| Overwrite | `map.insert(existing_key, new_value)` |
+| Insert if absent | `map.entry(key).or_insert(default)` |
+| Iterate | `for (k, v) in &map { … }` |
+| Remove | `map.remove(&key)` |
+| Contains key | `map.contains_key(&key)` |

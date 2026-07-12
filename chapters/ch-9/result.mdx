@@ -1,0 +1,168 @@
+---
+title: "Recoverable Errors with Result<T, E> in Rust"
+sidebarTitle: "Result"
+description: "Handle recoverable errors in Rust using Result<T, E>. Learn match on errors, the ? operator for propagating errors, and unwrap vs expect."
+mode: "wide"
+---
+
+Not all errors should end the program. Opening a file that the user forgot to create, parsing malformed JSON from a network response, or failing to connect to a database are all situations a well-written program should handle gracefully. Rust's `Result<T, E>` enum is the primary tool for propagating and handling these *recoverable* errors. By encoding success and failure in the type system, Rust forces you to acknowledge that an operation can fail before you can use its result.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The `Result` Enum
+
+`Result` is defined in the standard library and automatically in scope:
+
+```rust
+enum Result<T, E> {
+    Ok(T),   // success — holds the value
+    Err(E),  // failure — holds the error
+}
+```
+
+`T` is the type of the value returned on success; `E` is the type of the error returned on failure. The compiler will not let you use the inner value of an `Ok` without first handling the `Err` case.
+
+## Handling Errors with `match`
+
+The most explicit way to handle a `Result` is with a `match` expression. Here we attempt to open a file:
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let result = File::open("hello.txt");
+
+    let _file = match result {
+        Ok(file) => file,
+        Err(error) => {
+            panic!("Problem opening the file: {:?}", error);
+        }
+    };
+}
+```
+
+### Matching on Different Error Kinds
+
+Often you want to take different actions depending on *why* an operation failed. `io::Error` exposes a `.kind()` method that returns an `io::ErrorKind` enum:
+
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+fn main() {
+    let file = match File::open("hello.txt") {
+        Ok(f) => f,
+        Err(e) => match e.kind() {
+            // File doesn't exist: create it
+            ErrorKind::NotFound => match File::create("hello.txt") {
+                Ok(fc) => fc,
+                Err(create_err) => panic!("Could not create file: {:?}", create_err),
+            },
+            // Any other error is unrecoverable here
+            other_error => panic!("Problem opening file: {:?}", other_error),
+        },
+    };
+
+    println!("File opened or created successfully: {:?}", file);
+}
+```
+
+Nested `match` on error kinds is explicit but verbose. The `?` operator (covered below) is usually a cleaner alternative.
+
+## `unwrap` and `expect`
+
+When you're writing a prototype or you're certain a `Result` can only be `Ok`, you can use the shorthand methods `.unwrap()` and `.expect()`:
+
+```rust
+use std::fs::File;
+
+fn main() {
+    // unwrap: panics with a generic message on Err
+    let _f = File::open("hello.txt").unwrap();
+
+    // expect: panics with YOUR message on Err — prefer this
+    let _f2 = File::open("hello.txt")
+        .expect("hello.txt should exist in this project");
+}
+```
+
+Use `.expect()` over `.unwrap()` in production code — your custom message gives anyone reading a panic trace a clear reason why the failure should have been impossible. If the file really might be missing, return a `Result` and let the caller decide.
+
+## Propagating Errors with `?`
+
+When your function calls something that returns a `Result`, you often want to forward any error to your own caller rather than handling it right there. You can do this explicitly with `match`, but the `?` operator makes it concise:
+
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username = String::new();
+
+    // ? after a Result: if Err, return that Err from THIS function immediately
+    File::open("username.txt")?.read_to_string(&mut username)?;
+
+    Ok(username)
+}
+
+fn main() {
+    match read_username_from_file() {
+        Ok(name) => println!("Username: {}", name),
+        Err(e)   => println!("Error reading username: {}", e),
+    }
+}
+```
+
+`?` is equivalent to:
+```rust
+match result {
+    Ok(val) => val,
+    Err(e)  => return Err(e.into()),
+}
+```
+
+The `.into()` call means `?` also converts the error type using the `From` trait — if your function returns `Err(MyError)` and `MyError` implements `From<io::Error>`, `?` performs the conversion automatically.
+
+## Chaining `?` Calls
+
+The `?` operator enables highly readable chains:
+
+```rust
+use std::fs;
+use std::io;
+
+// fs::read_to_string is a convenience function that does all of the above
+fn read_username_from_file() -> Result<String, io::Error> {
+    fs::read_to_string("username.txt")
+}
+```
+
+This is equivalent to the multi-step version above, demonstrating how `?` composes cleanly.
+
+## Using `Result` in `main`
+
+`main` can return `Result<(), E>` to allow `?` at the top level:
+
+```rust
+use std::fs::File;
+use std::io;
+
+fn main() -> Result<(), io::Error> {
+    let _f = File::open("hello.txt")?;
+    println!("File opened successfully!");
+    Ok(())
+}
+```
+
+If `main` returns `Err`, Rust prints the error and exits with a non-zero status code. This is useful for scripts and small utilities where top-level error handling is sufficient.
+
+## At a Glance
+
+| Method | On `Ok` | On `Err` |
+|---|---|---|
+| `match` | Handles both arms explicitly | Handles both arms explicitly |
+| `.unwrap()` | Returns the inner value | Panics with default message |
+| `.expect("msg")` | Returns the inner value | Panics with your message |
+| `?` operator | Unwraps and continues | Returns `Err` from function |
+| `.unwrap_or(default)` | Returns inner value | Returns `default` |
+| `.map(f)` | Applies `f` to inner value | Passes `Err` through unchanged |

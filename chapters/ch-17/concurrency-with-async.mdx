@@ -1,0 +1,184 @@
+---
+title: "Applying Async Concurrency Patterns in Rust"
+sidebarTitle: "Async Concurrency"
+description: "Write concurrent Rust code with async/await using join!, race conditions, and structured concurrency patterns. Compare async tasks to OS threads."
+mode: "wide"
+---
+
+Sequential `.await` chains are the simplest form of async code, but most real applications need to run multiple operations *concurrently* — starting several async tasks at once and waiting for some or all of them to finish. Rust provides composable primitives for this: `join!`, task spawning, and racing futures, each with distinct semantics suited to different use cases.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Running Two Futures Concurrently with `trpl::join!`
+
+The `join!` macro accepts two or more futures and polls all of them on the current task, interleaving their progress. It resolves when **all** futures complete.
+
+```rust
+use std::time::Duration;
+
+async fn fetch(label: &str, delay_ms: u64) -> String {
+    trpl::sleep(Duration::from_millis(delay_ms)).await;
+    format!("{label} done after {delay_ms}ms")
+}
+
+fn main() {
+    trpl::run(async {
+        let (a, b) = trpl::join!(
+            fetch("request-A", 300),
+            fetch("request-B", 100),
+        );
+        // Both run concurrently; total wall time ≈ 300ms, not 400ms.
+        println!("{a}");
+        println!("{b}");
+    });
+}
+```
+
+The two futures share the same underlying thread. When `fetch("request-A")` suspends at `trpl::sleep`, the runtime immediately polls `fetch("request-B")`. Both timers tick simultaneously, so the combined wait is the *maximum* delay, not the *sum*.
+
+## `join!` vs Sequential `.await`
+
+The difference between concurrent and sequential awaiting is easy to see:
+
+```rust
+fn main() {
+    trpl::run(async {
+        // Sequential: ~500ms total
+        let a = fetch("A", 300).await;
+        let b = fetch("B", 200).await;
+        println!("{a}\n{b}");
+    });
+
+    trpl::run(async {
+        // Concurrent: ~300ms total
+        let (a, b) = trpl::join!(fetch("A", 300), fetch("B", 200));
+        println!("{a}\n{b}");
+    });
+}
+```
+
+Always prefer `join!` (or similar) when the futures are independent.
+
+## Racing Futures: First One Wins
+
+Sometimes you want to resolve as soon as *any one* of several futures completes — for example, implementing a timeout. The `trpl::race` function does this:
+
+```rust
+use std::time::Duration;
+
+async fn slow_operation() -> &'static str {
+    trpl::sleep(Duration::from_secs(5)).await;
+    "operation result"
+}
+
+async fn timeout(duration: Duration) -> &'static str {
+    trpl::sleep(duration).await;
+    "timed out"
+}
+
+fn main() {
+    trpl::run(async {
+        let result = trpl::race(
+            slow_operation(),
+            timeout(Duration::from_secs(1)),
+        )
+        .await;
+        println!("Resolved: {result}");
+        // Prints "Resolved: timed out" after ~1 second.
+    });
+}
+```
+
+When `race` returns, the *losing* future is simply dropped — Rust's drop semantics handle cleanup automatically, no explicit cancellation API is needed.
+
+## Structured Concurrency
+
+*Structured concurrency* is the principle that async tasks have well-defined lifetimes tied to their enclosing scope — they cannot outlive the scope that created them. `join!` enforces this naturally: all futures must complete before `join!` returns, so neither can escape its scope.
+
+```rust
+fn main() {
+    trpl::run(async {
+        // Both tasks are "structured" — they cannot outlive this block.
+        trpl::join!(
+            async {
+                trpl::sleep(Duration::from_millis(50)).await;
+                println!("Task 1 complete");
+            },
+            async {
+                trpl::sleep(Duration::from_millis(80)).await;
+                println!("Task 2 complete");
+            }
+        );
+        println!("All tasks complete"); // Guaranteed to print last.
+    });
+}
+```
+
+Contrast this with `thread::spawn`, where the spawned thread can outlive the block that called it unless you explicitly join its `JoinHandle`. Structured concurrency prevents a whole category of "dangling task" bugs.
+
+## Spawning Independent Tasks
+
+When you *do* want a task to run independently (fire-and-forget or background work), runtimes provide a `spawn` function analogous to `thread::spawn`:
+
+```rust
+fn main() {
+    trpl::run(async {
+        let handle = trpl::spawn_task(async {
+            for i in 0..5 {
+                println!("background task: {i}");
+                trpl::sleep(Duration::from_millis(50)).await;
+            }
+        });
+
+        // The main task does other work concurrently.
+        trpl::sleep(Duration::from_millis(125)).await;
+        println!("main task done, waiting for background…");
+
+        handle.await.unwrap(); // Await the JoinHandle to wait for completion.
+    });
+}
+```
+
+Spawned tasks are scheduled independently by the runtime, potentially on different threads in a multi-threaded runtime.
+
+## Async vs OS Threads: Trade-offs
+
+Both async tasks and OS threads enable concurrency. Choosing between them depends on the workload:
+
+```
+Async tasks                      OS Threads
+─────────────────────────────────────────────────────────
+✓ Cheap to create (kilobytes)    ✓ True parallelism (multi-core)
+✓ Great for I/O-bound work       ✓ Isolated failure (panic in one
+✓ Millions of tasks possible       thread doesn't kill others)
+✓ Cooperative scheduling         ✓ Works with blocking APIs
+✗ Needs a runtime                ✗ Expensive (~8 MB stack each)
+✗ .await must be used to yield   ✗ Limited to ~thousands
+✗ CPU-bound work blocks others   ✗ Context switch overhead
+```
+
+A typical production server uses an async runtime with a thread pool: I/O is handled by async tasks, while CPU-heavy work is offloaded to blocking threads via `spawn_blocking` (covered in the Futures vs Threads chapter).
+
+## Combining `join!` Results
+
+When futures return different useful values, `join!` returns a tuple that you can destructure:
+
+```rust
+async fn get_user(id: u32) -> String {
+    format!("User#{id}")
+}
+
+async fn get_score(id: u32) -> u32 {
+    id * 100
+}
+
+fn main() {
+    trpl::run(async {
+        let user_id = 42u32;
+        let (user, score) = trpl::join!(get_user(user_id), get_score(user_id));
+        println!("{user} has score {score}");
+    });
+}
+```
+
+Both requests are in-flight simultaneously, and the tuple is assembled once both complete.

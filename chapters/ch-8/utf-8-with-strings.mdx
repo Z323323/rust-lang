@@ -1,0 +1,167 @@
+---
+title: "Storing UTF-8 Text with Strings in Rust"
+sidebarTitle: "Strings"
+description: "Rust's String and &str types for UTF-8 text. Learn to create, update, and index strings, and why Rust doesn't support direct character indexing."
+mode: "wide"
+---
+
+Rust's approach to strings can feel surprising at first: there are two main string types, string indexing is not allowed, and concatenation syntax is more restricted than in most languages. These design decisions exist because Rust takes UTF-8 encoding seriously, preventing an entire class of bugs that stem from treating strings as simple byte arrays. Understanding the distinction between `String` (an owned, heap-allocated, growable string) and `&str` (a string slice, typically a reference into some existing string data) is fundamental to writing correct Rust programs.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Creating a New String
+
+Both `String` and `&str` store valid UTF-8 text. You can create a new empty `String` or initialize one from a string literal in several ways:
+
+```rust
+fn main() {
+    // Empty String
+    let mut s = String::new();
+
+    // From a string literal using .to_string()
+    let data = "initial contents";
+    let s2 = data.to_string();
+
+    // Also works directly on a literal
+    let s3 = "initial contents".to_string();
+
+    // Using String::from
+    let s4 = String::from("hello, world");
+
+    println!("{}", s2);
+    println!("{}", s3);
+    println!("{}", s4);
+}
+```
+
+`String::from` and `.to_string()` are equivalent; which you use is a matter of style.
+
+## Updating a String
+
+### Appending with `push_str` and `push`
+
+`push_str` appends a string slice to a `String`, and `push` appends a single character:
+
+```rust
+fn main() {
+    let mut s = String::from("foo");
+    s.push_str("bar"); // s is now "foobar"
+
+    let s2 = String::from(" world");
+    s.push_str(&s2);   // push_str takes a &str, so s2 is still usable
+    println!("s2 is still usable: {}", s2);
+
+    let mut s3 = String::from("lo");
+    s3.push('l'); // single char
+    println!("{}", s3); // "lol"
+}
+```
+
+Notice that `push_str` takes a `&str`, not a `String`, so it doesn't take ownership of the argument — you can keep using `s2` afterward.
+
+### Concatenation with `+` and `format!`
+
+The `+` operator calls an `add` method whose signature consumes the left-hand `String`:
+
+```rust
+fn main() {
+    let s1 = String::from("Hello, ");
+    let s2 = String::from("world!");
+
+    // s1 is moved here and can no longer be used
+    let s3 = s1 + &s2;
+    println!("{}", s3); // "Hello, world!"
+
+    // For combining more than two strings, format! is cleaner
+    let s4 = String::from("tic");
+    let s5 = String::from("tac");
+    let s6 = String::from("toe");
+
+    let combined = format!("{}-{}-{}", s4, s5, s6);
+    println!("{}", combined); // "tic-tac-toe"
+    // s4, s5, s6 are all still valid because format! uses references
+}
+```
+
+The `format!` macro is generally preferred for combining multiple strings because it doesn't take ownership of any of its arguments and is much easier to read.
+
+## Why Rust Doesn't Allow Direct Indexing
+
+In many languages you can write `s[0]` to get the first character. Rust intentionally disallows this:
+
+```rust
+fn main() {
+    let s = String::from("hello");
+    // This does NOT compile:
+    // let c = s[0];
+}
+```
+
+The reason is that `String` is a wrapper over `Vec<u8>`, and a single `char` can take 1 to 4 bytes in UTF-8. Indexing into a byte array by position would give you a *byte*, not a *character*, which is almost never what you want and frequently produces invalid results for non-ASCII text.
+
+Consider this example:
+
+```rust
+fn main() {
+    // "Здравствуйте" — each Cyrillic letter takes 2 bytes in UTF-8
+    let hello = String::from("Здравствуйте");
+    println!("Byte length: {}", hello.len()); // 24, not 12!
+}
+```
+
+If `s[0]` were allowed, you'd get `208`, the first byte of the two-byte encoding of `З` — not the letter itself.
+
+## String Slicing (with Care)
+
+You *can* take a byte-range slice of a string, but Rust will panic at runtime if the range doesn't fall on a character boundary:
+
+```rust
+fn main() {
+    let hello = "Здравствуйте";
+    // Each char is 2 bytes, so [0..4] gives the first two characters
+    let s = &hello[0..4];
+    println!("{}", s); // "Зд"
+
+    // This would panic: [0..1] cuts in the middle of a character
+    // let bad = &hello[0..1];
+}
+```
+
+Use slicing only when you are certain of the byte boundaries.
+
+## Iterating Over Strings: `chars()` and `bytes()`
+
+The right way to work with individual characters is via the `.chars()` and `.bytes()` iterators:
+
+```rust
+fn main() {
+    let word = String::from("नमस्ते"); // Devanagari "namaste"
+
+    println!("Characters:");
+    for c in word.chars() {
+        println!("  {}", c);
+    }
+
+    println!("Bytes:");
+    for b in word.bytes() {
+        print!("{} ", b);
+    }
+    println!();
+}
+```
+
+`.chars()` returns `char` values (Unicode scalar values), while `.bytes()` returns raw `u8` bytes. For most text-processing tasks, `.chars()` is what you want. Be aware that even `.chars()` does not model *grapheme clusters* (what a user perceives as a single character in some scripts); for that you'd use a third-party crate.
+
+## Summary
+
+| Operation | Method / Syntax |
+|---|---|
+| Create empty | `String::new()` |
+| Create from literal | `String::from("…")` or `"…".to_string()` |
+| Append string slice | `s.push_str("…")` |
+| Append single char | `s.push('c')` |
+| Concatenate (owns left) | `s1 + &s2` |
+| Concatenate (borrows all) | `format!("{}{}", s1, s2)` |
+| Iterate characters | `s.chars()` |
+| Iterate bytes | `s.bytes()` |
+| Length in bytes | `s.len()` |

@@ -1,0 +1,212 @@
+---
+title: "Bringing Paths into Scope with the use Keyword in Rust"
+sidebarTitle: "use"
+description: "Use the use keyword to bring Rust module paths into scope, create idiomatic imports, re-export with pub use, and import multiple items with curly braces."
+mode: "wide"
+---
+
+Writing full module paths every time you reference an item gets verbose quickly. The `use` keyword brings a path into the current scope as a shorthand, letting you call functions, instantiate types, and use traits without repeating the full module hierarchy. Idiomatic Rust code relies heavily on well-chosen `use` statements.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Basic `use`
+
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores: HashMap<String, u32> = HashMap::new();
+    scores.insert(String::from("Alice"), 100);
+    scores.insert(String::from("Bob"),   85);
+    println!("{:?}", scores);
+}
+```
+
+After the `use` declaration, `HashMap` is available directly in scope. Without it you would write `std::collections::HashMap` every time.
+
+## Idiomatic `use` Patterns
+
+### Functions: Import the Parent Module
+
+For functions, the idiom is to bring the *parent module* into scope so that the call site makes the function's origin clear:
+
+```rust
+// ✅ Idiomatic: function's module is visible at call site
+use crate::front_of_house::hosting;
+hosting::add_to_waitlist();
+
+// ❌ Less idiomatic: looks like a locally-defined function
+use crate::front_of_house::hosting::add_to_waitlist;
+add_to_waitlist();
+```
+
+### Types: Import the Full Path
+
+For structs, enums, and other types, the idiom is to bring the full path into scope:
+
+```rust
+// ✅ Idiomatic for types
+use std::collections::HashMap;
+let map = HashMap::new();
+
+// ❌ Unnecessarily verbose at call site
+use std::collections;
+let map = collections::HashMap::new();
+```
+
+The exception is when two types from different modules share the same name (see `as` aliases below).
+
+## `as` — Alias for Disambiguation
+
+When two types share a name, use `as` to create a local alias:
+
+```rust
+use std::fmt::Result;
+use std::io::Result as IoResult;
+
+fn fmt_result() -> Result { Ok(()) }
+fn io_result()  -> IoResult<()> { Ok(()) }
+```
+
+`as` is also used to give any import a more convenient name:
+
+```rust
+use std::collections::HashMap as Map;
+
+fn main() {
+    let mut m: Map<&str, i32> = Map::new();
+    m.insert("x", 1);
+}
+```
+
+## `pub use` — Re-exporting Items
+
+`pub use` makes an imported item part of your crate's public API:
+
+```rust
+// src/lib.rs
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+// Re-export so callers don't need to know the internal structure
+pub use crate::front_of_house::hosting::add_to_waitlist;
+```
+
+External users of your crate can now call `my_crate::add_to_waitlist()` without knowing it lives deep inside `front_of_house::hosting`. This is how library authors expose a clean, stable public API while freely reorganizing internal modules.
+
+## Nested Paths — Grouping Imports
+
+When you need multiple items from the same module, group them with curly braces to reduce line count:
+
+```rust
+// Instead of:
+use std::cmp::Ordering;
+use std::io;
+
+// Write:
+use std::{cmp::Ordering, io};
+```
+
+You can also mix a module itself with items inside it using `self`:
+
+```rust
+// Instead of:
+use std::io;
+use std::io::Write;
+
+// Write:
+use std::io::{self, Write};
+```
+
+Nested paths can go as deep as needed:
+
+```rust
+use std::collections::{HashMap, HashSet, BTreeMap};
+```
+
+## Glob Imports with `*`
+
+The glob operator (`*`) brings *all* public items from a module into scope:
+
+```rust
+use std::collections::*;
+
+fn main() {
+    let mut map: HashMap<&str, i32> = HashMap::new(); // no prefix needed
+    let mut set: HashSet<i32>       = HashSet::new();
+}
+```
+
+Globs are generally discouraged in production code because they make it hard to tell where a name comes from. They are used in:
+
+- **Test modules**: `use super::*;` to import all items under test.
+- **Prelude modules**: libraries that define a `prelude` module for users to glob-import.
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*; // idiomatic glob in tests
+    // ...
+}
+```
+
+## `use` in Different Scopes
+
+`use` is not limited to the crate root — it can appear anywhere a statement is valid:
+
+```rust
+fn main() {
+    use std::collections::HashMap; // scoped to this function
+    let m: HashMap<&str, i32> = HashMap::new();
+}
+
+// HashMap is not in scope here
+```
+
+This is useful for limiting the blast radius of a wildcard import or making the origin of a name obvious in a long function.
+
+## A Complete Example
+
+```rust
+use std::collections::{HashMap, HashSet};
+use std::fmt::{self, Display, Formatter};
+
+#[derive(Debug)]
+struct Student {
+    name: String,
+    grades: Vec<u32>,
+}
+
+impl Display for Student {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let avg: f64 = self.grades.iter().sum::<u32>() as f64
+            / self.grades.len() as f64;
+        write!(f, "{} (avg: {:.1})", self.name, avg)
+    }
+}
+
+fn main() {
+    let mut roster: HashMap<u32, Student> = HashMap::new();
+    roster.insert(1, Student { name: "Alice".into(), grades: vec![90, 85, 92] });
+    roster.insert(2, Student { name: "Bob".into(),   grades: vec![78, 82, 80] });
+
+    let ids: HashSet<u32> = roster.keys().copied().collect();
+    for id in &ids {
+        if let Some(s) = roster.get(id) {
+            println!("Student {}: {}", id, s);
+        }
+    }
+}
+```
+
+## Summary
+
+- `use path;` creates a local shorthand for a module path.
+- Idiomatic pattern: import the parent module for functions, the full path for types.
+- `as` creates an alias to avoid name collisions or improve readability.
+- `pub use` re-exports an item as part of your crate's public API.
+- Curly-brace syntax (`use std::{io, fs}`) and `self` group imports from the same module.
+- Glob imports (`use module::*`) should be used sparingly — mainly in test modules and preludes.

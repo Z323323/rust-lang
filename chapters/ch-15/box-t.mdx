@@ -1,0 +1,167 @@
+---
+title: "Using Box<T> to Point to Data on the Heap in Rust"
+sidebarTitle: "Box<T>"
+description: "Allocate values on the heap with Box<T> in Rust. Use it for recursive types, large data that shouldn't be copied, and trait objects."
+mode: "wide"
+---
+
+`Box<T>` is the simplest of Rust's smart pointers: it allocates a value on the heap and holds a single owning pointer to it. When the `Box` goes out of scope, the heap allocation is freed. Unlike a raw pointer, `Box<T>` participates in Rust's ownership system, so you get all the usual safety guarantees with no garbage collector overhead.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Basic Usage
+
+```rust
+fn main() {
+    let b = Box::new(5);       // 5 is allocated on the heap
+    println!("b = {b}");       // prints: b = 5
+}                              // b is dropped here; heap memory freed
+```
+
+`Box::new(value)` moves the value to the heap and returns a `Box<T>` on the stack. The stack value is tiny (one pointer-sized word); the actual data lives on the heap.
+
+You dereference a box just like a regular reference:
+
+```rust
+let b = Box::new(10);
+let x = *b + 5;    // deref the box to get the i32
+println!("{x}");   // 15
+```
+
+## When to Use `Box<T>`
+
+There are three primary use cases:
+
+### 1. Recursive Types with a Known Size
+
+Rust must know at compile time how much stack space each type requires. A type that contains itself directly would be infinitely large. `Box<T>` breaks the cycle by storing the inner value on the heap (a pointer has a known, fixed size):
+
+```rust
+// Without Box — COMPILE ERROR: "recursive type has infinite size"
+enum List {
+    Cons(i32, List),
+    Nil,
+}
+
+// With Box — compiles fine
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+```
+
+This `List` is a classic **cons list** from Lisp. Each node holds a value and a boxed pointer to the next node, terminating with `Nil`:
+
+```rust
+use List::{Cons, Nil};
+
+fn main() {
+    let list = Cons(1, Box::new(Cons(2, Box::new(Cons(3, Box::new(Nil))))));
+}
+```
+
+The stack stores only a small enum discriminant + pointer; all the actual `i32` values live on the heap.
+
+### 2. Large Data You Don't Want to Copy
+
+When transferring ownership of a large struct, Rust moves it (copies the bytes). For very large types, that copy can be expensive. Boxing the data means only the pointer moves:
+
+```rust
+struct BigMatrix {
+    data: [[f64; 1000]; 1000], // 8 MB
+}
+
+fn process(m: Box<BigMatrix>) {
+    // m is a pointer; no 8MB copy happened
+    println!("matrix[0][0] = {}", m.data[0][0]);
+}
+
+fn main() {
+    let m = Box::new(BigMatrix { data: [[0.0; 1000]; 1000] });
+    process(m); // transfers ownership of the pointer, not 8MB of data
+}
+```
+
+### 3. Trait Objects (`dyn Trait`)
+
+`Box<dyn Trait>` is the standard way to store values of different concrete types behind a uniform interface:
+
+```rust
+trait Animal {
+    fn sound(&self) -> &str;
+}
+
+struct Dog;
+struct Cat;
+
+impl Animal for Dog { fn sound(&self) -> &str { "woof" } }
+impl Animal for Cat { fn sound(&self) -> &str { "meow" } }
+
+fn main() {
+    let animals: Vec<Box<dyn Animal>> = vec![
+        Box::new(Dog),
+        Box::new(Cat),
+        Box::new(Dog),
+    ];
+
+    for animal in &animals {
+        println!("{}", animal.sound());
+    }
+}
+```
+
+Each `Box<dyn Animal>` stores a fat pointer: a pointer to the data and a pointer to the vtable (the trait's method dispatch table).
+
+## `Box<T>` and the `Deref` Trait
+
+`Box<T>` implements `Deref`, which means you can use `*` to access the inner value and Rust can automatically coerce `Box<T>` to `&T` where a reference is expected:
+
+```rust
+fn greet(name: &str) {
+    println!("Hello, {name}!");
+}
+
+fn main() {
+    let boxed_name = Box::new(String::from("Alice"));
+    greet(&boxed_name);  // Box<String> → &String → &str via deref coercion
+}
+```
+
+## `Box<T>` and the `Drop` Trait
+
+When a `Box<T>` goes out of scope, its `Drop` implementation is called, which:
+1. Drops the inner value `T` (running `T::drop` if implemented).
+2. Frees the heap memory.
+
+This happens automatically — no `free()` calls required.
+
+## `Box` in Error Handling
+
+`Box<dyn Error>` is used throughout the standard library and by convention for functions that can return many different error types:
+
+```rust
+use std::error::Error;
+
+fn run() -> Result<(), Box<dyn Error>> {
+    let _f = std::fs::read_to_string("file.txt")?;  // io::Error
+    let _n: i32 = "abc".parse()?;                    // ParseIntError
+    Ok(())
+}
+```
+
+Both `io::Error` and `ParseIntError` implement `Error`, so they can be boxed and returned through the same `Box<dyn Error>` type.
+
+## Summary
+
+| Use case | Why Box helps |
+|----------|---------------|
+| Recursive types | Pointer has a known size; breaks infinite size cycles |
+| Large data transfer | Move the pointer, not the data |
+| Trait objects | `Box<dyn Trait>` stores heterogeneous types uniformly |
+| Error propagation | `Box<dyn Error>` accepts any error type |
+
+- `Box::new(val)` allocates `val` on the heap; the `Box` itself lives on the stack.
+- `*b` dereferences a box; deref coercion applies automatically in most contexts.
+- Memory is freed when the `Box` drops — no manual management needed.
+
+Next we'll explore the `Deref` trait in detail to understand how deref coercion works across all smart pointers.

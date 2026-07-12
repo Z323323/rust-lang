@@ -1,0 +1,156 @@
+---
+title: "Trait Objects for Runtime Polymorphism in Rust"
+sidebarTitle: "Trait Objects"
+description: "Use Box<dyn Trait> trait objects in Rust for dynamic dispatch and runtime polymorphism. Understand the trade-offs vs. generics with static dispatch."
+mode: "wide"
+---
+
+Rust provides two distinct forms of polymorphism: *static dispatch* via generics (resolved at compile time, zero runtime cost) and *dynamic dispatch* via trait objects (resolved at runtime, with a small indirection cost). Trait objects — written as `dyn Trait` — are Rust's answer to the classic OOP virtual method table, enabling code to work with values of unknown concrete type at runtime.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Generics vs. Trait Objects
+
+Consider a function that prints any value implementing `Display`. You can write this two ways:
+
+```rust
+use std::fmt::Display;
+
+// Static dispatch: the compiler generates a separate function body
+// for each concrete type T that is used. Fast, but increases binary size.
+fn print_static<T: Display>(value: T) {
+    println!("{value}");
+}
+
+// Dynamic dispatch: one function body handles all types via a vtable.
+// Slight runtime cost; enables heterogeneous collections.
+fn print_dynamic(value: &dyn Display) {
+    println!("{value}");
+}
+
+fn main() {
+    print_static(42);
+    print_static("hello");
+    print_dynamic(&42);
+    print_dynamic(&"hello");
+}
+```
+
+Both compile. The generic version calls the correct `fmt::Display::fmt` at zero runtime overhead (inlined at each call site). The `dyn Display` version stores a vtable pointer alongside the data pointer and calls through it at runtime.
+
+## `Box<dyn Trait>` for Heap-Allocated Trait Objects
+
+Because trait objects have an unknown size at compile time, they must be placed behind a pointer. The most common form is `Box<dyn Trait>`:
+
+```rust
+pub trait Draw {
+    fn draw(&self) -> String;
+}
+
+struct Button { label: String }
+struct Image  { src: String }
+
+impl Draw for Button {
+    fn draw(&self) -> String { format!("[Button: {}]", self.label) }
+}
+
+impl Draw for Image {
+    fn draw(&self) -> String { format!("<img src='{}'>", self.src) }
+}
+
+fn render_all(components: &[Box<dyn Draw>]) {
+    for component in components {
+        println!("{}", component.draw());
+    }
+}
+
+fn main() {
+    let ui: Vec<Box<dyn Draw>> = vec![
+        Box::new(Button { label: String::from("OK") }),
+        Box::new(Image  { src:   String::from("/logo.png") }),
+        Box::new(Button { label: String::from("Cancel") }),
+    ];
+    render_all(&ui);
+}
+```
+
+The `Vec<Box<dyn Draw>>` can hold buttons, images, or any future `Draw` implementor you haven't written yet. With generics you would need `Vec<T> where T: Draw`, which can only hold *one* concrete type.
+
+## What a Trait Object Looks Like in Memory
+
+A trait object is a *fat pointer* — two machine words:
+
+```
+ ┌──────────────┐     ┌────────────┐
+ │  data ptr    │────>│  Button    │
+ ├──────────────┤     │  { label } │
+ │  vtable ptr  │─┐   └────────────┘
+ └──────────────┘ │
+                  │   vtable for Button as Draw:
+                  └──>┌──────────────────────┐
+                      │ drop (destructor)    │
+                      │ size & alignment     │
+                      │ Draw::draw           │──> Button::draw
+                      └──────────────────────┘
+```
+
+Each call through `dyn Draw` follows the vtable pointer to find the right implementation. This indirection is the cost of dynamic dispatch — typically a few nanoseconds, often negligible.
+
+## Object Safety: What Traits Can Be `dyn`?
+
+Not every trait can be used as a trait object. A trait is *object-safe* if:
+
+1. **All methods have a `Self: Sized` receiver or no `Self` return type.** Methods that return `Self` (like `clone()`) are not object-safe because the concrete size of `Self` is unknown at the call site.
+2. **No generic type parameters on methods.** Generic methods would need to be monomorphised, which requires knowing the concrete type.
+
+```rust
+// NOT object-safe — `clone()` returns `Self`:
+// let c: Box<dyn Clone> = Box::new(5i32); // ERROR
+
+// Object-safe — no generics or Self returns:
+trait Greet {
+    fn greeting(&self) -> String;
+}
+// Box<dyn Greet> is valid.
+```
+
+If you try to use a non-object-safe trait as `dyn`, the compiler gives a clear error:
+
+```
+error[E0038]: the trait `Clone` cannot be made into an object
+  note: method `clone` references the `Self` type in its return type
+```
+
+## Returning Trait Objects from Functions
+
+To return a trait object from a function, use `Box<dyn Trait>` (heap) or a lifetime-bounded reference `&dyn Trait`:
+
+```rust
+fn make_shape(kind: &str) -> Box<dyn Draw> {
+    match kind {
+        "button" => Box::new(Button { label: String::from("Submit") }),
+        "image"  => Box::new(Image  { src:   String::from("/icon.png") }),
+        _        => panic!("unknown shape: {kind}"),
+    }
+}
+
+fn main() {
+    let shape = make_shape("button");
+    println!("{}", shape.draw());
+}
+```
+
+The caller of `make_shape` does not need to know — and cannot know at compile time — whether the returned `Box` holds a `Button` or an `Image`. This enables plugin architectures and late-bound extensibility.
+
+## When to Choose `dyn Trait` Over Generics
+
+| Situation | Prefer |
+|---|---|
+| Collection of mixed types (`Vec<Box<dyn Draw>>`) | `dyn Trait` |
+| Return type varies at runtime | `dyn Trait` |
+| Performance-critical inner loop, one concrete type | Generics |
+| Compile-time checking with no runtime overhead | Generics |
+| Binary size is a concern (embedded, WASM) | `dyn Trait` (avoids monomorphisation) |
+| Object safety rules are violated | Must use generics |
+
+Neither is universally better. Many real Rust projects use both: generics for hot paths, trait objects for plugin registries or UI component trees.

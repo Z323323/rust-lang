@@ -1,0 +1,147 @@
+---
+title: "Defining and Using Structs in Rust"
+sidebarTitle: "Structs"
+description: "Learn how to define structs in Rust, instantiate them, use field shorthand, and create struct update syntax for new instances from existing ones."
+mode: "wide"
+---
+
+Structs are Rust's primary tool for grouping related data under a single named type. Like records or classes in other languages, a struct lets you name and package together multiple values that form a meaningful whole — and unlike a tuple, each field has an explicit name that makes the code self-documenting.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Defining a Struct
+
+Use the `struct` keyword followed by a name and a block of *fields*, each with a name and a type:
+
+```rust
+struct User {
+    username: String,
+    email: String,
+    sign_in_count: u64,
+    active: bool,
+}
+```
+
+By convention, struct names use `UpperCamelCase`.
+
+## Instantiating a Struct
+
+Create an instance by naming the struct and providing values for every field:
+
+```rust
+fn main() {
+    let user1 = User {
+        email: String::from("alice@example.com"),
+        username: String::from("alice"),
+        active: true,
+        sign_in_count: 1,
+    };
+
+    println!("User: {} ({})", user1.username, user1.email);
+}
+```
+
+Access fields with dot notation: `user1.email`. To mutate fields, the *entire* binding must be `mut`:
+
+```rust
+let mut user1 = User { /* ... */ };
+user1.email = String::from("newemail@example.com");
+```
+
+Rust does not allow marking individual fields as mutable — mutability is a property of the binding.
+
+## Field Init Shorthand
+
+When a variable name matches a field name exactly, you can use *field init shorthand* to avoid repetition:
+
+```rust
+fn build_user(email: String, username: String) -> User {
+    User {
+        email,        // shorthand for email: email
+        username,     // shorthand for username: username
+        active: true,
+        sign_in_count: 1,
+    }
+}
+```
+
+## Struct Update Syntax
+
+To create a new instance that inherits most fields from an existing one, use the `..` *struct update syntax*:
+
+```rust
+fn main() {
+    let user1 = build_user(
+        String::from("alice@example.com"),
+        String::from("alice"),
+    );
+
+    let user2 = User {
+        email: String::from("bob@example.com"),
+        ..user1 // fill remaining fields from user1
+    };
+
+    println!("{}", user2.username); // "alice" — copied from user1
+}
+```
+
+Note that `..user1` must come last. Also, because `username` is a `String` (not `Copy`), the `..user1` syntax *moves* it into `user2`, so `user1.username` is no longer valid after this point (though `user1.email` and the scalar fields are fine).
+
+## Tuple Structs
+
+*Tuple structs* have fields without names — useful when you want the type distinction of a struct but don't need field names:
+
+```rust
+struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+fn main() {
+    let black = Color(0, 0, 0);
+    let origin = Point(0, 0, 0);
+
+    // Color and Point are distinct types even though their fields are identical
+    println!("Red channel: {}", black.0);
+}
+```
+
+Access fields by index (`.0`, `.1`, `.2`).
+
+## Unit-Like Structs
+
+A *unit-like struct* has no fields at all. This sounds odd, but it is useful for implementing traits on a type when you don't need to store any data:
+
+```rust
+struct AlwaysEqual;
+
+fn main() {
+    let _subject = AlwaysEqual;
+}
+```
+
+Unit-like structs are particularly common when working with the trait system (e.g., marker traits, zero-sized types used with generics).
+
+## Ownership in Structs
+
+In the `User` struct above we used `String` rather than `&str` so that each struct instance *owns* its data. Structs can store references, but that requires *lifetime annotations* (covered later). For now, prefer owned types like `String` over borrowed ones like `&str` inside struct definitions.
+
+```rust
+// ✅ Each User owns its strings
+struct User {
+    username: String,
+    email: String,
+}
+
+// ❌ Requires lifetime annotations — covered in a later chapter
+// struct UserRef<'a> {
+//     username: &'a str,
+// }
+```
+
+## Summary
+
+- `struct` groups named fields into a custom type.
+- Instantiate with `TypeName { field: value, .. }`.
+- Field init shorthand avoids repetition when variable and field names match.
+- Struct update syntax (`..existing`) copies or moves remaining fields from another instance.
+- Tuple structs provide newtype wrappers without named fields.
+- Unit-like structs contain no data and are useful with traits.

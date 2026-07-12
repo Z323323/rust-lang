@@ -1,0 +1,217 @@
+---
+title: "Writing Automated Tests in Rust with #[test]"
+sidebarTitle: "Writing Tests"
+description: "Write unit tests in Rust using #[test], assert!, assert_eq!, assert_ne!, and #[should_panic]. Understand the test module pattern and test organization."
+mode: "wide"
+---
+
+Testing is a first-class citizen in Rust: the language has built-in attributes for marking test functions, a test runner integrated into Cargo, and a rich set of assertion macros in the standard library. You don't need an external testing framework to get started. A test in Rust is simply a function annotated with `#[test]` that panics if something goes wrong — the test runner executes each function and reports whether it panicked (failed) or returned normally (passed).
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Anatomy of a Test Function
+
+A minimal test looks like this:
+
+```rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
+}
+```
+
+- `#[cfg(test)]` tells the compiler to include this module only when running `cargo test`, not in normal builds.
+- `#[test]` marks `it_works` as a test function.
+- The test passes because `assert_eq!(4, 4)` does not panic.
+
+Run all tests with:
+
+```bash
+cargo test
+```
+
+## The Code Under Test
+
+Tests typically live in the same file as the code they test, in a nested `tests` module. Because the test module is inside the same file, it can access private functions:
+
+```rust
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn internal_helper() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // bring the outer module's items into scope
+
+    #[test]
+    fn test_add() {
+        assert_eq!(add(2, 3), 5);
+    }
+
+    #[test]
+    fn test_private_function() {
+        // Rust allows testing private functions — no special setup needed
+        assert!(internal_helper());
+    }
+}
+```
+
+## `assert!` — Check a Boolean Condition
+
+`assert!(expression)` panics if the expression evaluates to `false`:
+
+```rust
+#[test]
+fn larger_can_hold_smaller() {
+    let larger  = Rectangle { width: 8, height: 7 };
+    let smaller = Rectangle { width: 5, height: 1 };
+    assert!(larger.can_hold(&smaller));
+}
+
+#[test]
+fn smaller_cannot_hold_larger() {
+    let larger  = Rectangle { width: 8, height: 7 };
+    let smaller = Rectangle { width: 5, height: 1 };
+    assert!(!smaller.can_hold(&larger)); // note the !
+}
+```
+
+## `assert_eq!` and `assert_ne!`
+
+`assert_eq!(left, right)` checks that two values are equal and displays both values in the failure message, which is much more useful than a plain `assert!`:
+
+```rust
+#[test]
+fn test_greeting() {
+    let result = greeting("Carol");
+    assert_eq!(result, "Hello, Carol!");
+}
+
+#[test]
+fn test_not_equal() {
+    assert_ne!(greeting("Carol"), greeting("Dave"));
+}
+```
+
+On failure, `assert_eq!` prints:
+
+```
+left:  "Hello, Carol!"
+right: "Hello, Bob!"
+```
+
+Values used with `assert_eq!` and `assert_ne!` must implement both the `PartialEq` and `Debug` traits (typically via `#[derive(PartialEq, Debug)]`).
+
+## Custom Failure Messages
+
+All three assertion macros accept extra format-string arguments that are printed only when the assertion fails:
+
+```rust
+#[test]
+fn greeting_contains_name() {
+    let result = greeting("Carol");
+    assert!(
+        result.contains("Carol"),
+        "Greeting did not contain the name. Value was: '{}'",
+        result
+    );
+}
+```
+
+Custom messages are invaluable in parameterized tests or when the assertion condition alone doesn't explain what went wrong.
+
+## `#[should_panic]` — Testing for Expected Panics
+
+Sometimes correct behavior *is* panicking. The `#[should_panic]` attribute passes a test that panics and fails one that does not:
+
+```rust
+pub struct Guess {
+    value: i32,
+}
+
+impl Guess {
+    pub fn new(value: i32) -> Guess {
+        if value < 1 || value > 100 {
+            panic!("Guess value must be between 1 and 100, got {}.", value);
+        }
+        Guess { value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn greater_than_100() {
+        Guess::new(200); // this should panic
+    }
+}
+```
+
+To make `#[should_panic]` more precise, add an `expected` substring that the panic message must contain:
+
+```rust
+#[test]
+#[should_panic(expected = "between 1 and 100")]
+fn greater_than_100_precise() {
+    Guess::new(200);
+}
+```
+
+If the code panics with a message that doesn't contain `"between 1 and 100"`, the test fails — protecting against panics for the *wrong* reason.
+
+## Using `Result<T, E>` in Tests
+
+Instead of panicking, a test function can return `Result<(), E>`. A test passes if it returns `Ok(())` and fails if it returns `Err`:
+
+```rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works_with_result() -> Result<(), String> {
+        let value = 2 + 2;
+        if value == 4 {
+            Ok(())
+        } else {
+            Err(format!("Expected 4, got {}", value))
+        }
+    }
+}
+```
+
+This lets you use the `?` operator inside tests to propagate errors cleanly:
+
+```rust
+use std::fs;
+
+#[test]
+fn reads_file() -> Result<(), std::io::Error> {
+    let content = fs::read_to_string("fixtures/input.txt")?;
+    assert!(content.contains("expected text"));
+    Ok(())
+}
+```
+
+Note: you cannot use `#[should_panic]` with tests that return `Result`.
+
+## Quick Reference
+
+| Macro / Attribute | Purpose |
+|---|---|
+| `#[test]` | Marks a function as a test |
+| `#[cfg(test)]` | Compiles block only for `cargo test` |
+| `assert!(expr)` | Panics if `expr` is `false` |
+| `assert_eq!(a, b)` | Panics if `a != b`, prints both values |
+| `assert_ne!(a, b)` | Panics if `a == b`, prints both values |
+| `#[should_panic]` | Test passes only if function panics |
+| `#[should_panic(expected = "…")]` | Panic message must contain substring |

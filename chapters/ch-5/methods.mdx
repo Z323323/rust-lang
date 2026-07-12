@@ -1,0 +1,218 @@
+---
+title: "Defining Methods on Structs with impl in Rust"
+sidebarTitle: "Methods"
+description: "Add methods to Rust structs using impl blocks. Covers &self, &mut self, associated functions, and multiple impl blocks for the same struct."
+mode: "wide"
+---
+
+Methods are functions that are defined within the context of a struct (or enum, or trait object) and whose first parameter is always `self`, representing the instance they are called on. Moving behavior inside an `impl` block keeps related data and logic co-located, producing cleaner and more idiomatic Rust code.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Defining Methods with `impl`
+
+To add methods to `Rectangle`, open an `impl` (implementation) block:
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+fn main() {
+    let rect = Rectangle { width: 30, height: 50 };
+    println!("Area: {}", rect.area()); // method call syntax
+}
+```
+
+`&self` is shorthand for `self: &Self` — a reference to the current instance. Using `&self` means the method borrows the instance immutably; ownership is not transferred.
+
+### The Three Self Variants
+
+| Parameter | Meaning | When to use |
+|-----------|---------|-------------|
+| `&self` | Immutable borrow | Most methods — just reading data |
+| `&mut self` | Mutable borrow | Modifying the instance in place |
+| `self` | Takes ownership | Rare; consuming or transforming the instance |
+
+```rust
+impl Rectangle {
+    // Immutable: just reads
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    // Mutable: changes the instance
+    fn scale(&mut self, factor: u32) {
+        self.width *= factor;
+        self.height *= factor;
+    }
+
+    // Consuming: transforms into a new type
+    fn into_dimensions(self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+}
+```
+
+## Methods with Additional Parameters
+
+Methods can take additional parameters beyond `self`. Here `can_hold` checks whether one rectangle fits inside another:
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+fn main() {
+    let large  = Rectangle { width: 100, height: 80 };
+    let medium = Rectangle { width: 50,  height: 40 };
+    let small  = Rectangle { width: 10,  height: 20 };
+
+    println!("large can hold medium: {}", large.can_hold(&medium)); // true
+    println!("medium can hold large: {}", medium.can_hold(&large)); // false
+    println!("large can hold small:  {}", large.can_hold(&small));  // true
+}
+```
+
+## Associated Functions (Static Methods)
+
+Functions inside an `impl` block that do **not** take `self` are called *associated functions*. They are called with `::` syntax on the type rather than `.` syntax on an instance. The most common use is constructors:
+
+```rust
+impl Rectangle {
+    // Associated function — acts like a constructor
+    fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
+    // Another common pattern: square convenience constructor
+    fn square(size: u32) -> Self {
+        Self { width: size, height: size }
+    }
+
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+fn main() {
+    let rect   = Rectangle::new(30, 50);
+    let sq     = Rectangle::square(25);
+
+    println!("Rect area: {}", rect.area()); // 1500
+    println!("Square area: {}", sq.area()); // 625
+}
+```
+
+`Self` inside the `impl` block is an alias for the type being implemented (`Rectangle` here). Prefer `Self` over repeating the type name to make refactoring easier.
+
+## Multiple `impl` Blocks
+
+A type can have more than one `impl` block. While usually one block is fine, multiple blocks become useful with generics and traits (covered in later chapters):
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+impl Rectangle {
+    fn perimeter(&self) -> u32 {
+        2 * (self.width + self.height)
+    }
+
+    fn is_square(&self) -> bool {
+        self.width == self.height
+    }
+}
+
+fn main() {
+    let r = Rectangle::new(20, 20);
+    println!("Area:      {}", r.area());       // 400
+    println!("Perimeter: {}", r.perimeter());  // 80
+    println!("Is square: {}", r.is_square());  // true
+}
+```
+
+## Automatic Referencing and Dereferencing
+
+When you call a method with dot syntax, Rust automatically adds `&`, `&mut`, or `*` so that the object matches the method signature. This means you rarely need to write `(&rect).area()` — Rust figures it out:
+
+```rust
+rect.area();           // Rust reads this as (&rect).area()
+rect.scale(2);         // Rust reads this as (&mut rect).scale(2)
+```
+
+This *automatic referencing* behavior is why method syntax feels ergonomic — no explicit dereferencing is needed.
+
+## Putting It All Together
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
+    fn square(size: u32) -> Self {
+        Self { width: size, height: size }
+    }
+
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn perimeter(&self) -> u32 {
+        2 * (self.width + self.height)
+    }
+
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+
+    fn scale(&mut self, factor: u32) {
+        self.width  *= factor;
+        self.height *= factor;
+    }
+}
+
+fn main() {
+    let mut r1 = Rectangle::new(30, 50);
+    let r2 = Rectangle::square(20);
+
+    println!("{:#?}", r1);
+    println!("Area: {}, Perimeter: {}", r1.area(), r1.perimeter());
+    println!("r1 can hold r2: {}", r1.can_hold(&r2));
+
+    r1.scale(2);
+    println!("After scaling: {:?}", r1);
+}
+```
+
+## Summary
+
+- `impl TypeName { }` defines methods and associated functions for a type.
+- `&self` borrows immutably; `&mut self` borrows mutably; `self` consumes.
+- Associated functions (no `self`) are called with `::` — commonly used as constructors (`Type::new(...)`).
+- Multiple `impl` blocks are valid; useful when combined with generics and traits.
+- Rust handles automatic referencing so dot-call syntax is ergonomic.

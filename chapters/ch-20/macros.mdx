@@ -1,0 +1,244 @@
+---
+title: "Macros in Rust: Declarative and Procedural Macro Types"
+sidebarTitle: "Macros"
+description: "Understand Rust macros: declarative macros with macro_rules!, and procedural macros including custom #[derive], attribute-like, and function-like macros."
+mode: "wide"
+---
+
+Macros are a form of *metaprogramming*—code that writes code. In Rust, macros are expanded at compile time, before type checking, and they can do things ordinary functions cannot: accept a variable number of arguments, generate trait implementations, and operate on raw syntax rather than values. Understanding when and how to use macros is essential for reading idiomatic Rust and for authoring libraries.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Macros vs. Functions
+
+Before diving in, it helps to understand why macros exist alongside functions:
+
+| Capability | Function | Macro |
+|---|---|---|
+| Variable number of arguments | ❌ (without slices/tuples) | ✅ |
+| Operate on syntax / token trees | ❌ | ✅ |
+| Generate trait implementations | ❌ | ✅ |
+| Available before type checking | ❌ | ✅ |
+| Debuggable with normal tools | ✅ Easy | ⚠️ Harder |
+| Readable and writable | ✅ Easy | ⚠️ Harder |
+
+Use macros when you genuinely need compile-time code generation. Prefer functions everywhere else.
+
+---
+
+## Declarative Macros with `macro_rules!`
+
+Declarative macros (also called "macros by example") work by matching patterns against the token stream you pass to them and replacing the match with expanded code. The macro itself is written with `macro_rules!`.
+
+### A Minimal Example
+
+```rust
+macro_rules! say_hello {
+    () => {
+        println!("Hello, world!");
+    };
+    ($name:expr) => {
+        println!("Hello, {}!", $name);
+    };
+}
+
+fn main() {
+    say_hello!();            // Hello, world!
+    say_hello!("Alice");     // Hello, Alice!
+    say_hello!("Bob");       // Hello, Bob!
+}
+```
+
+The `() =>` arm matches an invocation with no arguments; `($name:expr) =>` matches an invocation with a single expression argument, binding it to `$name`.
+
+### Metavariable Fragment Specifiers
+
+Patterns in `macro_rules!` use *fragment specifiers* to describe what kind of syntax a metavariable matches:
+
+| Specifier | Matches |
+|---|---|
+| `expr` | An expression |
+| `stmt` | A statement |
+| `ty` | A type |
+| `ident` | An identifier |
+| `pat` | A pattern |
+| `path` | A path (e.g. `std::io::Error`) |
+| `block` | A `{...}` block |
+| `tt` | A single token tree (anything) |
+| `literal` | A literal value |
+
+### The `vec!` Macro Explained
+
+The standard library's `vec!` macro is a classic example of `macro_rules!`:
+
+```rust
+// Simplified version of how vec! works
+macro_rules! my_vec {
+    // Empty vec: my_vec![]
+    () => {
+        Vec::new()
+    };
+    // Comma-separated elements: my_vec![1, 2, 3]
+    ($($x:expr),+ $(,)?) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )+
+            temp_vec
+        }
+    };
+}
+
+fn main() {
+    let v1: Vec<i32> = my_vec![];
+    let v2 = my_vec![1, 2, 3];
+    let v3 = my_vec!["a", "b", "c",]; // trailing comma OK due to $(,)?
+
+    println!("{:?}", v1); // []
+    println!("{:?}", v2); // [1, 2, 3]
+    println!("{:?}", v3); // ["a", "b", "c"]
+}
+```
+
+The `$($x:expr),+` pattern means "one or more expressions, separated by commas." The `$(,)?` at the end allows an optional trailing comma. Inside the body, `$( temp_vec.push($x); )+` repeats the push for each captured expression.
+
+### A Practical `macro_rules!` Example: `hashmap!`
+
+```rust
+macro_rules! hashmap {
+    ($($key:expr => $value:expr),* $(,)?) => {
+        {
+            let mut map = std::collections::HashMap::new();
+            $(
+                map.insert($key, $value);
+            )*
+            map
+        }
+    };
+}
+
+fn main() {
+    let scores = hashmap! {
+        "Alice" => 95,
+        "Bob"   => 87,
+        "Carol" => 91,
+    };
+    println!("{:?}", scores);
+}
+```
+
+---
+
+## Procedural Macros
+
+Procedural macros are more powerful than `macro_rules!`—they operate on a `TokenStream` (the raw token representation of Rust code) and produce a new `TokenStream`. They are written as regular Rust functions in a special crate with `proc-macro = true` in `Cargo.toml`.
+
+There are three kinds:
+
+1. **Custom `#[derive]` macros** — add behaviour to `#[derive(YourTrait)]`
+2. **Attribute-like macros** — custom attributes like `#[route(GET, "/")]`
+3. **Function-like macros** — look like `macro_rules!` but operate on token streams
+
+### 1. Custom Derive Macros
+
+Suppose you want to implement a `HelloMacro` trait automatically:
+
+```rust
+// In the consumer crate:
+use hello_macro::HelloMacro;
+use hello_macro_derive::HelloMacro;
+
+pub trait HelloMacro {
+    fn hello_macro();
+}
+
+#[derive(HelloMacro)]
+struct Pancakes;
+
+fn main() {
+    Pancakes::hello_macro();
+    // Prints: Hello, Macro! My name is Pancakes!
+}
+```
+
+The derive proc-macro crate implementation looks like this:
+
+```rust
+// In hello_macro_derive/src/lib.rs
+use proc_macro::TokenStream;
+use quote::quote;
+use syn;
+
+#[proc_macro_derive(HelloMacro)]
+pub fn hello_macro_derive(input: TokenStream) -> TokenStream {
+    // Parse the input tokens into a syntax tree
+    let ast: syn::DeriveInput = syn::parse(input).unwrap();
+    let name = &ast.ident;
+
+    // Generate the implementation
+    let gen = quote! {
+        impl HelloMacro for #name {
+            fn hello_macro() {
+                println!("Hello, Macro! My name is {}!", stringify!(#name));
+            }
+        }
+    };
+    gen.into()
+}
+```
+
+The `syn` crate parses Rust source code into an AST, and the `quote` crate generates Rust source code from a template. These two crates are the workhorses of almost every proc-macro crate.
+
+### 2. Attribute-Like Macros
+
+Attribute-like macros can be applied to any item (functions, structs, etc.) and receive both the attribute arguments and the annotated item as token streams:
+
+```rust
+// Usage in a web framework
+#[route(GET, "/hello")]
+fn hello_handler() -> String {
+    String::from("Hello!")
+}
+
+// The macro definition (in the framework's proc-macro crate)
+#[proc_macro_attribute]
+pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // attr contains: GET, "/hello"
+    // item contains the fn hello_handler() { ... }
+    // Generate registration code + the original function
+    todo!()
+}
+```
+
+Attribute-like macros are used heavily in web frameworks (Actix, Axum), async runtimes (`#[tokio::main]`), and testing frameworks.
+
+### 3. Function-Like Macros
+
+Function-like proc-macros look like `macro_rules!` invocations but have the full power of a procedural macro:
+
+```rust
+// Usage
+let sql = sql!(SELECT * FROM users WHERE id = 1);
+
+// Definition
+#[proc_macro]
+pub fn sql(input: TokenStream) -> TokenStream {
+    // Parse and validate the SQL at compile time,
+    // then generate the appropriate Rust code
+    todo!()
+}
+```
+
+This pattern is used to implement things like compile-time SQL validation (`sqlx`), regex compilation, and shader embedding.
+
+---
+
+## When to Use Macros
+
+- **`macro_rules!`**: small, repetitive code generation within a single crate; the `vec!`, `println!`, `assert_eq!` pattern.
+- **Custom derive**: generating boilerplate trait implementations (`Debug`, `Serialize`, `Deserialize`).
+- **Attribute macros**: transforming or annotating items with context (async, routing, testing).
+- **Function-like proc-macros**: compile-time parsing and validation of domain-specific languages.
+
+Always prefer a regular function or a generic type before reaching for a macro. Macros are harder to test, produce less readable error messages, and add compile-time overhead. But when metaprogramming is genuinely needed, Rust's macro system is one of the most expressive available in any systems language.

@@ -1,0 +1,140 @@
+---
+title: "Reading Command Line Arguments with std::env in Rust"
+sidebarTitle: "CLI Arguments"
+description: "Read command-line arguments in Rust using std::env::args(). Collect arguments into a Vec<String> and pass them to your program logic."
+mode: "wide"
+---
+
+Command-line arguments are the primary way users pass configuration to CLI tools, and Rust makes reading them straightforward with the `std::env` module. In this chapter we build **minigrep**, a simplified clone of the classic `grep` utility that searches for a string pattern inside a file. Along the way you'll learn how to collect arguments, validate their presence, and wire them into your program's logic.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The `std::env::args` Function
+
+The standard library exposes `std::env::args()`, which returns an iterator over the command-line arguments passed to the current process. The very first argument (index `0`) is always the name of the binary itself; your actual user-supplied arguments start at index `1`.
+
+```rust
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    println!("{:?}", args);
+}
+```
+
+Running `cargo run -- needle haystack.txt` prints something like:
+
+```
+["target/debug/minigrep", "needle", "haystack.txt"]
+```
+
+### Why `collect()`?
+
+`env::args()` is lazy — it produces values on demand. Calling `.collect()` drives the iterator to completion and stores every argument in a `Vec<String>`. The type annotation `Vec<String>` is required because `collect` is generic and Rust needs to know what collection to build.
+
+## Accessing Individual Arguments
+
+Once you have the `Vec<String>`, you can index into it directly:
+
+```rust
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Searching for: {query}");
+    println!("In file: {file_path}");
+}
+```
+
+### Panicking on Missing Arguments
+
+If the user runs the program without supplying both arguments, indexing out-of-bounds will panic with an unhelpful message like `index out of bounds`. This is acceptable for a first draft, but in production code you should validate argument count and print a useful error message:
+
+```rust
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 3 {
+        eprintln!("Usage: minigrep <query> <file_path>");
+        std::process::exit(1);
+    }
+
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Searching for '{query}' in '{file_path}'");
+}
+```
+
+Exiting with a non-zero code (`1`) signals failure to the calling shell, which is standard Unix convention.
+
+## Setting Up the minigrep Project
+
+Create a new binary project and open `src/main.rs`:
+
+```bash
+cargo new minigrep
+cd minigrep
+```
+
+Your initial `main.rs` will hold argument parsing, file reading, and the search loop. As the project grows we'll extract logic into `src/lib.rs` so it can be tested independently. For now, the full skeleton looks like this:
+
+```rust
+use std::env;
+use std::fs;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 3 {
+        eprintln!("Usage: minigrep <query> <file_path>");
+        std::process::exit(1);
+    }
+
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Searching for '{query}' in '{file_path}'");
+
+    let contents = fs::read_to_string(file_path)
+        .expect("Should have been able to read the file");
+
+    println!("File contents:\n{contents}");
+}
+```
+
+Run it with:
+
+```bash
+cargo run -- the poem.txt
+```
+
+## Handling Non-Unicode Arguments
+
+`std::env::args()` panics if any argument contains invalid UTF-8. If you need to accept arbitrary byte sequences (e.g., unusual filenames on Linux), use `std::env::args_os()` instead, which returns `OsString` values that can represent any byte sequence:
+
+```rust
+use std::env;
+
+fn main() {
+    for arg in env::args_os() {
+        println!("{:?}", arg);
+    }
+}
+```
+
+For most programs targeting normal users, `args()` is fine and the simpler API is preferred.
+
+## Summary
+
+- `std::env::args()` returns an iterator; call `.collect()` to get a `Vec<String>`.
+- Arguments are indexed from `0` (binary name) through `N-1`.
+- Always check `args.len()` before indexing to avoid cryptic panics.
+- Use `eprintln!` and `std::process::exit(1)` for user-facing error messages.
+- For non-UTF-8 inputs, prefer `args_os()`.
+
+In the next section we'll read the file whose path was just captured from the command line.

@@ -1,0 +1,169 @@
+---
+title: "Adding Search Functionality to a Rust CLI Program"
+sidebarTitle: "Search Logic"
+description: "Implement a search function in Rust using TDD. Write a failing test first, then implement search to find lines containing a query string in file contents."
+mode: "wide"
+---
+
+The heart of minigrep is searching: given a query string and a block of text, find every line that contains the query. We'll implement this using **test-driven development (TDD)** — writing a failing test first, then writing just enough code to make it pass. TDD works particularly well in Rust because the compiler enforces function signatures even before you have a body, giving you a tight feedback loop.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Writing the Failing Test
+
+Add a `tests` module to `src/lib.rs`:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_result() {
+        let query = "duct";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.";
+
+        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
+    }
+}
+```
+
+Run `cargo test` — it fails because `search` doesn't exist yet. That red test is your guide.
+
+## Implementing `search`
+
+The function signature must satisfy the test:
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+```
+
+### Lifetime Annotation `'a`
+
+Notice `'a` ties the return value's lifetime to `contents`, not `query`. The returned slices point into the `contents` string — they don't own data. Rust needs the lifetime annotation to verify those slices won't outlive `contents`. Without it the compiler will reject the function with a lifetime error.
+
+Run `cargo test` again — the test passes. ✅
+
+## How `lines()` Works
+
+`str::lines()` is an iterator that yields each line as a `&str` slice, stripping the newline character. It handles both `\n` (Unix) and `\r\n` (Windows) line endings transparently:
+
+```rust
+let text = "line one\nline two\r\nline three";
+for line in text.lines() {
+    println!("{line}");
+}
+// line one
+// line two
+// line three
+```
+
+## Using `contains` for Matching
+
+`str::contains` checks whether a pattern appears anywhere in the string. It's case-sensitive by default:
+
+```rust
+assert!("Productive".contains("duct"));   // true
+assert!(!"Productive".contains("DUCT"));  // true – 'DUCT' not found
+```
+
+Case-insensitive search is covered in the next section on environment variables.
+
+## Integrating `search` into `run`
+
+Update the `run` function in `src/lib.rs` to call `search` and print each matching line:
+
+```rust
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
+
+    for line in search(&config.query, &contents) {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+```
+
+Now run minigrep against the poem:
+
+```bash
+cargo run -- nobody poem.txt
+```
+
+Expected output:
+
+```
+I'm nobody! Who are you?
+Are you nobody, too?
+```
+
+Both lines that contain "nobody" are printed, and nothing else.
+
+## Adding More Tests
+
+Good test coverage catches regressions. Add tests for edge cases:
+
+```rust
+#[test]
+fn no_results() {
+    let query = "monomorphization";
+    let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.";
+    assert_eq!(Vec::<&str>::new(), search(query, contents));
+}
+
+#[test]
+fn multiple_results() {
+    let query = "safe";
+    let contents = "\
+safe harbor
+not safe anymore
+just kidding, safe!";
+    assert_eq!(
+        vec!["safe harbor", "not safe anymore", "just kidding, safe!"],
+        search(query, contents)
+    );
+}
+```
+
+Running `cargo test` exercises all three cases:
+
+```
+test tests::no_results ... ok
+test tests::one_result ... ok
+test tests::multiple_results ... ok
+
+test result: ok. 3 passed; 0 failed
+```
+
+## TDD Benefits in Rust
+
+1. **Compiler-driven design** — writing the test first forces you to define the function signature before worrying about the implementation.
+2. **Regression safety** — every future change is validated against the test suite automatically.
+3. **Documentation** — tests serve as executable examples of how the function is meant to be called.
+
+## Summary
+
+- `str::lines()` splits content into an iterator of line slices.
+- `str::contains(pattern)` tests for substring presence (case-sensitive).
+- Lifetime `'a` links returned slices to the `contents` input, not the `query`.
+- TDD: write the test, watch it fail, implement the minimum code, watch it pass.
+- Integrate `search` into `run` by iterating the returned `Vec<&str>` and printing each line.
+
+The minigrep core is now functional. Next we'll make search case-insensitive via an environment variable.

@@ -1,0 +1,144 @@
+---
+title: "Reading File Contents in Rust with fs::read_to_string"
+sidebarTitle: "Reading Files"
+description: "Read a file's entire contents into a String with std::fs::read_to_string. Handle file-not-found errors and display the results in a CLI program."
+mode: "wide"
+---
+
+With command-line arguments captured, the next step for minigrep is to actually open the target file and load its contents into memory. Rust's standard library provides `std::fs::read_to_string`, a single convenient function that opens a file, reads every byte, and returns the content as a UTF-8 `String`. This section walks through using it, handling errors gracefully, and printing the results back to the terminal.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## `std::fs::read_to_string`
+
+The simplest way to read a whole file in Rust:
+
+```rust
+use std::fs;
+
+fn main() {
+    let contents = fs::read_to_string("poem.txt")
+        .expect("Should have been able to read the file");
+
+    println!("File contents:\n{contents}");
+}
+```
+
+`read_to_string` returns `Result<String, std::io::Error>`. Calling `.expect(msg)` is an easy way to unwrap the value in early development — if the file doesn't exist or can't be read, the program panics with your message instead of a raw OS error code.
+
+### Creating a Sample File
+
+Before running minigrep, create a test file in the project root:
+
+```text
+# poem.txt
+I'm nobody! Who are you?
+Are you nobody, too?
+Then there's a pair of us — don't tell!
+They'd banish us, you know.
+
+How dreary to be somebody!
+How public, like a frog
+To tell your name the livelong day
+To an admiring bog!
+```
+
+Now run the project:
+
+```bash
+cargo run -- nobody poem.txt
+```
+
+You should see the full poem printed to the terminal.
+
+## Wiring File Reading into minigrep
+
+Combine argument parsing with file reading in `main.rs`:
+
+```rust
+use std::env;
+use std::fs;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 3 {
+        eprintln!("Usage: minigrep <query> <file_path>");
+        std::process::exit(1);
+    }
+
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Searching for '{query}'");
+    println!("In file '{file_path}'");
+
+    let contents = fs::read_to_string(file_path)
+        .expect("Should have been able to read the file");
+
+    println!("\nFile contents:\n{contents}");
+}
+```
+
+At this stage the program prints the entire file — the search step comes later. But having the file content loaded as a plain `String` is exactly what we need to iterate over its lines.
+
+## Understanding the Error Path
+
+`.expect()` is convenient but blunt. Consider what happens when the file doesn't exist:
+
+```
+thread 'main' panicked at 'Should have been able to read the file: Os { code: 2, kind: NotFound, message: "No such file or directory" }', src/main.rs:14:10
+```
+
+The `Os { code: 2, kind: NotFound }` part is the underlying `io::Error`. In the next section, **Refactoring**, we'll replace `.expect()` with proper `Result` propagation so that errors are reported cleanly to the user without a panic backtrace.
+
+## Handling Large Files
+
+`read_to_string` reads the entire file into a single heap allocation. For most CLI tasks — configuration files, source files, log snippets — this is perfectly fine. If you ever need to process multi-gigabyte files line-by-line without loading everything into memory, use a `BufReader` instead:
+
+```rust
+use std::fs::File;
+use std::io::{self, BufRead};
+
+fn main() -> io::Result<()> {
+    let file = File::open("big_file.txt")?;
+    let reader = io::BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        println!("{line}");
+    }
+
+    Ok(())
+}
+```
+
+`BufReader::lines()` yields each line as a `Result<String>`, keeping memory usage constant regardless of file size. For minigrep's purposes, `read_to_string` is the right tool.
+
+## Checking File Existence Before Reading
+
+Sometimes you want to test whether a file exists without immediately reading it. Use `std::path::Path::exists()`:
+
+```rust
+use std::path::Path;
+
+fn main() {
+    let path = Path::new("poem.txt");
+    if path.exists() {
+        println!("File found!");
+    } else {
+        eprintln!("File not found.");
+    }
+}
+```
+
+Note that there is an inherent TOCTOU (time-of-check/time-of-use) race between `.exists()` and actually opening the file, so in production code it's cleaner to attempt the read and handle the `NotFound` error directly.
+
+## Summary
+
+- `fs::read_to_string(path)` returns `Result<String, io::Error>` and is ideal for loading whole files.
+- Use `.expect(msg)` during development; replace it with `?` and proper `Result` handling in production.
+- For very large files, `BufReader::lines()` streams content line-by-line without loading it all into memory.
+- Error messages from `.expect()` include the underlying OS error code, which is helpful for debugging.
+
+Next up: refactoring minigrep to separate concerns, extract a `Config` struct, and propagate errors idiomatically.

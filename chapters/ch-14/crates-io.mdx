@@ -1,0 +1,184 @@
+---
+title: "Publishing a Crate to Crates.io with Cargo"
+sidebarTitle: "Publishing"
+description: "Publish Rust crates to crates.io. Covers documentation comments, cargo doc, cargo publish, SemVer requirements, and yanking a version."
+mode: "wide"
+---
+
+Crates.io is Rust's central package registry — the place where the community shares open-source libraries and tools. Publishing your crate there makes it available to every Rust developer with a single line in their `Cargo.toml`. Before you publish, good documentation is essential, so we'll start with Rust's built-in documentation comment syntax.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Documentation Comments `///`
+
+Rust has two documentation comment styles:
+
+- `///` — documents the **item that follows** (function, struct, enum, etc.)
+- `//!` — documents the **enclosing item** (used at the top of `lib.rs` or a module)
+
+### Item Documentation
+
+```rust
+/// Adds two numbers together.
+///
+/// # Examples
+///
+/// ```
+/// let result = my_crate::add(2, 3);
+/// assert_eq!(result, 5);
+/// ```
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+
+Sections like `# Examples`, `# Panics`, `# Errors`, and `# Safety` are conventions that `rustdoc` renders nicely. The code inside ` ``` ` fences is also compiled and run as a **doc test** when you run `cargo test`.
+
+### Crate-level Documentation
+
+At the top of `src/lib.rs`:
+
+```rust
+//! # My Crate
+//!
+//! `my_crate` is a collection of utilities that does useful things.
+//! It is documented here as an example of good documentation practice.
+```
+
+## `cargo doc`
+
+Generate HTML documentation locally:
+
+```bash
+cargo doc             # generates docs in target/doc/
+cargo doc --open      # generates and opens in your browser
+```
+
+This runs `rustdoc` on your code and all dependencies, producing interlinked HTML docs.
+
+## Preparing for Publication
+
+Your `Cargo.toml` needs several fields before you can publish:
+
+```toml
+[package]
+name = "my_crate"
+version = "0.1.0"
+edition = "2021"
+description = "A short description of what the crate does"
+license = "MIT OR Apache-2.0"   # SPDX expression; dual-license is standard for Rust
+repository = "https://github.com/you/my_crate"
+homepage = "https://my_crate.rs"
+documentation = "https://docs.rs/my_crate"
+readme = "README.md"
+keywords = ["utility", "example"]   # max 5
+categories = ["no-std", "parser-implementations"]  # from crates.io category list
+```
+
+Missing required fields cause `cargo publish` to fail with a helpful error.
+
+## `cargo login`
+
+Authenticate with crates.io using your API token. Generate one at [crates.io/me](https://crates.io/me) under "API Tokens":
+
+```bash
+cargo login <your-api-token>
+```
+
+The token is stored in `~/.cargo/credentials.toml`.
+
+## `cargo publish`
+
+Do a dry run first to catch any errors before actually uploading:
+
+```bash
+cargo publish --dry-run
+```
+
+Then publish for real:
+
+```bash
+cargo publish
+```
+
+Cargo packages your source code (respecting `.gitignore` and `include`/`exclude` fields), uploads it to crates.io, and triggers a build on [docs.rs](https://docs.rs) automatically.
+
+**Note**: Published versions are **permanent**. You can never overwrite or delete a version — only yank it (see below).
+
+## SemVer Requirements
+
+Crates.io enforces that version numbers follow [Semantic Versioning](https://semver.org/):
+
+- `MAJOR.MINOR.PATCH`
+- Increment `PATCH` for bug fixes.
+- Increment `MINOR` for new backwards-compatible features.
+- Increment `MAJOR` for breaking changes.
+
+Cargo depends on SemVer to resolve compatible dependencies. Breaking the API in a patch release will confuse and break downstream users.
+
+## Updating a Published Crate
+
+Make your changes, bump the version in `Cargo.toml`, and publish again:
+
+```bash
+# Cargo.toml: version = "0.1.1"
+cargo publish
+```
+
+Each new version becomes independently addressable in `Cargo.toml`:
+
+```toml
+my_crate = "0.1.1"    # exact
+my_crate = "^0.1"     # any 0.1.x
+```
+
+## `cargo yank`
+
+Yanking tells Cargo "don't use this version for new dependency resolutions." It does **not** delete the version or break existing projects that already depend on it — it only prevents new `Cargo.lock` entries from selecting it.
+
+```bash
+cargo yank --version 0.1.0
+```
+
+To undo a yank:
+
+```bash
+cargo yank --version 0.1.0 --undo
+```
+
+Yank a version when you discover a serious bug or security vulnerability.
+
+## Re-exporting Public API with `pub use`
+
+If your crate has deeply nested modules, users must write long paths like `my_crate::kinds::PrimaryColor`. You can re-export items at the crate root with `pub use` to create a cleaner API surface:
+
+```rust
+// src/lib.rs
+pub use self::kinds::PrimaryColor;
+pub use self::kinds::SecondaryColor;
+pub use self::utils::mix;
+
+pub mod kinds {
+    pub enum PrimaryColor { Red, Yellow, Blue }
+    pub enum SecondaryColor { Orange, Green, Purple }
+}
+
+pub mod utils {
+    use crate::kinds::*;
+    pub fn mix(c1: PrimaryColor, c2: PrimaryColor) -> SecondaryColor {
+        // ...
+        SecondaryColor::Orange
+    }
+}
+```
+
+Now users can write `my_crate::PrimaryColor` instead of `my_crate::kinds::PrimaryColor`, and the re-exports appear prominently in the generated docs.
+
+## Summary
+
+- Use `///` for item docs, `//!` for crate/module docs; doc tests in `# Examples` run with `cargo test`.
+- `cargo doc --open` generates and previews HTML documentation locally.
+- Fill in `description`, `license`, `repository` in `Cargo.toml` before publishing.
+- `cargo login <token>` authenticates; `cargo publish` uploads the crate.
+- Published versions are immutable; use `cargo yank` to hide a broken version.
+- `pub use` flattens deep module hierarchies into a clean public API.

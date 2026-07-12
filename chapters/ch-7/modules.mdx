@@ -1,0 +1,168 @@
+---
+title: "Defining Modules to Control Scope and Privacy in Rust"
+sidebarTitle: "Modules"
+description: "Use mod to define modules in Rust, control public vs. private visibility with pub, and organize your code into logical, nested namespaces."
+mode: "wide"
+---
+
+Modules let you partition a crate's code into named, hierarchical namespaces — hiding implementation details while exposing a clean public API. The `mod` keyword introduces a module, and `pub` marks items as publicly accessible. Together they form Rust's privacy boundary system.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Restaurant Analogy
+
+The official Rust Book uses a restaurant to illustrate modules. A restaurant has a *front of house* (dining area, host stand, servers) and a *back of house* (kitchen, storage). Some things in the back of house are visible to customers; most are not. We can mirror this structure in code:
+
+```rust
+// src/lib.rs
+
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Added to waitlist");
+        }
+
+        pub fn seat_at_table() {
+            println!("Seated at table");
+        }
+    }
+
+    mod serving {
+        fn take_order()  { /* ... */ }
+        fn serve_order() { /* ... */ }
+        fn take_payment(){ /* ... */ }
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::seat_at_table();
+}
+```
+
+`hosting` and its functions are `pub`, so callers can reach them. `serving` is private — no outside code can call its functions.
+
+## Privacy Rules
+
+- **Everything is private by default.** Functions, structs, enums, and nested modules are only visible within the module that defines them (and its descendants).
+- **`pub` makes an item visible to the parent module.** You must add `pub` at every level of the path you want to expose.
+- **Child modules can access private items in parent modules.** The privacy rules work downward, not upward.
+
+```rust
+mod outer {
+    fn private_fn() {}
+    pub fn public_fn() {}
+
+    mod inner {
+        pub fn call_parent() {
+            super::private_fn(); // ✅ child can call parent's private fn
+            super::public_fn();  // ✅ also fine
+        }
+    }
+}
+```
+
+## Defining Nested Modules
+
+Modules can be nested arbitrarily deep. The full module tree for the restaurant example looks like this:
+
+```
+crate
+ └── front_of_house
+      ├── hosting
+      │    ├── add_to_waitlist
+      │    └── seat_at_table
+      └── serving
+           ├── take_order
+           ├── serve_order
+           └── take_payment
+```
+
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+    mod serving {
+        fn take_order() {}
+    }
+}
+```
+
+## `pub` on Structs and Enums
+
+When you mark a **struct** `pub`, the struct itself is public but its fields remain private by default — you must mark each field `pub` individually:
+
+```rust
+pub mod back_of_house {
+    pub struct Breakfast {
+        pub toast: String,       // customer can choose
+        seasonal_fruit: String,  // kitchen decides — private
+    }
+
+    impl Breakfast {
+        pub fn summer(toast: &str) -> Breakfast {
+            Breakfast {
+                toast: String::from(toast),
+                seasonal_fruit: String::from("peaches"),
+            }
+        }
+    }
+}
+
+pub fn eat_at_restaurant() {
+    let mut meal = back_of_house::Breakfast::summer("Rye");
+    meal.toast = String::from("Wheat"); // ✅ toast is pub
+    // meal.seasonal_fruit = String::from("blueberries"); // ❌ private
+}
+```
+
+When you mark an **enum** `pub`, all its variants become public automatically:
+
+```rust
+pub mod back_of_house {
+    pub enum Appetizer {
+        Soup,   // automatically pub
+        Salad,  // automatically pub
+    }
+}
+```
+
+This asymmetry makes sense: a struct with some private fields is still usable, but an enum with private variants would often be impossible to match on.
+
+## The `use` Keyword (Preview)
+
+Typing full module paths everywhere is verbose. The `use` keyword brings a path into scope so you can use a shorter name:
+
+```rust
+use crate::front_of_house::hosting;
+
+pub fn eat_at_restaurant() {
+    hosting::add_to_waitlist(); // no need for full path
+}
+```
+
+The `use` keyword is covered in depth in the next section.
+
+## Inline vs File-Based Modules
+
+You can define a module inline (as shown above) or in a separate file. When you write:
+
+```rust
+// src/lib.rs
+mod front_of_house;
+```
+
+Rust looks for `src/front_of_house.rs` (or `src/front_of_house/mod.rs`) to supply the module's content. File-based modules are covered in the *Separating Modules into Files* section.
+
+## Summary
+
+- `mod name { }` defines a module inline; `mod name;` loads it from a file.
+- All items are private by default; `pub` exposes them to the parent module.
+- Children can access private items in their parent, but not vice versa.
+- `pub struct` makes the type public but not its fields — add `pub` per field.
+- `pub enum` makes the type and *all* its variants public.
+- Module nesting creates a tree; paths navigate it using `::` separators.

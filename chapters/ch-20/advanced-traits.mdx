@@ -1,0 +1,301 @@
+---
+title: "Advanced Traits in Rust: Associated Types, Defaults, and Newtype"
+sidebarTitle: "Advanced Traits"
+description: "Explore advanced Rust trait features: associated types, default generic type parameters, operator overloading, the newtype pattern, and fully qualified syntax."
+mode: "wide"
+---
+
+Traits in Rust go well beyond simple method signatures. Advanced trait features let you express rich relationships between types, customise how operators behave, resolve ambiguous method calls, and wrap external types in new behaviour—all with full compile-time safety. Mastering these features is key to reading and writing idiomatic Rust library code.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Associated Types: Placeholder Types in Trait Definitions
+
+Associated types connect a type placeholder to a trait so that method signatures can use those placeholder types without specifying the concrete type at the trait definition site. The most familiar example is `Iterator`:
+
+```rust
+pub trait Iterator {
+    type Item;               // associated type
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+
+When you implement `Iterator` for a type, you specify exactly one `Item`:
+
+```rust
+struct Counter {
+    count: u32,
+    max: u32,
+}
+
+impl Counter {
+    fn new(max: u32) -> Counter {
+        Counter { count: 0, max }
+    }
+}
+
+impl Iterator for Counter {
+    type Item = u32;         // concrete type chosen here
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count < self.max {
+            self.count += 1;
+            Some(self.count)
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
+    let counter = Counter::new(5);
+    let collected: Vec<u32> = counter.collect();
+    println!("{:?}", collected); // [1, 2, 3, 4, 5]
+}
+```
+
+### Associated Types vs. Generics
+
+You might wonder: why not just write `Iterator<T>` with a generic parameter? The difference is that a type can implement `Iterator<String>` *and* `Iterator<i32>` simultaneously, whereas with an associated type a given type has exactly one `Item`. Associated types enforce a one-to-one relationship, which is usually what you want for traits like `Iterator` and `Deref`.
+
+---
+
+## Default Generic Type Parameters
+
+When you define a trait or struct with a generic type parameter, you can provide a default. This is common in operator overloading traits:
+
+```rust
+// From the standard library:
+pub trait Add<Rhs = Self> {
+    type Output;
+    fn add(self, rhs: Rhs) -> Self::Output;
+}
+```
+
+The `Rhs = Self` default means "unless you specify otherwise, the right-hand side operand has the same type as `Self`." This allows the common case to be written simply:
+
+```rust
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Metres(f64);
+
+impl Add for Metres {           // Rhs defaults to Metres
+    type Output = Metres;
+    fn add(self, other: Metres) -> Metres {
+        Metres(self.0 + other.0)
+    }
+}
+
+fn main() {
+    let one_km = Metres(1000.0);
+    let half_km = Metres(500.0);
+    println!("{:?}", one_km + half_km); // Metres(1500.0)
+}
+```
+
+You can override the default to add two *different* types together:
+
+```rust
+#[derive(Debug)]
+struct Millimetres(f64);
+
+impl Add<Millimetres> for Metres {
+    type Output = Metres;
+    fn add(self, other: Millimetres) -> Metres {
+        Metres(self.0 + other.0 / 1000.0)
+    }
+}
+```
+
+---
+
+## Operator Overloading
+
+Operator overloading in Rust is done entirely through traits in `std::ops`. You cannot overload arbitrary operators—only the ones the standard library defines traits for. Common ones include `Add`, `Sub`, `Mul`, `Div`, `Neg`, `Index`, and `PartialEq`.
+
+```rust
+use std::ops::{Mul, Neg};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+impl Mul<f64> for Vec2 {
+    type Output = Vec2;
+    fn mul(self, scalar: f64) -> Vec2 {
+        Vec2 { x: self.x * scalar, y: self.y * scalar }
+    }
+}
+
+impl Neg for Vec2 {
+    type Output = Vec2;
+    fn neg(self) -> Vec2 {
+        Vec2 { x: -self.x, y: -self.y }
+    }
+}
+
+fn main() {
+    let v = Vec2 { x: 3.0, y: 4.0 };
+    println!("{:?}", v * 2.0);  // Vec2 { x: 6.0, y: 8.0 }
+    println!("{:?}", -v);       // Vec2 { x: -3.0, y: -4.0 }
+}
+```
+
+---
+
+## The Newtype Pattern for Trait Implementation
+
+Rust's *orphan rule* prevents you from implementing an external trait on an external type. If you want to implement `Display` for `Vec<String>` (both from the standard library), you cannot—unless you wrap the type in a new struct:
+
+```rust
+use std::fmt;
+
+struct Wrapper(Vec<String>);
+
+impl fmt::Display for Wrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+
+fn main() {
+    let w = Wrapper(vec![
+        String::from("hello"),
+        String::from("world"),
+    ]);
+    println!("{}", w); // [hello, world]
+}
+```
+
+The `Wrapper` struct is a zero-cost abstraction—it has the same memory representation as `Vec<String>` and is compiled away entirely. To expose all methods of the inner type, you can implement `Deref`:
+
+```rust
+use std::ops::Deref;
+
+impl Deref for Wrapper {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Vec<String> {
+        &self.0
+    }
+}
+```
+
+---
+
+## Fully Qualified Syntax for Disambiguation
+
+When a type implements multiple traits that each define a method with the same name, or when a trait method shadows an inherent method, you need *fully qualified syntax* to specify which one you mean:
+
+```rust
+trait Pilot {
+    fn fly(&self);
+}
+
+trait Wizard {
+    fn fly(&self);
+}
+
+struct Human;
+
+impl Human {
+    fn fly(&self) {
+        println!("*waving arms*");
+    }
+}
+
+impl Pilot for Human {
+    fn fly(&self) {
+        println!("This is your captain speaking.");
+    }
+}
+
+impl Wizard for Human {
+    fn fly(&self) {
+        println!("Up!");
+    }
+}
+
+fn main() {
+    let person = Human;
+
+    // Calls the inherent method
+    person.fly();
+
+    // Calls the trait methods explicitly
+    Pilot::fly(&person);
+    Wizard::fly(&person);
+}
+```
+
+For *associated functions* (no `self` parameter), you need the fully qualified form `<Type as Trait>::function()`:
+
+```rust
+trait Animal {
+    fn baby_name() -> String;
+}
+
+struct Dog;
+
+impl Dog {
+    fn baby_name() -> String {
+        String::from("Spot")
+    }
+}
+
+impl Animal for Dog {
+    fn baby_name() -> String {
+        String::from("puppy")
+    }
+}
+
+fn main() {
+    // Calls Dog's inherent method
+    println!("{}", Dog::baby_name());              // Spot
+
+    // Calls the Animal trait implementation on Dog
+    println!("{}", <Dog as Animal>::baby_name());  // puppy
+}
+```
+
+---
+
+## Supertraits
+
+Sometimes a trait requires that implementors also implement another trait. You express this with a *supertrait* bound:
+
+```rust
+use std::fmt;
+
+trait OutlinePrint: fmt::Display {
+    fn outline_print(&self) {
+        let output = self.to_string();   // available because of the Display supertrait
+        let len = output.len();
+        println!("{}", "*".repeat(len + 4));
+        println!("* {} *", output);
+        println!("{}", "*".repeat(len + 4));
+    }
+}
+
+struct Point { x: i32, y: i32 }
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl OutlinePrint for Point {}   // Display is satisfied, so this compiles
+
+fn main() {
+    let p = Point { x: 3, y: 5 };
+    p.outline_print();
+    // ********
+    // * (3, 5) *
+    // ********
+}
+```
+
+Supertraits keep trait definitions clean by reusing guarantees from other traits rather than duplicating methods.

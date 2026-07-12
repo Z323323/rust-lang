@@ -1,0 +1,85 @@
+---
+title: "Installing Rust with rustup on Linux, macOS, and Windows"
+sidebarTitle: "Installation"
+description: "Install Rust using rustup, verify your setup with cargo --version, and learn how to update, uninstall, and add offline dependencies."
+mode: "wide"
+---
+
+<Warning>
+Throughout the book, I will assume you are using Linux. Nevertheless, you can execute practically every bash command covered in this text on other systems as well. For macOS users, the default zsh terminal is fully compatible, meaning you will execute the exact same commands without making any modifications. For Windows users, you will need to use the Windows Subsystem for Linux (WSL) or a terminal emulator like Git Bash to run these commands smoothly.
+</Warning>
+
+<Steps>
+  <Step title="Installing Rustup">
+   <Note>
+   To copy and paste each command into the terminal, use <kbd>Ctrl</kbd>+<kbd>C</kbd> (or the provided copy button) to copy the text, and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> to paste it.
+   </Note>
+   <Tip>
+   Throughout the book, be sure to click on 'Output' to view the expected output for each command whenever available!
+   </Tip>
+   
+   <CodeGroup>
+    ```bash Command 1.1.1
+    curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
+    ```
+    ```text Output 1.1.1
+    Rust is installed now. Great!
+    ```
+   </CodeGroup>
+  
+   When you install Rust via `rustup`, you don't just get the compiler (`rustc`). By default, `rustup` automatically installs the entire essential toolchain. This includes Cargo (the official package manager and build system).
+  </Step>
+
+  <Step title="Checking Installation">
+   <Tabs>
+    <Tab title="Checking Cargo Version">
+    After installing `rustup`, the installer should automatically add the ~/.cargo/bin directory to your system's `PATH` environment variable. To verify that everything is configured correctly, simply open a new terminal and run:
+    
+    <CodeGroup>
+    ```bash Command 1.1.2-1
+    cargo --version
+    ```
+    ```text Example Output 1.1.2-1
+    cargo 1.96.0 (30a34c682 2026-05-25)
+    ```
+    </CodeGroup>
+    
+    If the terminal outputs the version number, your setup is complete. If the command is not recognized, the environment variable hasn't been updated in your current session. You can resolve this by running `source $HOME/.cargo/env` to apply the changes immediately, or by simply restarting your terminal.
+    </Tab>
+    <Tab title="Checking Environment Variable">
+    Once the installation of `rustup` and Cargo is complete, you should verify that your `PATH` environment variable has been updated correctly. The ~/.cargo/bin directory must be present in your `PATH` to execute Rust tools from the command line. You can check this by printing the variable to your terminal:
+    
+    ```bash Command 1.1.2-2
+    echo $PATH
+    ```
+    
+    Check the output for /home/your_username/.cargo/bin. If it is missing, you need to reload your shell configuration by running `source $HOME/.cargo/env`, or close and reopen your terminal window.
+    
+    </Tab>
+   </Tabs> 
+  </Step>
+</Steps>
+
+## Updating
+
+```bash Command 1.1.3
+rustup update
+```
+
+## Uninstalling
+
+```bash Command 1.1.4
+rustup self uninstall
+```
+
+## Adding Dependencies to Work Offline
+
+This section is included primarily as a reference.
+
+To work offline, Cargo allows you to download packages in advance (via the internet, of course), so you can use their features later if you anticipate a lack of connectivity. To do this, ensure you are connected to the internet, then run the following in your project directory (`rand` and `trpl` are examples).
+
+```bash Example Command 1.1.5
+cargo add rand@0.8.5 trpl@0.2.0
+```
+
+To work offline, simply append the `--offline` flag to each `cargo` command.

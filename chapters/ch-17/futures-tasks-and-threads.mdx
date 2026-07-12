@@ -1,0 +1,193 @@
+---
+title: "Futures, Tasks, and Threads: Choosing the Right Tool in Rust"
+sidebarTitle: "Futures vs Threads"
+description: "Compare futures, async tasks, and OS threads in Rust. Know when to use each, how runtimes schedule tasks, and how to mix async and sync code."
+mode: "wide"
+---
+
+Rust gives you three distinct concurrency primitives: OS threads (`std::thread`), async tasks (futures driven by a runtime), and blocking thread pools. Each shines in a different context, and mixing them correctly is key to writing performant, correct Rust programs. This chapter helps you understand the trade-offs and know which tool to reach for.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Three Models at a Glance
+
+```
+OS Threads          Async Tasks             Blocking Thread Pool
+────────────────────────────────────────────────────────────────────
+Preemptive          Cooperative             Preemptive
+~8 MB stack each    Kilobytes per task      Shared thread pool
+OS scheduled        Runtime scheduled       OS scheduled
+Blocking I/O OK     Must use async I/O      Blocking I/O OK
+True parallelism    Concurrency ± parallel  Parallelism for CPU work
+```
+
+## Thread-per-Connection vs Task-per-Connection
+
+The classic network server model assigns one OS thread per connection. This works fine up to a few thousand connections, but at tens of thousands of connections the per-thread memory and context-switching overhead becomes prohibitive.
+
+```rust
+// Thread-per-connection (classic, simpler but less scalable):
+use std::net::TcpListener;
+use std::thread;
+
+fn handle_client(/* stream: TcpStream */) {
+    // blocking reads/writes here are fine — this thread is dedicated
+    println!("handling connection");
+}
+
+fn thread_server() {
+    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    for stream in listener.incoming() {
+        let _stream = stream.unwrap();
+        thread::spawn(move || handle_client());
+    }
+}
+```
+
+```rust
+// Task-per-connection (async, highly scalable):
+async fn async_handle_client(/* stream: TcpStream */) {
+    // async reads/writes here — this task yields while waiting
+    trpl::sleep(std::time::Duration::from_millis(1)).await;
+    println!("handling connection");
+}
+
+fn async_server() {
+    trpl::run(async {
+        // In a real server: loop over incoming connections, spawn a task per connection.
+        let handle = trpl::spawn_task(async_handle_client());
+        handle.await.unwrap();
+    });
+}
+```
+
+Async tasks are scheduled cooperatively: a task yields at each `.await` point, allowing the runtime to run other tasks on the same thread without an OS context switch.
+
+## How the Async Runtime Scheduler Works
+
+A multi-threaded async runtime (like Tokio's `#[tokio::main]` with its default configuration) maintains a pool of OS threads — typically one per CPU core. Each thread runs an event loop:
+
+```
+Thread 0: [Task A: poll] → [Task A: Pending] → [Task B: poll] → [Task B: Ready] → ...
+Thread 1: [Task C: poll] → [Task C: Pending] → [Task D: poll] → ...
+```
+
+Tasks are distributed across threads by a *work-stealing* scheduler: idle threads steal tasks from busy threads' queues. This gives near-linear CPU scaling for CPU-bound async work, while still efficiently handling millions of concurrent I/O-bound tasks.
+
+## Blocking Inside Async: The Problem
+
+If a task calls a *blocking* function (one that puts the OS thread to sleep), it occupies that thread and prevents the runtime from scheduling other tasks on it:
+
+```rust
+// BAD: blocks the async runtime thread
+fn main() {
+    trpl::run(async {
+        // `std::fs::read_to_string` blocks the OS thread.
+        // Other async tasks on this thread are starved while waiting.
+        let content = std::fs::read_to_string("big_file.txt").unwrap();
+        println!("read {} bytes", content.len());
+    });
+}
+```
+
+## `spawn_blocking`: Offloading CPU or Blocking Work
+
+The solution is to move blocking work off the async thread pool onto a *blocking thread pool* managed by the runtime. In Tokio, this is `tokio::task::spawn_blocking`:
+
+```rust
+// GOOD: blocking work is offloaded to a dedicated blocking thread
+async fn read_file_async(path: &'static str) -> String {
+    tokio::task::spawn_blocking(move || {
+        // This runs on a separate thread — blocking is fine here.
+        std::fs::read_to_string(path).unwrap()
+    })
+    .await
+    .unwrap()
+}
+```
+
+`spawn_blocking` returns a `JoinHandle` (a future) that you can `.await`. The calling async task is suspended (non-blocking) while the blocking work runs on a separate OS thread.
+
+The `trpl` crate exposes a similar helper:
+
+```rust
+fn main() {
+    trpl::run(async {
+        let content = trpl::spawn_blocking(|| {
+            std::fs::read_to_string("notes.txt").unwrap_or_default()
+        })
+        .await
+        .unwrap();
+        println!("File has {} chars", content.len());
+    });
+}
+```
+
+## CPU-Bound Work: Use Rayon or Threads
+
+For heavy CPU computation (image processing, cryptography, numerical simulations), neither async tasks nor OS threads scheduled by an async runtime are ideal on their own. Async tasks can't use multiple CPU cores unless the runtime is multi-threaded, and holding the CPU for too long prevents cooperative yielding.
+
+The `rayon` crate provides a data-parallel work-stealing thread pool designed for CPU-bound work:
+
+```rust
+// Rayon for parallel CPU work, then return result to async world:
+async fn parallel_sum(data: Vec<u64>) -> u64 {
+    tokio::task::spawn_blocking(move || {
+        use rayon::prelude::*;
+        data.par_iter().sum()
+    })
+    .await
+    .unwrap()
+}
+```
+
+## Decision Guide
+
+```
+Is the work I/O-bound (waiting for network, disk, timers)?
+  └─ YES → Async task with async I/O (tokio::fs, reqwest, etc.)
+  └─ NO → Is it CPU-bound?
+       └─ YES → spawn_blocking + rayon / thread pool
+       └─ NO (occasional blocking call in async code)?
+            └─ spawn_blocking for the blocking portion
+
+Do I need simple concurrent scripts or CLI tools?
+  └─ OS threads with channels or Arc<Mutex<T>> are often simpler.
+
+Do I need to handle 10,000+ simultaneous connections?
+  └─ Async runtime is the clear choice.
+```
+
+## Mixing Async and Sync Code
+
+Sometimes you must call async code from sync code, or sync code from async code.
+
+**Sync → Async**: use `Runtime::block_on` to drive a future to completion from a synchronous context:
+
+```rust
+fn sync_function_needing_async_result() -> String {
+    // Build or reuse a runtime (expensive to create; do it once at startup).
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        fetch_data_from_api().await
+    })
+}
+
+async fn fetch_data_from_api() -> String {
+    String::from("api data")
+}
+```
+
+**Async → Sync**: use `spawn_blocking` as shown above.
+
+## Summary
+
+| Tool | When to use |
+|---|---|
+| `async` / `.await` + runtime | I/O-bound concurrency, many simultaneous connections |
+| `std::thread::spawn` | Isolated work, simple scripts, when async overhead isn't needed |
+| `spawn_blocking` | Blocking or CPU-bound code called from async context |
+| `rayon` | Data-parallel CPU-bound computation |
+| `Runtime::block_on` | Calling async code from a sync context |
+
+Rust does not force you into one model. Combining OS threads for parallelism with async tasks for I/O concurrency — each in their appropriate domain — is a fully supported and common production pattern.

@@ -1,0 +1,188 @@
+---
+title: "Reading Environment Variables in Rust with std::env::var"
+sidebarTitle: "Env Variables"
+description: "Add environment variable support to a Rust program using std::env::var. Implement case-insensitive search toggled by an environment variable."
+mode: "wide"
+---
+
+Environment variables are a portable, shell-friendly way to configure program behavior without adding more command-line flags. Many tools use them for optional features: `RUST_LOG` sets log verbosity, `NO_COLOR` disables ANSI colors, and in our minigrep project `IGNORE_CASE` will toggle case-insensitive search. Rust's `std::env::var` function makes reading these variables straightforward.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## `std::env::var`
+
+`std::env::var(key)` returns `Result<String, VarError>`:
+
+- `Ok(value)` — the variable is set and contains valid UTF-8.
+- `Err(VarError::NotPresent)` — the variable isn't set in the environment.
+- `Err(VarError::NotUnicode(...))` — the variable is set but isn't valid UTF-8.
+
+```rust
+use std::env;
+
+fn main() {
+    match env::var("HOME") {
+        Ok(val) => println!("HOME = {val}"),
+        Err(e)  => println!("Could not read HOME: {e}"),
+    }
+}
+```
+
+## Using `is_ok()` as a Boolean Flag
+
+For a simple on/off environment variable, you don't need the actual value — just whether it's set. `Result::is_ok()` returns `true` if the variable exists:
+
+```rust
+let ignore_case = env::var("IGNORE_CASE").is_ok();
+```
+
+This idiom is concise and idiomatic. Even if the variable is set to an empty string or `"0"`, `is_ok()` returns `true`. If you need to distinguish `IGNORE_CASE=false` from unset, parse the value explicitly.
+
+## Implementing Case-Insensitive Search
+
+Add `search_case_insensitive` alongside the existing `search` function in `src/lib.rs`:
+
+```rust
+pub fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.to_lowercase().contains(&query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+```
+
+`str::to_lowercase()` allocates a new `String` with every character converted to its lowercase Unicode equivalent. Because both the query and each line are lowercased before comparison, the match is effectively case-insensitive without altering the original text.
+
+### Tests for Case-Insensitive Search
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn case_sensitive() {
+        let query = "duct";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Duct tape.";
+        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        let query = "rUsT";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Trust me.";
+        assert_eq!(
+            vec!["Rust:", "Trust me."],
+            search_case_insensitive(query, contents)
+        );
+    }
+}
+```
+
+## Storing the Flag in `Config`
+
+Add an `ignore_case` field to `Config` and set it from the environment in `Config::build`:
+
+```rust
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
+    pub ignore_case: bool,
+}
+
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+```
+
+## Branching in `run`
+
+Update `run` to dispatch to the correct search function:
+
+```rust
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
+
+    let results = if config.ignore_case {
+        search_case_insensitive(&config.query, &contents)
+    } else {
+        search(&config.query, &contents)
+    };
+
+    for line in results {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+```
+
+## Setting the Variable at the Shell
+
+On Linux and macOS:
+
+```bash
+IGNORE_CASE=1 cargo run -- to poem.txt
+```
+
+On Windows PowerShell:
+
+```powershell
+$Env:IGNORE_CASE = 1; cargo run -- to poem.txt
+```
+
+On Windows Command Prompt:
+
+```cmd
+set IGNORE_CASE=1
+cargo run -- to poem.txt
+```
+
+With `IGNORE_CASE` set, searching for `"to"` will also match `"To"`, `"TO"`, and `"tO"`.
+
+## Persisting the Variable for a Session
+
+To keep the variable set across multiple commands in a bash session:
+
+```bash
+export IGNORE_CASE=1
+cargo run -- nobody poem.txt
+cargo run -- are poem.txt
+unset IGNORE_CASE  # clear it when done
+```
+
+## Summary
+
+- `std::env::var(key)` returns `Result<String, VarError>`.
+- `is_ok()` is an idiomatic way to treat an env var as a boolean flag.
+- Case-insensitive search: lowercase both query and each line before comparing.
+- Store flags in `Config` so `run` can stay clean and testable.
+- Set env vars inline (`KEY=val cargo run`) or with `export` for a full session.
+
+Next we'll look at sending error messages to `stderr` so they don't pollute redirected program output.

@@ -1,0 +1,154 @@
+---
+title: "Extensible Concurrency with the Send and Sync Traits in Rust"
+sidebarTitle: "Send & Sync"
+description: "Understand Rust's Send and Sync marker traits that enable fearless concurrency. Learn what they guarantee and how the compiler enforces thread safety."
+mode: "wide"
+---
+
+Almost all of Rust's concurrency guarantees come not from the language syntax, but from two marker traits in the standard library: `Send` and `Sync`. These traits encode thread-safety contracts that the compiler checks statically, turning an entire class of data-race bugs into compile-time errors. Understanding them is key to writing both safe concurrent code and custom data structures that work across threads.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## `Send`: Transferring Ownership Across Threads
+
+A type `T` implements `Send` if it is safe to **move ownership** of a `T` value to another thread. Almost every Rust type is `Send` by default, because Rust's ownership model ensures that once you move a value, the original thread can no longer use it.
+
+```rust
+use std::thread;
+
+fn main() {
+    let s = String::from("hello"); // String: Send
+    let handle = thread::spawn(move || {
+        println!("{s}"); // Ownership of `s` moved here — safe.
+    });
+    handle.join().unwrap();
+}
+```
+
+The compiler enforces `Send` automatically: `thread::spawn` requires its closure to be `Send`, which means every captured variable must also be `Send`.
+
+### Types That Are NOT `Send`
+
+The most prominent non-`Send` type is `Rc<T>`. Its reference count uses non-atomic operations — if two threads cloned the same `Rc<T>` simultaneously the count could corrupt. The compiler prevents this entirely.
+
+```rust
+use std::rc::Rc;
+use std::thread;
+
+fn main() {
+    let rc = Rc::new(42);
+    let rc2 = Rc::clone(&rc);
+
+    // Does NOT compile:
+    // thread::spawn(move || println!("{rc2}"));
+    // error[E0277]: `Rc<i32>` cannot be sent between threads safely
+}
+```
+
+The fix is to use `Arc<T>` instead, which uses atomic reference counts and is `Send`.
+
+## `Sync`: Sharing References Across Threads
+
+A type `T` implements `Sync` if it is safe for **multiple threads to hold a shared reference `&T` simultaneously**. Equivalently, `T: Sync` if and only if `&T: Send`.
+
+For example, `i32` is `Sync`: reading an `i32` from multiple threads concurrently is safe because reads do not mutate state. `Mutex<T>` is `Sync` because its locking protocol serialises access.
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn print_value(val: &i32) {
+    println!("{val}");
+}
+
+fn main() {
+    let data = Arc::new(42i32); // i32: Sync — sharing &i32 is safe
+
+    let handles: Vec<_> = (0..4)
+        .map(|_| {
+            let data = Arc::clone(&data);
+            thread::spawn(move || {
+                // Dereferencing Arc gives &i32, which is Sync.
+                print_value(&data);
+            })
+        })
+        .collect();
+
+    for h in handles { h.join().unwrap(); }
+}
+```
+
+### Types That Are NOT `Sync`
+
+`Cell<T>` and `RefCell<T>` use non-atomic interior mutability — allowing mutation through a shared reference without a lock. This makes them `!Sync`: sharing a `&RefCell<T>` across threads could cause data races.
+
+```rust
+use std::cell::RefCell;
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let rf = Arc::new(RefCell::new(0));
+    let rf2 = Arc::clone(&rf);
+
+    // Does NOT compile:
+    // thread::spawn(move || *rf2.borrow_mut() += 1);
+    // error[E0277]: `RefCell<i32>` cannot be shared between threads safely
+}
+```
+
+## Auto-Trait Derivation
+
+`Send` and `Sync` are *auto traits*: the compiler automatically derives them for your types if all their fields are `Send`/`Sync`. You rarely need to write `impl Send for MyType {}` manually.
+
+```rust
+struct Wrapper {
+    value: i32,     // i32: Send + Sync
+    name: String,   // String: Send + Sync
+}
+// Wrapper is automatically Send + Sync — no annotation needed.
+```
+
+## Opting Out with `!Send` / `!Sync`
+
+If your type contains a raw pointer or some non-thread-safe resource, you can explicitly declare it not `Send` or not `Sync` using a negative impl. The standard library itself does this for `Rc<T>`:
+
+```rust
+// (Simplified from std) — in actual std source:
+impl<T> !Send for Rc<T> {}
+impl<T> !Sync for Rc<T> {}
+```
+
+## Manually Implementing `Send` and `Sync`
+
+You can manually implement these traits for your own types — but doing so requires `unsafe`, because you are promising the compiler a thread-safety invariant it cannot verify.
+
+```rust
+use std::sync::atomic::{AtomicPtr, Ordering};
+
+/// A type that wraps a raw pointer but guarantees the pointed-to
+/// data is immutable and valid for the program's lifetime.
+struct SharedReadOnly<T> {
+    ptr: AtomicPtr<T>,
+}
+
+// SAFETY: We only ever read through this pointer, never write.
+// The data outlives all threads that could access it.
+unsafe impl<T: Sync> Send for SharedReadOnly<T> {}
+unsafe impl<T: Sync> Sync for SharedReadOnly<T> {}
+```
+
+This is an advanced pattern reserved for low-level library code. **Never implement `Send` or `Sync` manually unless you have thoroughly reasoned about the invariants.**
+
+## Raw Pointers Are Neither `Send` Nor `Sync`
+
+Raw pointers (`*const T`, `*mut T`) are automatically `!Send` and `!Sync`. The language takes a conservative stance: it cannot know what invariants your raw pointer upholds, so it opts out of thread safety by default. Safe wrappers around raw pointers (like `Arc<T>`) re-add `Send`/`Sync` with the `unsafe impl` pattern shown above.
+
+## Summary
+
+| Trait | Meaning | Key non-implementors |
+|---|---|---|
+| `Send` | Safe to move ownership to another thread | `Rc<T>`, `*mut T`, `*const T`, `MutexGuard<T>` |
+| `Sync` | Safe to share `&T` across threads | `Cell<T>`, `RefCell<T>`, `Rc<T>`, `*mut T` |
+
+These two traits are the foundation of Rust's *fearless concurrency* promise. Because they are checked at compile time, you can refactor concurrent code confidently — if you accidentally introduce a thread-safety bug, the compiler will tell you before your code ever runs.

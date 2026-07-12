@@ -1,0 +1,155 @@
+---
+title: "Refactoring Rust Programs for Modularity and Error Handling"
+sidebarTitle: "Refactoring"
+description: "Refactor a Rust CLI program for better modularity: extract a Config struct, separate library logic into lib.rs, and use Result for error propagation."
+mode: "wide"
+---
+
+A working program that crams everything into `main` is a good starting point, but it quickly becomes hard to test, maintain, and extend. Rust's project conventions encourage splitting logic into a library crate (`src/lib.rs`) that can be unit-tested independently from the binary entry point (`src/main.rs`). In this section we refactor minigrep by extracting a `Config` struct, making its constructor return a `Result`, and moving the core `run` function into the library.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Extracting a `Config` Struct
+
+Rather than passing individual `&String` references around, group related configuration into a named struct:
+
+```rust
+struct Config {
+    query: String,
+    file_path: String,
+}
+```
+
+### A Fallible Constructor: `Config::build`
+
+Using `Config::new` that panics on invalid input is unfriendly. Instead, define `Config::build` to return `Result<Config, &'static str>`:
+
+```rust
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+
+        let query = args[1].clone();
+        let file_path = args[2].clone();
+
+        Ok(Config { query, file_path })
+    }
+}
+```
+
+We `.clone()` the strings here to keep ownership simple. The performance cost is negligible for short strings at startup.
+
+## Handling the `Result` in `main`
+
+`main` now calls `Config::build` and handles the `Err` branch explicitly:
+
+```rust
+use std::env;
+use std::process;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let config = Config::build(&args).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    // ... rest of main
+}
+```
+
+`unwrap_or_else` lets us run a closure on the error value before exiting, keeping the happy path readable while still handling failures properly.
+
+## Extracting a `run` Function
+
+Move the core program logic out of `main` into a `run` function that returns `Result<(), Box<dyn Error>>`:
+
+```rust
+use std::error::Error;
+use std::fs;
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
+    println!("File contents:\n{contents}");
+    Ok(())
+}
+```
+
+The `?` operator replaces `.expect()`: on `Err` it returns early, propagating the error up the call stack. `Box<dyn Error>` is a trait object that can hold *any* error type — perfect for a function that might fail in multiple ways (IO errors, future search errors, etc.).
+
+## Moving Logic to `src/lib.rs`
+
+Create `src/lib.rs` and move `Config` and `run` there, marking them `pub`:
+
+```rust
+// src/lib.rs
+use std::error::Error;
+use std::fs;
+
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
+}
+
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+        })
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
+    println!("File contents:\n{contents}");
+    Ok(())
+}
+```
+
+### The Slimmed-down `src/main.rs`
+
+```rust
+// src/main.rs
+use std::env;
+use std::process;
+
+use minigrep::Config;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let config = Config::build(&args).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    if let Err(e) = minigrep::run(config) {
+        eprintln!("Application error: {e}");
+        process::exit(1);
+    }
+}
+```
+
+`main` now does only three things: collect args, build config, call run. All testable logic lives in the library.
+
+## Why `Box<dyn Error>`?
+
+`Box<dyn Error>` is a heap-allocated trait object that satisfies the `Error` trait. It lets a single return type express "some error, which I'll figure out at runtime." When you need more control — such as matching on specific error variants — you'd define a custom enum error type. For a CLI tool, `Box<dyn Error>` hits the sweet spot between flexibility and simplicity.
+
+## Summary
+
+| Before | After |
+|--------|-------|
+| All logic in `main` | Logic in `lib.rs`, thin `main` |
+| Panics on bad input | `Result` + `process::exit` |
+| `.expect()` for IO | `?` operator with `Box<dyn Error>` |
+| Hard to test | `run` and `Config` are fully unit-testable |
+
+This separation of concerns is a pattern you'll use across virtually every Rust CLI project. Next we add the actual search functionality using test-driven development.

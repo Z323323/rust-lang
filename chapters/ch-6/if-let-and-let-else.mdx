@@ -1,0 +1,176 @@
+---
+title: "Concise Control Flow with if let and let-else in Rust"
+sidebarTitle: "if let"
+description: "Use if let for concise single-pattern matching in Rust. Learn let-else for early returns when a pattern doesn't match, avoiding nested match blocks."
+mode: "wide"
+---
+
+While `match` is the workhorse of Rust pattern matching, it can feel verbose when you only care about a single variant and want to ignore everything else. `if let` and `let-else` are ergonomic companions that reduce boilerplate in these common situations without sacrificing clarity or safety.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## The Problem: Verbose `match` for One Pattern
+
+Suppose you want to do something only when an `Option` is `Some`:
+
+```rust
+fn main() {
+    let config_max: Option<u8> = Some(3u8);
+
+    match config_max {
+        Some(max) => println!("The maximum is configured to be {}", max),
+        _         => (), // do nothing — boilerplate
+    }
+}
+```
+
+The `_ => ()` arm is noise — we don't care about the `None` case. `if let` removes it.
+
+## `if let`: Single-Pattern Shorthand
+
+`if let` is syntactic sugar for a `match` with one interesting arm:
+
+```rust
+fn main() {
+    let config_max: Option<u8> = Some(3u8);
+
+    if let Some(max) = config_max {
+        println!("The maximum is configured to be {}", max);
+    }
+    // If config_max is None, nothing happens
+}
+```
+
+Read it as: *"if `config_max` matches the pattern `Some(max)`, then bind `max` and execute the block."*
+
+### `if let` with an `else` Branch
+
+You can add an `else` for the non-matching case:
+
+```rust
+fn describe_coin(coin: &Coin) {
+    if let Coin::Quarter(state) = coin {
+        println!("State quarter from {:?}!", state);
+    } else {
+        println!("Not a quarter");
+    }
+}
+```
+
+This is exactly equivalent to:
+
+```rust
+fn describe_coin(coin: &Coin) {
+    match coin {
+        Coin::Quarter(state) => println!("State quarter from {:?}!", state),
+        _                    => println!("Not a quarter"),
+    }
+}
+```
+
+Choose `if let` when there is only one interesting pattern; prefer `match` when you need to handle several variants explicitly.
+
+### Chaining `if let` with `else if let`
+
+Multiple `if let` / `else if let` chains can match different patterns from different values:
+
+```rust
+fn main() {
+    let favorite_color: Option<&str> = None;
+    let is_tuesday                   = false;
+    let age: Result<u8, _>           = "34".parse();
+
+    if let Some(color) = favorite_color {
+        println!("Using your favorite color, {}", color);
+    } else if is_tuesday {
+        println!("Tuesday is green day!");
+    } else if let Ok(age) = age {
+        if age > 30 {
+            println!("Using purple as the background color");
+        } else {
+            println!("Using orange as the background color");
+        }
+    } else {
+        println!("Using blue as the background color");
+    }
+}
+```
+
+Unlike `match`, these branches do not need to be exhaustive or match the same value — they are just independent `if` conditions that happen to use patterns.
+
+## `let-else`: Early Return on Pattern Failure
+
+Introduced in Rust 1.65, `let-else` is designed for the common pattern of *extracting a value or bailing out early*:
+
+```rust
+fn get_count_item(s: &str) -> (u64, &str) {
+    let Some((count_str, item)) = s.split_once(' ') else {
+        panic!("Cannot parse, expected format: '<count> <item>'");
+    };
+
+    let Ok(count) = count_str.parse::<u64>() else {
+        panic!("Count is not a valid u64: '{}'", count_str);
+    };
+
+    (count, item)
+}
+
+fn main() {
+    let (count, item) = get_count_item("3 apples");
+    println!("{} {}", count, item); // "3 apples"
+}
+```
+
+The `else` branch of `let-else` **must diverge** — it must `return`, `break`, `continue`, or `panic!`. After the `let-else` statement, the bound variables are available in the surrounding scope.
+
+### `let-else` vs. `if let` + Early Return
+
+Without `let-else`, the same logic is more nested:
+
+```rust
+// Without let-else — more nesting
+fn get_count_item(s: &str) -> (u64, &str) {
+    if let Some((count_str, item)) = s.split_once(' ') {
+        if let Ok(count) = count_str.parse::<u64>() {
+            return (count, item);
+        }
+        panic!("Count is not a valid u64");
+    }
+    panic!("Cannot parse input");
+}
+```
+
+`let-else` "flattens" this pyramid by inverting the condition and putting the happy path at the top level — the same pattern as a guard clause in other languages.
+
+## When to Use Each Construct
+
+| Construct | Best for |
+|-----------|---------|
+| `match` | Multiple variants, exhaustive handling required |
+| `if let` | One variant matters; others can be ignored |
+| `if let ... else` | One variant with a distinct fallback path |
+| `let-else` | Extract a value or diverge (early return / panic) |
+
+```rust
+fn process(value: Option<i32>) {
+    // if let: only care about Some
+    if let Some(n) = value {
+        println!("Processing: {}", n);
+    }
+
+    // let-else: require Some or bail
+    let Some(n) = value else {
+        eprintln!("Expected a value, got None");
+        return;
+    };
+    println!("Got: {}", n);
+}
+```
+
+## Summary
+
+- `if let pattern = value { ... }` is a concise `match` for a single pattern.
+- An optional `else` block handles the non-matching case.
+- `if let` chains (`else if let`) can test different patterns from different values.
+- `let-else` binds a pattern or diverges (return/break/panic), keeping the happy path un-nested.
+- Prefer `match` when you need exhaustive coverage; prefer `if let` / `let-else` for single-pattern convenience.

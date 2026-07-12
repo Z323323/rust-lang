@@ -1,0 +1,292 @@
+---
+title: "Pattern Syntax in Rust: A Comprehensive Reference"
+sidebarTitle: "Pattern Syntax"
+description: "Complete reference for Rust pattern syntax: literals, variables, wildcards, ranges, destructuring structs/enums/tuples, @ bindings, and guards."
+mode: "wide"
+---
+
+Rust's pattern syntax is rich and composable — you can combine multiple pattern features in a single arm to precisely describe the values you care about. This chapter is a comprehensive reference to all the forms Rust patterns can take, with code examples for each.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Matching Literals
+
+The simplest pattern is a literal value. The arm only matches if the scrutinee equals the literal exactly:
+
+```rust
+let x = 1i32;
+match x {
+    1 => println!("one"),
+    2 => println!("two"),
+    3 => println!("three"),
+    _ => println!("anything else"),
+}
+```
+
+Works for integers, characters, booleans, and string slices:
+
+```rust
+let ch = 'c';
+match ch {
+    'a' | 'e' | 'i' | 'o' | 'u' => println!("vowel"),
+    'a'..='z'                    => println!("consonant"),
+    _                            => println!("other"),
+}
+```
+
+## Named Variables
+
+A plain identifier pattern binds the matched value to a new name. Be careful inside `match`: identifier patterns *always* match and introduce a new binding — they do not compare against an existing variable of the same name:
+
+```rust
+let x = Some(5);
+let y = 10; // We might expect this to match, but...
+
+match x {
+    Some(50) => println!("Got 50"),
+    Some(y)  => println!("Matched, y = {y}"), // `y` is a NEW binding here!
+    _        => println!("Default case, x = {x:?}"),
+}
+// Prints: "Matched, y = 5" — the outer `y` (10) is shadowed.
+```
+
+To match against an existing variable's value, use a match guard (see below).
+
+## The Wildcard `_`
+
+`_` matches any value without binding it. Use it as a catch-all or to ignore specific fields:
+
+```rust
+let numbers = (2, 4, 8, 16, 32);
+match numbers {
+    (first, .., last) => println!("first={first}, last={last}"),
+}
+
+// Ignore a function parameter:
+fn do_something(_: i32, y: i32) {
+    println!("y = {y}");
+}
+
+// Suppress "unused variable" warnings without binding:
+let _unused = expensive_computation();
+```
+
+## The OR Operator `|`
+
+Use `|` to match multiple patterns in one arm:
+
+```rust
+let x = 2u32;
+match x {
+    1 | 2 => println!("one or two"),
+    3 | 4 => println!("three or four"),
+    _     => println!("something else"),
+}
+```
+
+`|` also works inside nested patterns:
+
+```rust
+enum Message { Move { x: i32, y: i32 }, Write(String), ChangeColor(u8, u8, u8) }
+
+let msg = Message::Move { x: 0, y: 5 };
+match msg {
+    Message::Move { x: 0, y } | Message::Move { x: _, y: 0 } => {
+        println!("On an axis, y={y}");
+    },
+    Message::Move { x, y } => println!("Move to ({x}, {y})"),
+    _ => {},
+}
+```
+
+## Range Patterns `..=`
+
+Range patterns match any value within an inclusive range. Only integers and `char` support range patterns:
+
+```rust
+let age = 25u32;
+let category = match age {
+    0..=12  => "child",
+    13..=17 => "teenager",
+    18..=64 => "adult",
+    65..=   => "senior",
+};
+println!("{category}");
+
+let grade = 'B';
+let description = match grade {
+    'A'..='C' => "passing",
+    'D' | 'F' => "failing",
+    _         => "invalid",
+};
+```
+
+## Destructuring Structs
+
+Match and bind struct fields by name, optionally renaming them:
+
+```rust
+struct Point { x: i32, y: i32 }
+
+let p = Point { x: 3, y: -5 };
+
+// Bind field names directly:
+let Point { x, y } = p;
+println!("x={x}, y={y}");
+
+// Rename during binding:
+let Point { x: a, y: b } = Point { x: 10, y: 20 };
+println!("a={a}, b={b}");
+
+// In a match, also test specific values:
+match p {
+    Point { x: 0, y }    => println!("On y-axis at {y}"),
+    Point { x, y: 0 }    => println!("On x-axis at {x}"),
+    Point { x, y }       => println!("At ({x}, {y})"),
+}
+```
+
+## Destructuring Enums
+
+```rust
+#[derive(Debug)]
+enum Shape {
+    Circle { radius: f64 },
+    Rectangle { width: f64, height: f64 },
+    Triangle(f64, f64, f64), // base, height, hypotenuse
+}
+
+let shape = Shape::Circle { radius: 3.0 };
+
+match shape {
+    Shape::Circle { radius }                  => println!("Circle r={radius}"),
+    Shape::Rectangle { width, height }        => println!("Rect {width}×{height}"),
+    Shape::Triangle(base, height, _hyp)       => println!("Triangle b={base} h={height}"),
+}
+```
+
+## Destructuring Tuples
+
+```rust
+let point = (3, -7, 0);
+match point {
+    (0, 0, 0)   => println!("origin"),
+    (x, 0, 0)   => println!("on x-axis at {x}"),
+    (0, y, 0)   => println!("on y-axis at {y}"),
+    (0, 0, z)   => println!("on z-axis at {z}"),
+    (x, y, z)   => println!("({x}, {y}, {z})"),
+}
+```
+
+## Destructuring References
+
+When iterating over a collection of references, prefix the pattern with `&` or use `ref` to avoid moving out of the reference:
+
+```rust
+let points = vec![Point { x: 0, y: 0 }, Point { x: 1, y: 2 }];
+
+for &Point { x, y } in &points {
+    println!("({x}, {y})");
+}
+
+// Equivalently using `ref` in a match guard context:
+for p in &points {
+    let Point { x, y } = p;
+    println!("({x}, {y})");
+}
+```
+
+## Ignoring Remaining Fields with `..`
+
+Use `..` to ignore all unmentioned fields in a struct or tuple:
+
+```rust
+struct Config {
+    debug: bool,
+    verbose: bool,
+    threads: usize,
+    timeout: u64,
+}
+
+let cfg = Config { debug: true, verbose: false, threads: 4, timeout: 30 };
+
+// Only care about `debug`:
+let Config { debug, .. } = cfg;
+println!("debug={debug}");
+
+// In a tuple:
+let numbers = (1, 2, 3, 4, 5);
+let (first, .., last) = numbers;
+println!("first={first}, last={last}");
+```
+
+## The `@` Binding
+
+`@` lets you bind a value to a name *while also testing* it against a pattern. This is useful when you need the value itself as well as knowledge that it passed a test:
+
+```rust
+let num = 7u32;
+match num {
+    n @ 1..=9   => println!("{n} is a single-digit number"),
+    n @ 10..=99 => println!("{n} is a double-digit number"),
+    n           => println!("{n} is large"),
+}
+```
+
+`@` also works with enum variants:
+
+```rust
+#[derive(Debug)]
+enum Msg { Id(u32) }
+
+let msg = Msg::Id(5);
+match msg {
+    Msg::Id(id @ 1..=1000) => println!("valid id: {id}"),
+    Msg::Id(id)            => println!("invalid id: {id}"),
+}
+```
+
+## Match Guards
+
+A *match guard* is an `if` condition appended to a pattern arm. The arm only fires if the pattern matches *and* the guard is true:
+
+```rust
+let pair = (2, -2);
+
+match pair {
+    (x, y) if x == y     => println!("equal"),
+    (x, y) if x + y == 0 => println!("opposites"),
+    (x, _)               => println!("x={x}, not special"),
+}
+```
+
+Match guards can reference outer variables (unlike patterns, which shadow them):
+
+```rust
+let target = 5;
+let x = Some(5);
+
+match x {
+    Some(n) if n == target => println!("matched the target!"),
+    Some(n)                => println!("got {n}, not {target}"),
+    None                   => println!("nothing"),
+}
+```
+
+## Quick Reference
+
+| Syntax | Name | Example |
+|---|---|---|
+| `5`, `'a'`, `true` | Literal | `match x { 5 => … }` |
+| `x` | Variable binding | `match x { n => … }` |
+| `_` | Wildcard | `match x { _ => … }` |
+| `p1 \| p2` | OR | `1 \| 2 => …` |
+| `1..=9` | Range | `'a'..='z' => …` |
+| `Point { x, y }` | Struct destructure | `let Point { x, y } = p` |
+| `(a, b, c)` | Tuple destructure | `let (a, b) = pair` |
+| `..` | Rest / ignore fields | `Config { debug, .. }` |
+| `n @ 1..=9` | `@` binding | `n @ 1..=9 => println!("{n}")` |
+| `arm if cond` | Match guard | `Some(n) if n > 0 => …` |
+| `&x` | Reference destructure | `for &val in slice` |
+
+Mastering pattern syntax is one of the highest-leverage skills in Rust — it appears everywhere and enables concise, readable, exhaustively-checked code.

@@ -1,0 +1,172 @@
+---
+title: "Futures and async/await: Rust Async Programming Fundamentals"
+sidebarTitle: "Futures & async"
+description: "Understand Rust's async/await model and the Future trait. Learn what async functions return, how await drives futures, and what an async runtime does."
+mode: "wide"
+---
+
+Asynchronous programming allows a single thread to juggle many concurrent tasks by suspending work-in-progress tasks while they wait for I/O and resuming them when the data is ready. Rust's async/await syntax provides a clean, readable way to write such code while the underlying `Future` trait and poll-based model give it a zero-cost foundation — you only pay for what you use.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## What Is a Future?
+
+A `Future` is a value that represents an asynchronous computation that may not have completed yet. The standard library defines it as:
+
+```rust
+pub trait Future {
+    type Output;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+}
+
+pub enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+```
+
+When you `poll` a future and it is not yet done, it returns `Poll::Pending` and registers a *waker* (via `Context`) so the runtime knows to poll it again when progress can be made. When it is done, it returns `Poll::Ready(output)`.
+
+You rarely interact with `poll` directly. The `async`/`.await` syntax generates state machines that implement `Future` and handle polling for you.
+
+## `async fn` Returns a Future
+
+Marking a function `async` causes it to return a `Future` rather than its stated return type directly:
+
+```rust
+// This function's actual return type is `impl Future<Output = String>`.
+async fn fetch_greeting(name: &str) -> String {
+    format!("Hello, {name}!")
+}
+
+// Without a runtime, you cannot drive the future to completion yet.
+fn main() {
+    let _future = fetch_greeting("world");
+    // The future is created but NOT polled — no work happens yet.
+}
+```
+
+Futures in Rust are *lazy*: they do nothing until polled. Creating a future is essentially free.
+
+## The `.await` Keyword
+
+Inside an `async` block or `async fn`, you use `.await` to suspend the current task until a future completes. The `.await` point is where the async state machine may yield control back to the runtime:
+
+```rust
+async fn say_hello() {
+    let greeting = fetch_greeting("world").await;
+    //                                     ^^^^^
+    // Suspends here until `fetch_greeting` completes,
+    // allowing other tasks to run in the meantime.
+    println!("{greeting}");
+}
+```
+
+Unlike blocking code, `.await` does not block the underlying thread — it merely suspends the *task* running on that thread.
+
+## You Need a Runtime
+
+Rust's standard library defines the `Future` trait but ships **no runtime**. A runtime is needed to:
+
+1. Poll futures to drive them forward.
+2. Register I/O events with the OS (epoll/kqueue/IOCP).
+3. Schedule and resume tasks when wakers fire.
+
+The most popular runtime is [Tokio](https://tokio.rs/). The Rust Book (Almond Version) uses the `trpl` crate, a thin educational wrapper, to avoid overwhelming you with runtime configuration while you learn the core concepts:
+
+```toml
+# Cargo.toml
+[dependencies]
+trpl = "0.2"
+```
+
+```rust
+fn main() {
+    // `trpl::run` drives the async block to completion on a simple runtime.
+    trpl::run(async {
+        let greeting = fetch_greeting("world").await;
+        println!("{greeting}");
+    });
+}
+```
+
+## A Complete Async Example with `trpl`
+
+Here is a more realistic example showing two async operations sequenced with `.await`:
+
+```rust
+use std::time::Duration;
+
+async fn simulate_download(url: &str, delay_ms: u64) -> String {
+    trpl::sleep(Duration::from_millis(delay_ms)).await;
+    format!("Response from {url}")
+}
+
+fn main() {
+    trpl::run(async {
+        println!("Starting downloads…");
+        let result1 = simulate_download("https://example.com/a", 300).await;
+        let result2 = simulate_download("https://example.com/b", 200).await;
+        println!("{result1}");
+        println!("{result2}");
+        println!("Done!");
+    });
+}
+```
+
+These two downloads run *sequentially* here because each `.await` waits for the previous one. To run them concurrently, you would use `trpl::join!` (covered in the next section).
+
+## async Blocks
+
+You can also write `async { … }` blocks inline to create anonymous futures:
+
+```rust
+fn main() {
+    trpl::run(async {
+        let future = async {
+            println!("inside async block");
+            42u32
+        };
+        let value = future.await;
+        println!("got {value}");
+    });
+}
+```
+
+async blocks are useful for scoping short-lived async computations without defining a full `async fn`.
+
+## How the Poll Model Works (Conceptually)
+
+The runtime maintains a queue of *tasks* (each task wraps a top-level future). It repeatedly:
+
+1. Takes a task from the ready queue.
+2. Calls `poll` on its future.
+3. If `Poll::Pending`: the task is parked; its waker will re-enqueue it when I/O is ready.
+4. If `Poll::Ready`: the task is complete.
+
+```
+┌─────────────────────────────────────────┐
+│              Runtime                    │
+│                                         │
+│  Ready Queue:  [Task A] [Task C]        │
+│  Parked:       [Task B – waiting for I/O]│
+│                                         │
+│  1. Poll Task A → Pending (registers waker)│
+│  2. Poll Task C → Ready(42) → done      │
+│  3. I/O arrives → Task B waker fires    │
+│  4. Task B moves to Ready Queue         │
+└─────────────────────────────────────────┘
+```
+
+This cooperative scheduling means no task is preemptively interrupted — it yields at each `.await` point.
+
+## `async` vs Threads: A First Look
+
+| | OS Threads | Async Tasks |
+|---|---|---|
+| Concurrency model | Preemptive | Cooperative (yields at `.await`) |
+| Memory per unit | ~8 MB stack | Kilobytes (state machine size) |
+| Best for | CPU-bound, blocking code | I/O-bound, many concurrent operations |
+| Standard library support | `std::thread` | `Future` trait only; runtime needed |
+
+Async is not a replacement for threads — it is a complementary tool for I/O-heavy workloads where spinning up thousands of OS threads would be prohibitive.

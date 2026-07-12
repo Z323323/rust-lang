@@ -1,0 +1,252 @@
+---
+title: "Building a Single-Threaded Web Server in Rust"
+sidebarTitle: "Single-Threaded Server"
+description: "Build a basic HTTP server in Rust from scratch using TcpListener and TcpStream. Parse HTTP requests and write responses without any external crates."
+mode: "wide"
+---
+
+Building a web server from scratch is one of the most satisfying exercises in learning a systems language—it touches networking, I/O, string parsing, and file handling all at once. In this chapter we build a minimal but functional HTTP/1.1 server using nothing but Rust's standard library: `TcpListener` to accept connections, `TcpStream` to read and write data, and `BufReader` to process the request line by line.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Project Setup
+
+Create a new binary project:
+
+```bash
+cargo new hello_server
+cd hello_server
+```
+
+We won't add any external dependencies. Everything we need lives in `std::net` and `std::io`.
+
+---
+
+## Listening for TCP Connections
+
+The `TcpListener` type binds to a local address and port and listens for incoming TCP connections. Each accepted connection produces a `TcpStream` that we can read from and write to.
+
+```rust
+use std::net::TcpListener;
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    println!("Listening on http://127.0.0.1:7878");
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        println!("Connection established: {:?}", stream.peer_addr().unwrap());
+    }
+}
+```
+
+`listener.incoming()` returns an iterator that yields `Result<TcpStream, _>` for every incoming connection attempt. The loop runs forever—we'll add a shutdown mechanism in the next chapter.
+
+---
+
+## Reading an HTTP Request
+
+HTTP/1.1 is a text-based protocol. A request looks like:
+
+```
+GET / HTTP/1.1\r\n
+Host: 127.0.0.1:7878\r\n
+User-Agent: curl/7.88.0\r\n
+Accept: */*\r\n
+\r\n
+```
+
+The headers end with a blank line (`\r\n`). We use `BufReader` to read the stream line by line and collect lines until we hit the empty terminator:
+
+```rust
+use std::{
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        handle_connection(stream);
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect();
+
+    println!("Request: {:#?}", http_request);
+
+    let response = "HTTP/1.1 200 OK\r\n\r\n";
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+`BufReader::lines()` strips the `\r\n` endings, so the terminating blank line arrives as an empty `String`. `take_while(|line| !line.is_empty())` stops collecting at that point.
+
+---
+
+## Sending a Proper HTTP Response
+
+A valid HTTP response has this structure:
+
+```
+HTTP/1.1 200 OK\r\n
+Content-Length: 13\r\n
+Content-Type: text/plain\r\n
+\r\n
+Hello, world!
+```
+
+Let's serve an HTML page. First, create `hello.html` in the project root:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Hello from Rust!</title></head>
+  <body>
+    <h1>Hello!</h1>
+    <p>This page is served by a hand-rolled Rust web server.</p>
+  </body>
+</html>
+```
+
+Now update `handle_connection` to read the file and respond with it:
+
+```rust
+use std::{
+    fs,
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    println!("Serving on http://127.0.0.1:7878");
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        handle_connection(stream);
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
+
+    let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
+        ("HTTP/1.1 200 OK", "hello.html")
+    } else {
+        ("HTTP/1.1 404 NOT FOUND", "404.html")
+    };
+
+    let contents = fs::read_to_string(filename).unwrap_or_else(|_| {
+        String::from("<html><body><h1>404 Not Found</h1></body></html>")
+    });
+
+    let length = contents.len();
+    let response = format!(
+        "{status_line}\r\nContent-Length: {length}\r\nContent-Type: text/html\r\n\r\n{contents}"
+    );
+
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+Run the server with `cargo run`, then open `http://127.0.0.1:7878` in your browser. You should see your HTML page.
+
+---
+
+## Understanding the Limitation: Single-Threaded
+
+Our server handles one connection *at a time*. While `handle_connection` is running, no new connections are accepted. You can demonstrate this by simulating a slow request:
+
+```rust
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
+
+    if request_line.contains("/sleep") {
+        // Simulate a slow operation
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+
+    let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+If you open `/sleep` in one tab and immediately open `/` in another, the second request will block until the first finishes. This is the core problem that a thread pool solves in the next chapter.
+
+---
+
+## Complete Single-Threaded Server
+
+Here is the full server in one file:
+
+```rust
+use std::{
+    fs,
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    println!("Serving on http://127.0.0.1:7878 — press Ctrl+C to stop");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => handle_connection(stream),
+            Err(e) => eprintln!("Connection failed: {}", e),
+        }
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+
+    // Collect all request headers
+    let request: Vec<String> = buf_reader
+        .lines()
+        .map(|l| l.unwrap())
+        .take_while(|l| !l.is_empty())
+        .collect();
+
+    if request.is_empty() {
+        return;
+    }
+
+    let request_line = &request[0];
+    println!("← {}", request_line);
+
+    let (status, body) = match request_line.as_str() {
+        "GET / HTTP/1.1" => (
+            "200 OK",
+            fs::read_to_string("hello.html")
+                .unwrap_or_else(|_| "<h1>Hello from Rust!</h1>".to_string()),
+        ),
+        _ => (
+            "404 NOT FOUND",
+            "<html><body><h1>404 – Not Found</h1></body></html>".to_string(),
+        ),
+    };
+
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+
+    if let Err(e) = stream.write_all(response.as_bytes()) {
+        eprintln!("Failed to send response: {}", e);
+    }
+}
+```
+
+This is a solid foundation. In the next chapter, we extend it with a thread pool so it can handle multiple simultaneous connections without blocking.

@@ -1,0 +1,170 @@
+---
+title: "Treating Smart Pointers Like References with the Deref Trait"
+sidebarTitle: "Deref Trait"
+description: "Implement the Deref trait to use smart pointers like regular references. Understand deref coercion and how Rust automatically dereferences smart pointers."
+mode: "wide"
+---
+
+The `Deref` trait is what allows smart pointers to behave like ordinary references. By implementing `Deref`, a type can be used with the `*` dereference operator, and Rust's **deref coercion** feature can automatically insert dereferences to make types match in function calls. Without `Deref`, smart pointers would be clumsy — you'd have to manually unwrap them everywhere. With it, they become nearly transparent.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Following a Regular Reference
+
+Start with raw references to build intuition:
+
+```rust
+fn main() {
+    let x = 5;
+    let y = &x;         // y is a reference to x
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);  // dereference y to get the value
+}
+```
+
+`*y` follows the reference to get `5`. Without `*`, comparing `y` (a `&i32`) to `5` (an `i32`) would fail to compile.
+
+## Following a `Box<T>` Like a Reference
+
+`Box<T>` implements `Deref`, so the same `*` operator works:
+
+```rust
+fn main() {
+    let x = 5;
+    let y = Box::new(x);
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);  // works the same way
+}
+```
+
+## Defining a Custom Smart Pointer
+
+Let's implement a minimal `MyBox<T>` to understand how `Deref` works:
+
+```rust
+struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+```
+
+Without `Deref`, `*my_box` doesn't compile. Let's add it:
+
+```rust
+use std::ops::Deref;
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0    // returns a reference to the inner value
+    }
+}
+```
+
+Now `*y` works. Under the hood, Rust transforms `*y` into `*(y.deref())`:
+
+```rust
+fn main() {
+    let x = 5;
+    let y = MyBox::new(x);
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);  // compiled as *(y.deref()), i.e., *(&y.0)
+}
+```
+
+`deref` returns a `&T`, not a `T`, so the outer `*` performs the final dereference. This prevents the value from being moved out of the smart pointer.
+
+## Deref Coercion
+
+Deref coercion is a convenience Rust applies automatically when passing arguments to functions or methods. It inserts as many `*` (followed by `deref()`) calls as needed to make the types match:
+
+```rust
+fn hello(name: &str) {
+    println!("Hello, {name}!");
+}
+
+fn main() {
+    let m = MyBox::new(String::from("Rust"));
+    hello(&m);
+    // Rust sees: &MyBox<String> → &String (via MyBox::deref)
+    //                           → &str    (via String::deref)
+    // Both coercions happen at compile time with no runtime cost.
+}
+```
+
+Without deref coercion, you'd need to write:
+
+```rust
+hello(&(*m)[..]);  // manually deref MyBox and slice the String
+```
+
+## The Deref Coercion Rules
+
+Rust applies deref coercion in three situations:
+
+| From | To |
+|------|----|
+| `&T` where `T: Deref<Target=U>` | `&U` |
+| `&mut T` where `T: DerefMut<Target=U>` | `&mut U` |
+| `&mut T` where `T: Deref<Target=U>` | `&U` |
+
+Note: the compiler will coerce from `&mut` to `&` (shared reference), but **never** from `&` to `&mut` — that would allow creating a mutable alias from an immutable one, violating Rust's aliasing rules.
+
+## `DerefMut` for Mutable Dereference
+
+To support `*x = value` (mutable dereference), implement `DerefMut`:
+
+```rust
+use std::ops::DerefMut;
+
+impl<T> DerefMut for MyBox<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+fn main() {
+    let mut b = MyBox::new(5);
+    *b = 10;
+    assert_eq!(10, *b);
+}
+```
+
+## Coercion Chain Example
+
+The full standard library deref chain for `Box<String>`:
+
+```
+Box<String>   →  (Box::deref)   →  String
+String        →  (String::deref) → str
+```
+
+So a `&Box<String>` can be used anywhere a `&str` is expected, with two automatic coercions applied:
+
+```rust
+fn print(s: &str) { println!("{s}"); }
+
+fn main() {
+    let s = Box::new(String::from("hello"));
+    print(&s);  // &Box<String> → &String → &str
+}
+```
+
+## Why Deref Coercion Matters
+
+Without deref coercion, every API that accepts `&str` would need to accept `&String`, `&Box<String>`, `&Arc<String>`, etc. separately. Instead, library authors write functions with `&str` parameters and let the coercion handle every wrapped form automatically. This is why you can pass a `&String` to any function expecting `&str` — `String` implements `Deref<Target = str>`.
+
+## Summary
+
+- Implement `Deref` to enable `*` on a custom type: `fn deref(&self) -> &Self::Target`.
+- `*y` is sugar for `*(y.deref())`.
+- Deref coercion automatically chains `.deref()` calls to satisfy function parameter types.
+- Coercion works from `&T` to `&U` and from `&mut T` to `&mut U`; never from `&` to `&mut`.
+- This mechanism makes `Box<T>`, `Rc<T>`, `Arc<T>`, and custom smart pointers transparent in most usage contexts.

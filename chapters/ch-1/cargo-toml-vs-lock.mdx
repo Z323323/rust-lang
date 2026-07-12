@@ -1,0 +1,183 @@
+---
+title: "Cargo.toml vs Cargo.lock: Manifests and Reproducible Builds"
+sidebarTitle: "Cargo.toml vs Lock"
+description: "Understand the difference between Cargo.toml (manifest) and Cargo.lock (lock file), and how Cargo ensures reproducible builds across machines."
+mode: "wide"
+---
+
+In the 'Hello, Cargo!' section, alongside the concept of an **edition**, we also introduced the **Cargo.lock** file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between Cargo.toml and Cargo.lock, as well as the underlying reasons for having a lock file in the first place.
+
+Returning to the `hello_cargo` project, there is a specific detail that was not shown at the end of the 'Hello, Cargo!' section. By executing the command
+
+<CodeGroup>
+```bash Command 1.6.1
+cd ~/rust_projects/hello_cargo &&
+# Output 1.6.1
+ls
+```
+```text Output 1.6.1
+Cargo.lock  Cargo.toml  src  target
+```
+</CodeGroup>
+
+you will notice that, alongside the previously discussed src and target directories, the Cargo.lock file is now present. This file did not exist prior to executing `cargo build` (or `cargo run`, which automatically runs a build behind the scenes).
+
+>Cargo.toml and Cargo.lock serve two different purposes. Before we talk about them, here's a summary:
+
+>- Cargo.toml is about describing your dependencies in a broad sense, and is written by you.
+>- Cargo.lock contains exact information about your dependencies. It is maintained by Cargo and should not be manually edited.
+
+>Cargo.toml is a **manifest** file in which you can specify a bunch of different **metadata** about your **package**. For example, you can say that you depend on another package.
+
+Execute the following command.
+
+```bash Command 1.6.2
+gedit Cargo.toml
+```
+
+Next, add the `regex` package under the `[dependencies]` section as shown below, and save.
+
+```toml
+[dependencies]
+regex = { git = "https://github.com/rust-lang/regex.git" }
+```
+
+>This package has a single dependency, on the `regex` library. **It states in this case to rely on a particular Git repository that lives on GitHub. Since you haven't specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.**
+
+>Sound good? Well, there's one problem: **If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.** This would be bad because we want reproducible builds.
+
+>You could fix this problem by defining a specific `rev` value in our Cargo.toml, so Cargo could know exactly which **revision** to use when building the package.
+
+```toml
+[dependencies]
+regex = { git = "https://github.com/rust-lang/regex.git", rev = "9f9f693" }
+```
+
+>Now our builds will be the same. But there's a big drawback: **now you have to manually think about SHA-1s every time you want to update our library**. This is both tedious and error prone.
+
+>**Enter the Cargo.lock. Because of its existence, you don't need to manually keep track of the exact revisions: Cargo will do it for you.** When you have a manifest like this:
+
+```toml ~/rust_projects/hello_cargo/Cargo.toml
+[package]
+name = "hello_cargo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+regex = { git = "https://github.com/rust-lang/regex.git" }
+```
+
+>**Cargo will take the latest commit and write that information out into your Cargo.lock when you build for the first time.**
+
+<CodeGroup>
+```bash Command 1.6.3
+# Output 1.6.3.1
+cargo build &&
+# Output 1.6.3.2
+cat Cargo.lock
+```
+```text Output 1.6.3.1
+    Updating git repository `https://github.com/rust-lang/regex.git`
+    Updating crates.io index
+     Locking 5 packages to latest Rust 1.96.0 compatible versions
+      Adding aho-corasick v1.1.4
+      Adding memchr v2.8.3
+      Adding regex v1.12.4 (https://github.com/rust-lang/regex.git#b9d2cf72)
+      Adding regex-automata v0.4.14 (https://github.com/rust-lang/regex.git#b9d2cf72)
+      Adding regex-syntax v0.8.11 (https://github.com/rust-lang/regex.git#b9d2cf72)
+  Downloaded aho-corasick v1.1.4
+  Downloaded memchr v2.8.3
+  Downloaded 2 crates (276.5KiB) in 0.30s
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11 (https://github.com/rust-lang/regex.git#b9d2cf72)
+   Compiling aho-corasick v1.1.4
+   Compiling regex-automata v0.4.14 (https://github.com/rust-lang/regex.git#b9d2cf72)
+   Compiling regex v1.12.4 (https://github.com/rust-lang/regex.git#b9d2cf72)
+   Compiling hello_cargo v0.1.0 (/var/home/z561/rust_projects/hello_cargo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.14s
+```
+```toml Output 1.6.3.2
+# This file is automatically @generated by Cargo.
+# It is not intended for manual editing.
+version = 4
+
+[[package]]
+name = "aho-corasick"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "hello_cargo"
+version = "0.1.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
+name = "memchr"
+version = "2.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "regex"
+version = "1.12.4"
+source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d2292c4d3e2dd3"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.14"
+source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d2292c4d3e2dd3"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.11"
+source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d2292c4d3e2dd3"
+```
+</CodeGroup>
+
+>You can see that there's a lot more information here, including the exact **revision** you used to build. **Now when you give your package to someone else, they'll use the exact same SHA, even though you didn't specify it in your Cargo.toml.**
+
+>**When you're ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.**
+
+<Columns cols={2}>
+  <Column>
+```bash Command 1.6.4
+# Updates all dependencies
+cargo update
+```
+  </Column>
+  <Column>
+```bash Command 1.6.5
+# Updates just "regex"
+cargo update regex
+```
+  </Column>
+</Columns>
+
+>**This will write out a new Cargo.lock with the new version information.** Note that the argument to `cargo update` is actually a **Package ID Specification** and `regex` is just a short specification.
+
+We will revisit how to configure your Cargo.toml file to **permit only specific updates** for the crates listed under `[dependencies]` in the 'Naming Conventions' section.
+
+## Extra Information about Packages
+
+While you can pull dependencies directly from a Git repository—where specific code states are fetched from commit history—modern Cargo primarily relies on its package registry, [[crates.io](https://crates.io)], which operates on a completely different philosophy.
+
+Unlike a Git repository, where authors can rewrite history or delete old commits (e.g., using `git push --force`), every package published to [[crates.io](https://crates.io)] is **strictly immutable**. Once a specific version is uploaded as a compressed archive, it cannot be deleted or modified. This guarantees that if your project compiles today, it will always compile in the future, as the underlying code on the server is permanent.
+
+Under the hood, Cargo uploads your packages as compressed archives to [[crates.io](https://crates.io)]. When you download a dependency, Cargo retrieves these archives, caches them inside ~/.cargo/registry/cache, and extracts their contents into ~/.cargo/registry/src (which is exactly where `rustc` looks for the files to compile your project).

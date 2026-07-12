@@ -1,0 +1,155 @@
+---
+title: "Shared-State Concurrency with Mutex<T> and Arc<T> in Rust"
+sidebarTitle: "Shared State"
+description: "Share mutable state between Rust threads safely using Mutex<T> wrapped in Arc<T>. Understand lock(), MutexGuard, and deadlock avoidance."
+mode: "wide"
+---
+
+While message passing is elegant, some problems genuinely require multiple threads to read and write a shared piece of data. Rust enables this safely through `Mutex<T>`, a mutual-exclusion primitive that ensures only one thread accesses the inner data at a time, and `Arc<T>`, an atomically reference-counted smart pointer that lets multiple threads own the same allocation. Together, the `Arc<Mutex<T>>` pattern is the idiomatic Rust solution for shared mutable state.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## What Is a Mutex?
+
+A *mutex* (mutual exclusion) guards a value: before a thread can access the data, it must acquire the mutex's *lock*. When it is done, it releases the lock so another thread can acquire it. Rust models this with the type `Mutex<T>`, where `T` is the guarded data. The lock is acquired by calling `.lock()`, which returns a `LockResult<MutexGuard<T>>`.
+
+## Basic `Mutex<T>` in a Single Thread
+
+Although single-threaded use is unusual, it illustrates the API clearly:
+
+```rust
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(5);
+
+    {
+        // Acquire the lock; blocks if another thread holds it.
+        let mut num = m.lock().unwrap();
+        *num = 6;
+        // `MutexGuard` is dropped here — lock released automatically.
+    }
+
+    println!("m = {m:?}");  // m = Mutex { data: 6 }
+}
+```
+
+`MutexGuard<T>` implements `Deref` (and `DerefMut`), so you interact with the inner value through normal dereference syntax. Critically, it also implements `Drop`: when the guard goes out of scope, the lock is released automatically — no explicit `unlock()` call is needed and none is possible. This design makes it impossible to forget to release the lock.
+
+## Why You Can't Use `Rc<Mutex<T>>` Across Threads
+
+`Rc<T>` is a reference-counted pointer, but its reference count is not atomic — it is not safe to modify from multiple threads. Attempting to share `Rc<Mutex<T>>` across threads will fail to compile because `Rc<T>` does not implement the `Send` trait.
+
+```rust
+// This does NOT compile:
+use std::rc::Rc;
+use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let counter = Rc::new(Mutex::new(0));
+    let c = Rc::clone(&counter);
+    thread::spawn(move || {
+        // error[E0277]: `Rc<Mutex<i32>>` cannot be sent between threads safely
+        *c.lock().unwrap() += 1;
+    });
+}
+```
+
+## The Solution: `Arc<Mutex<T>>`
+
+`Arc<T>` (*Atomically Reference Counted*) is the thread-safe sibling of `Rc<T>`. Its reference-count operations use atomic CPU instructions, making it safe to clone and send across threads. Wrap your `Mutex<T>` in an `Arc<T>` and clone the `Arc` for each thread.
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+
+    for _ in 0..10 {
+        let counter = Arc::clone(&counter); // Bump the reference count atomically.
+        let handle = thread::spawn(move || {
+            let mut num = counter.lock().unwrap();
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    println!("Result: {}", *counter.lock().unwrap()); // Result: 10
+}
+```
+
+Each of the 10 threads receives its own clone of the `Arc`, but all clones point to the same `Mutex<i32>`. Only one thread can hold the lock at a time, so each increment is guaranteed to be atomic at the application level.
+
+## `MutexGuard` and RAII Unlocking
+
+The RAII (Resource Acquisition Is Initialization) unlock pattern is crucial for correctness. Consider a function that might return early:
+
+```rust
+use std::sync::{Arc, Mutex};
+
+fn increment_if_small(counter: &Arc<Mutex<i32>>, threshold: i32) -> bool {
+    let mut guard = counter.lock().unwrap();
+    if *guard >= threshold {
+        return false; // Guard is dropped here — lock released before returning.
+    }
+    *guard += 1;
+    true // Guard is dropped here — lock released.
+}
+```
+
+No matter which path the function takes, the `MutexGuard` is dropped when it goes out of scope, releasing the lock. If Rust required a manual `unlock()` call, forgetting it on the early-return path would cause a deadlock.
+
+## Deadlock Avoidance
+
+A *deadlock* occurs when thread A holds lock X and waits for lock Y, while thread B holds lock Y and waits for lock X — both block forever. Rust's type system cannot prevent deadlocks, but you can avoid them by:
+
+1. **Always acquiring locks in the same order** across all threads.
+2. **Keeping critical sections short** to minimise lock-hold time.
+3. **Avoiding calling unknown code while holding a lock** (callbacks, trait methods, etc. might try to re-acquire the same lock).
+
+```rust
+// Potential deadlock: thread 1 locks A then B, thread 2 locks B then A.
+// Safe version: both threads always lock A before B.
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let lock_a = Arc::new(Mutex::new(0u32));
+    let lock_b = Arc::new(Mutex::new(0u32));
+
+    let (a1, b1) = (Arc::clone(&lock_a), Arc::clone(&lock_b));
+    let h1 = thread::spawn(move || {
+        let _ga = a1.lock().unwrap(); // Always A first
+        let _gb = b1.lock().unwrap();
+        println!("Thread 1 holds both locks");
+    });
+
+    let (a2, b2) = (Arc::clone(&lock_a), Arc::clone(&lock_b));
+    let h2 = thread::spawn(move || {
+        let _ga = a2.lock().unwrap(); // Always A first — safe!
+        let _gb = b2.lock().unwrap();
+        println!("Thread 2 holds both locks");
+    });
+
+    h1.join().unwrap();
+    h2.join().unwrap();
+}
+```
+
+## `Mutex<T>` vs Channels
+
+| Concern | `Mutex<T>` + `Arc<T>` | Channels (`mpsc`) |
+|---|---|---|
+| Data access pattern | Shared in-place mutation | Ownership transfer |
+| Risk | Deadlock if used carelessly | No shared memory |
+| Best for | Shared counters, caches, state | Pipelines, task queues |
+| Composability | Must manage lock ordering | Naturally composable |
+
+Both approaches are valid; many real programs use a combination. `Mutex<T>` is the right choice when threads genuinely need to mutate the same location without copying data. Channels are preferred when data naturally flows from one stage to another.

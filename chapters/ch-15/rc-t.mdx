@@ -1,0 +1,152 @@
+---
+title: "Rc<T>: Reference Counted Smart Pointer for Shared Ownership"
+sidebarTitle: "Rc<T>"
+description: "Share ownership of heap data in Rust with Rc<T>. Understand reference counting, when to use Rc over Box, and Rc::clone vs deep cloning."
+mode: "wide"
+---
+
+Rust's ownership model says every value has exactly one owner. But sometimes you genuinely need multiple parts of a program to share ownership of the same data — a graph where nodes reference each other, a configuration object shared across subsystems, or a cons list with shared tails. `Rc<T>` (Reference Counted) enables this by tracking how many owners a value has and freeing the memory only when that count reaches zero.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## When to Use `Rc<T>`
+
+Use `Rc<T>` when:
+- Multiple parts of your program need to **read** (but not mutate) the same heap-allocated value.
+- You can't determine at compile time which part will finish using the value last.
+- You are in a **single-threaded** context (for multi-threading, use `Arc<T>`).
+
+## Creating an `Rc<T>`
+
+```rust
+use std::rc::Rc;
+
+fn main() {
+    let a = Rc::new(String::from("hello"));
+    println!("Reference count: {}", Rc::strong_count(&a)); // 1
+
+    let b = Rc::clone(&a);  // increment the count; b shares ownership with a
+    println!("Reference count after clone: {}", Rc::strong_count(&a)); // 2
+
+    {
+        let c = Rc::clone(&a);
+        println!("Reference count inside inner block: {}", Rc::strong_count(&a)); // 3
+    }
+    // c dropped here; count goes back to 2
+
+    println!("Reference count after inner block: {}", Rc::strong_count(&a)); // 2
+}
+// a and b dropped; count reaches 0; String is freed
+```
+
+## `Rc::clone` vs `.clone()`
+
+`Rc::clone(&a)` is **not** a deep copy. It only increments the reference count and returns a new `Rc<T>` pointing to the same allocation. This is O(1) and very cheap.
+
+Calling `a.clone()` on an `Rc<T>` does the same thing (it delegates to `Rc::clone` internally). But by convention, writing `Rc::clone(&a)` makes it visually clear that you're doing reference counting, not deep-copying data.
+
+```rust
+// Idiomatic — makes intent clear
+let b = Rc::clone(&a);
+
+// Works but visually ambiguous
+let b = a.clone();
+```
+
+## Sharing a Cons List
+
+A classic example: two lists that share a common tail.
+
+```rust
+use std::rc::Rc;
+
+#[derive(Debug)]
+enum List {
+    Cons(i32, Rc<List>),
+    Nil,
+}
+
+use List::{Cons, Nil};
+
+fn main() {
+    let shared_tail = Rc::new(Cons(10, Rc::new(Cons(20, Rc::new(Nil)))));
+    //                       count = 1
+
+    let list_a = Cons(3, Rc::clone(&shared_tail));
+    // count = 2
+
+    let list_b = Cons(7, Rc::clone(&shared_tail));
+    // count = 3
+
+    println!("shared_tail count = {}", Rc::strong_count(&shared_tail)); // 3
+    println!("list_a = {:?}", list_a);
+    println!("list_b = {:?}", list_b);
+}
+// list_b dropped: count = 2
+// list_a dropped: count = 1
+// shared_tail dropped: count = 0 → memory freed
+```
+
+With `Box<T>`, both `list_a` and `list_b` would need their own copies of the tail — wasteful. `Rc<T>` eliminates that duplication.
+
+## `Rc::strong_count`
+
+`Rc::strong_count(&rc)` returns the current number of strong references:
+
+```rust
+let x = Rc::new(42);
+let y = Rc::clone(&x);
+let z = Rc::clone(&x);
+assert_eq!(Rc::strong_count(&x), 3);
+drop(z);
+assert_eq!(Rc::strong_count(&x), 2);
+```
+
+When the count reaches 0, the inner value is dropped and the heap allocation is freed.
+
+## `Rc<T>` is Immutable
+
+`Rc<T>` only gives you **shared, immutable** access to the inner value. To share mutable access, you combine `Rc<T>` with `RefCell<T>` (covered in the next section):
+
+```rust
+let a: Rc<Vec<i32>> = Rc::new(vec![1, 2, 3]);
+// a.push(4);  // ERROR: cannot borrow as mutable through Rc
+let _n = a[0]; // OK: shared read access
+```
+
+## Single-Threaded Only
+
+`Rc<T>` is not `Send` or `Sync`, meaning it cannot be transferred or shared across threads. The reference count is a plain integer — not an atomic one — so concurrent increments/decrements would be a data race.
+
+For multi-threaded shared ownership, use `Arc<T>` (Atomic Reference Counted) from the standard library. The API is identical; just replace `Rc` with `Arc` and `std::rc` with `std::sync`:
+
+```rust
+use std::sync::Arc;
+let shared = Arc::new(vec![1, 2, 3]);
+let clone = Arc::clone(&shared);
+std::thread::spawn(move || println!("{:?}", clone)).join().unwrap();
+```
+
+## How `Rc<T>` Works Internally
+
+An `Rc<T>` allocation looks like this in memory:
+
+```
+Stack:    [ ptr ]  ← Rc<T> value (one pointer)
+Heap:     [ strong_count | weak_count | T ]
+```
+
+- `strong_count`: how many `Rc<T>` instances point here.
+- `weak_count`: how many `Weak<T>` instances point here (see the reference cycles section).
+- `T`: the actual data.
+
+When `strong_count` reaches 0, `T` is dropped. The heap block is freed when both counts reach 0.
+
+## Summary
+
+- `Rc<T>` enables **shared ownership** of immutable data in a single-threaded program.
+- `Rc::clone(&rc)` increments the reference count cheaply (O(1), no data copy).
+- `Rc::strong_count(&rc)` returns the current owner count.
+- The inner value is freed when the last `Rc` pointing to it is dropped.
+- `Rc<T>` is not thread-safe — use `Arc<T>` across threads.
+- To combine shared ownership with mutation, use `Rc<RefCell<T>>`.

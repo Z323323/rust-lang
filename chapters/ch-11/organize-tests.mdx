@@ -1,0 +1,199 @@
+---
+title: "Organizing Tests in Rust: Unit, Integration, and Doc Tests"
+sidebarTitle: "Test Organization"
+description: "Structure Rust tests as unit tests, integration tests in the tests/ directory, and documentation tests. Understand what each type tests and when to use them."
+mode: "wide"
+---
+
+The Rust community organizes tests into three distinct categories: *unit tests*, which test small units of code in isolation (including private functions); *integration tests*, which test your library's public API from the outside as a user would; and *documentation tests*, which ensure your code examples in doc comments actually compile and run correctly. Understanding when and how to use each type gives your project a thorough, layered safety net.
+
+<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+
+## Unit Tests
+
+Unit tests live in the same source file as the code they test, inside a module conventionally named `tests`, gated by `#[cfg(test)]`. This placement is deliberate: it lets unit tests access private functions that wouldn't be visible to external code.
+
+### Testing Private Functions
+
+```rust
+// src/lib.rs
+
+pub fn add_two(x: i32) -> i32 {
+    internal_adder(x, 2)
+}
+
+fn internal_adder(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // brings internal_adder into scope
+
+    #[test]
+    fn test_internal_adder() {
+        // Testing a private function is perfectly valid in Rust
+        assert_eq!(internal_adder(3, 4), 7);
+    }
+
+    #[test]
+    fn test_add_two() {
+        assert_eq!(add_two(5), 7);
+    }
+}
+```
+
+The `#[cfg(test)]` attribute ensures the test module and its dependencies are only compiled when you run `cargo test`, keeping production binaries lean.
+
+### Typical Project Structure with Unit Tests
+
+```
+my_library/
+├── Cargo.toml
+└── src/
+    ├── lib.rs          # Unit tests at the bottom in #[cfg(test)] mod
+    ├── parser.rs       # Each module can have its own #[cfg(test)] section
+    └── validator.rs
+```
+
+## Integration Tests
+
+Integration tests live in a top-level `tests/` directory (a sibling of `src/`). Each file in `tests/` is compiled as a separate crate that can only access your library's *public* API — exactly as an external consumer would. There is no `#[cfg(test)]` needed; every file in `tests/` is automatically treated as a test target.
+
+### Directory Structure
+
+```
+my_library/
+├── Cargo.toml
+├── src/
+│   └── lib.rs
+└── tests/
+    ├── integration_test.rs
+    └── common/
+        └── mod.rs          # Shared setup helpers (not a test file itself)
+```
+
+### A Basic Integration Test
+
+```rust
+// tests/integration_test.rs
+use my_library::add_two; // must use the public API
+
+#[test]
+fn it_adds_two() {
+    assert_eq!(add_two(10), 12);
+}
+```
+
+Run only integration tests with:
+
+```bash
+cargo test --test integration_test
+```
+
+### Sharing Setup Code Between Integration Tests
+
+If multiple integration test files need common helpers (e.g., database setup), place them in `tests/common/mod.rs` (the old module style):
+
+```rust
+// tests/common/mod.rs
+pub fn setup() {
+    // Initialize shared resources, test database, etc.
+    println!("Running test setup...");
+}
+```
+
+```rust
+// tests/integration_test.rs
+mod common;
+
+#[test]
+fn test_with_setup() {
+    common::setup();
+    // ... rest of test
+}
+```
+
+Using `tests/common/mod.rs` (not `tests/common.rs`) prevents Rust from treating `common` itself as an integration test file.
+
+### Integration Tests for Binary Crates
+
+If your project is a binary crate (has only `src/main.rs` and no `src/lib.rs`), you cannot create integration tests that import from `src/main.rs` the same way. The common solution is to move logic into `src/lib.rs` and keep `src/main.rs` as a thin wrapper:
+
+```rust
+// src/lib.rs — testable logic lives here
+pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
+    // ...
+    Ok(())
+}
+
+// src/main.rs — thin entry point
+fn main() {
+    // parse args, call lib::run(...)
+}
+```
+
+## Documentation Tests
+
+Rust will automatically run code examples in doc comments as tests. This guarantees that your documentation examples are always up to date and correct:
+
+````rust
+/// Adds two numbers together.
+///
+/// # Examples
+///
+/// ```
+/// let result = my_library::add_two(3);
+/// assert_eq!(result, 5);
+/// ```
+pub fn add_two(x: i32) -> i32 {
+    x + 2
+}
+````
+
+Running `cargo test` executes this code block as a test. If the assertion fails or the code doesn't compile, the test fails. This is one of Rust's killer features for library authors: stale examples become failing tests.
+
+### Hiding Lines in Doc Examples
+
+Prefix lines with `#` to hide them from the rendered docs but include them when running the test:
+
+````rust
+/// ```
+/// # use my_library::Config;
+/// # let cfg = Config::default();
+/// let value = cfg.get("key");
+/// assert!(value.is_none());
+/// ```
+````
+
+The `# use my_library::Config;` line is needed for the test to compile but would clutter the documentation if shown.
+
+### Marking Examples That Should Panic
+
+````rust
+/// ```should_panic
+/// my_library::divide(1, 0); // This will panic
+/// ```
+````
+
+### Marking Examples That Don't Need to Compile
+
+````rust
+/// ```no_run
+/// // This example shows the API but would require a real server to run
+/// let response = client.get("http://example.com").send()?;
+/// ```
+````
+
+## Comparing the Three Types
+
+| | Unit Tests | Integration Tests | Doc Tests |
+|---|---|---|---|
+| **Location** | `src/` (same file) | `tests/` | Doc comments (`///`) |
+| **Access** | Public and private | Public only | Public only |
+| **`#[cfg(test)]`** | Required | Not needed | Not needed |
+| **Isolation** | Single module | Whole crate as a user | Per-example |
+| **Purpose** | Logic correctness | API surface correctness | Example correctness |
+| **Run with** | `cargo test --lib` | `cargo test --test <name>` | `cargo test --doc` |
+
+A well-tested Rust project uses all three: unit tests for internal logic, integration tests for verifying the public API as a whole, and doc tests to keep examples in documentation accurate.
