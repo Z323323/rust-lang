@@ -86,9 +86,9 @@ You can picture nested scopes like the layers of an onion:
 ... -> { 3rd { 2nd { 1st } 2nd } 3rd } -> ...
 ```
 
-**The innermost scope (marked as `1st`) is the first to disappear when its block ends. Then the `2nd` one disappears, followed by the `3rd`, and so on. This means that the variables within each of the scopes shown will cease to exist in the exact same order.**
+The innermost scope (marked as `1st`) is the first to disappear when its block ends. Then the `2nd` one disappears, followed by the `3rd`, and so on. **This means that the variables within each of the scopes shown will cease to exist in the exact same order.**
 
-As we saw earlier, **a simple inner scope can see variables from its outer scopes**. **This is partly because they are still 'alive'. However, the reverse is not true: outer scopes cannot see inside inner scopes.**
+As we saw earlier, **a simple inner scope can see variables from its outer scopes**. This is partly because they are still 'alive'. However, **the reverse is not true: outer scopes cannot see inside inner scopes**.
 
 If you think about it, this makes perfect sense. First, an outer scope cannot 'capture' values from an inner scope because **when the outer scope starts running, the inner variables haven't even been initialized yet**. Furthermore, **once the inner scope finishes executing, its variables are dropped and cease to exist**. Allowing the outer scope to access them afterward would mean referencing data that is no longer there—a scenario that Rust's safety rules strictly forbid!
 
