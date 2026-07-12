@@ -1,8 +1,7 @@
 ---
-title: "Useful Rust Dev Tools: rustfmt, rustfix, and Clippy"
-sidebarTitle: "Dev Tools"
-description: "Overview of essential Rust development tools included with rustup: rustfmt for formatting, rustfix for auto-fixing warnings, and Clippy for linting."
+title: "Appendix D: Useful Development Tools"
 mode: "wide"
+sidebarTitle: "1.9 - Appendix D: Useful Development Tools"
 ---
 
 >In this appendix, we talk about some useful development tools that the Rust project provides.
@@ -21,7 +20,7 @@ cargo fmt
 
 ## Fix Your Code with `rustfix`
 
->The `rustfix` tool is included with Rust installations and can automatically fix compiler warnings that have a clear way to correct the problem that's likely what you want. For example, consider this code:
+>The `rustfix` tool is included with Rust installations and can automatically fix compiler warnings that have a clear way to correct the problem that’s likely what you want. For example, consider this code:
 
 ```rust
 fn main() {
@@ -30,7 +29,7 @@ fn main() {
 }
 ```
 
->Here, we're defining the variable `x` as mutable, but we never actually mutate it. Rust warns us about that:
+>Here, we’re defining the variable `x` as mutable, but we never actually mutate it. Rust warns us about that:
 
 <CodeGroup>
 ```bash Command 1.9.2
@@ -77,7 +76,7 @@ fn main() {
 
 >The Clippy tool is a collection of lints to analyze your code so that you can catch common mistakes and improve your Rust code. Clippy is included with standard Rust installations.
 
->To run Clippy's lints on any Cargo project, enter the following:
+>To run Clippy’s lints on any Cargo project, enter the following:
 
 ```bash Command 1.9.4
 cargo clippy
@@ -109,7 +108,7 @@ error: approximate value of `f{32, 64}::consts::PI` found
 
 >This error lets you know that Rust already has a more precise `PI` constant defined, and that your program would be more correct if you used the constant instead. You would then change your code to use the `PI` constant.
 
->The following code doesn't result in any errors or warnings from Clippy:
+>The following code doesn’t result in any errors or warnings from Clippy:
 
 ```rust
 fn main() {

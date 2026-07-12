@@ -1,8 +1,7 @@
 ---
-title: "Cargo.toml vs Cargo.lock: Manifests and Reproducible Builds"
-sidebarTitle: "Cargo.toml vs Lock"
-description: "Understand the difference between Cargo.toml (manifest) and Cargo.lock (lock file), and how Cargo ensures reproducible builds across machines."
+title: "Cargo.toml vs Cargo.lock"
 mode: "wide"
+sidebarTitle: "1.6 - Cargo.toml vs Cargo.lock"
 ---
 
 In the 'Hello, Cargo!' section, alongside the concept of an **edition**, we also introduced the **Cargo.lock** file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between Cargo.toml and Cargo.lock, as well as the underlying reasons for having a lock file in the first place.
@@ -22,7 +21,7 @@ Cargo.lock  Cargo.toml  src  target
 
 you will notice that, alongside the previously discussed src and target directories, the Cargo.lock file is now present. This file did not exist prior to executing `cargo build` (or `cargo run`, which automatically runs a build behind the scenes).
 
->Cargo.toml and Cargo.lock serve two different purposes. Before we talk about them, here's a summary:
+>Cargo.toml and Cargo.lock serve two different purposes. Before we talk about them, here’s a summary:
 
 >- Cargo.toml is about describing your dependencies in a broad sense, and is written by you.
 >- Cargo.lock contains exact information about your dependencies. It is maintained by Cargo and should not be manually edited.
@@ -42,9 +41,9 @@ Next, add the `regex` package under the `[dependencies]` section as shown below,
 regex = { git = "https://github.com/rust-lang/regex.git" }
 ```
 
->This package has a single dependency, on the `regex` library. **It states in this case to rely on a particular Git repository that lives on GitHub. Since you haven't specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.**
+>This package has a single dependency, on the `regex` library. **It states in this case to rely on a particular Git repository that lives on GitHub. Since you haven’t specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.**
 
->Sound good? Well, there's one problem: **If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.** This would be bad because we want reproducible builds.
+>Sound good? Well, there’s one problem: **If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.** This would be bad because we want reproducible builds.
 
 >You could fix this problem by defining a specific `rev` value in our Cargo.toml, so Cargo could know exactly which **revision** to use when building the package.
 
@@ -53,9 +52,9 @@ regex = { git = "https://github.com/rust-lang/regex.git" }
 regex = { git = "https://github.com/rust-lang/regex.git", rev = "9f9f693" }
 ```
 
->Now our builds will be the same. But there's a big drawback: **now you have to manually think about SHA-1s every time you want to update our library**. This is both tedious and error prone.
+>Now our builds will be the same. But there’s a big drawback: **now you have to manually think about SHA-1s every time you want to update our library**. This is both tedious and error prone.
 
->**Enter the Cargo.lock. Because of its existence, you don't need to manually keep track of the exact revisions: Cargo will do it for you.** When you have a manifest like this:
+>**Enter the Cargo.lock. Because of its existence, you don’t need to manually keep track of the exact revisions: Cargo will do it for you.** When you have a manifest like this:
 
 ```toml ~/rust_projects/hello_cargo/Cargo.toml
 [package]
@@ -151,9 +150,9 @@ source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d
 ```
 </CodeGroup>
 
->You can see that there's a lot more information here, including the exact **revision** you used to build. **Now when you give your package to someone else, they'll use the exact same SHA, even though you didn't specify it in your Cargo.toml.**
+>You can see that there’s a lot more information here, including the exact **revision** you used to build. **Now when you give your package to someone else, they’ll use the exact same SHA, even though you didn’t specify it in your Cargo.toml.**
 
->**When you're ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.**
+>**When you’re ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.**
 
 <Columns cols={2}>
   <Column>
@@ -164,7 +163,7 @@ cargo update
   </Column>
   <Column>
 ```bash Command 1.6.5
-# Updates just "regex"
+# Updates just “regex”
 cargo update regex
 ```
   </Column>

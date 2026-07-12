@@ -1,11 +1,10 @@
 ---
-title: "Understanding Scopes and Variable Lifetimes in Rust"
-sidebarTitle: "Scopes"
-description: "Understand how Rust scopes work—nested blocks, variable lifetimes, function scopes, and how references allow you to share data across scope boundaries."
+title: "Understanding Rust Scopes"
 mode: "wide"
+sidebarTitle: "3.2 - Understanding Rust Scopes"
 ---
 
-Before moving on to Rust's scalar types, let's revisit the inner scope from the previous shadowing example. We will use it as a foundation to explore how scopes work in Rust in much greater depth.
+Before moving on to Rust’s scalar types, let's revisit the inner scope from the previous shadowing example. We will use it as a foundation to explore how scopes work in Rust in much greater depth.
 
 You can already spot a key characteristic of scopes just by looking at that code: **the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends** (which is why we printed it while still inside).
 
@@ -29,7 +28,7 @@ fn main() {
 Executing this latest snippet with `cargo run` produces the following output, demonstrating that both code examples behave exactly the same way.
 
 ```text
-   Compiling scopes v0.1.0 (~/rust_projects/scopes)
+   Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
      Running `target/debug/scopes`
 The value of a in the inner scope is: 12
@@ -52,7 +51,7 @@ fn main() {
 we would encounter the following error during compilation.
 
 ```text
-   Compiling scopes v0.1.0 (~/rust_projects/scopes)
+   Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
 error[E0425]: cannot find value `a` in this scope
   --> src/main.rs:11:54
    |
@@ -101,19 +100,6 @@ Once that's done, we will finally answer the questions raised earlier, definitiv
 
 ## Function Scopes
 
-Consider this simple example: a function receives a mutable reference to a variable and increments it. Because the function operates on the caller's memory address rather than a copy, the change is visible in the outer scope once the function returns.
 
-```rust
-fn increment(value: &mut i32) {
-    *value += 1; // dereference and modify the caller's variable
-}
 
-fn main() {
-    let mut count = 0;
-    increment(&mut count);
-    increment(&mut count);
-    println!("count = {count}"); // prints: count = 2
-}
-```
-
-**When the program exits a scope, all variables contained within it get dropped and vanish. There is a way, however, to avoid losing variables: grabbing them with a hook if they come from outer scopes, or returning them implicitly or explicitly.** In Rust, that hook is a **reference** (`&`). **If you modify a mutable variable declared inside an outer scope, but from inside an inner scope via a reference, you are actually modifying a specific memory address that lives in the outer scope.** Because of this, **when the inner scope disappears, you don't lose your modifications, because the data is safely anchored to the outer scope by your reference**.
+**When the program exits a scope, all variables contained within it, get dropped and vanish. There is a way, however, to avoid losing variables: grabbing them with a hook if they come from outer scopes, or returning them implicitly or explicitly.** In Rust, that hook is a **reference** (`&`). **If you modify a mutable variable declared inside an outerscope, but from inside an inner scope via a reference, you are actually modifying a specific memory address that lives in the outer scope.** Because of this, **when the inner pool disappears, you don't lose your modifications (your fish), because the data is safely anchored to the outer scope by your hook**.

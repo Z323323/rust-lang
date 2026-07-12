@@ -3,14 +3,19 @@
   "theme": "almond",
   "name": "The Rust Book - Almond Version",
   "colors": {
-    "primary": "#1be49c",
-    "light": "#0c8c5c",
-    "dark": "#0c0c0c"
+    "primary": "#2d51c7",
+    "light": "#2d51c7",
+    "dark": "#2d51c7"
   },
-  "favicon": "https://media.brand.dev/483ee27f-08fb-4d32-842d-86b4c40f9fb4.png",
-  "logo": {
-    "light": "https://media.brand.dev/07fcb57b-76a5-49f6-abdb-740da69c791f.svg",
-    "dark": "https://media.brand.dev/07fcb57b-76a5-49f6-abdb-740da69c791f.svg"
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "mcp",
+      "cursor"
+    ]
   },
   "fonts": {
     "heading": {
@@ -23,33 +28,25 @@
   "background": {
     "decoration": "gradient"
   },
-  "css": "style.css",
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "mcp",
-      "cursor"
-    ]
+  "favicon": "/assets/favicon.png",
+  "logo": {
+    "light": "/assets/logo/light.png",
+    "dark": "/assets/logo/dark.png"
   },
+  "css": "style.css",
   "navigation": {
     "tabs": [
-      {
-        "tab": "The Book",
+       {
+        "tab": "The Rust Book - Almond Version",
         "groups": [
-          {
-            "group": "Introduction",
-            "pages": [
-              "index",
-              "foreword",
-              "introduction"
-            ]
-          },
-          {
-            "group": "Ch. 1 – Getting Started",
-            "pages": [
+          { 
+           "group": "The Rust Book - Almond Version",
+           "pages": [
+             "foreword",
+             "introduction",
+             {
+              "group": "Ch. 1 - Getting Started",
+              "pages": [
               "chapters/ch-1/installation",
               "chapters/ch-1/hello-world",
               "chapters/ch-1/hello-cargo",
@@ -59,190 +56,192 @@
               "chapters/ch-1/package-id-specs",
               "chapters/ch-1/naming-conventions",
               "chapters/ch-1/appendix-d"
-            ]
-          },
-          {
-            "group": "Ch. 2 – Guessing Game",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 2 - Programming a Guessing Game",
+              "pages": [
               "chapters/ch-2/guessing-game"
-            ]
-          },
-          {
-            "group": "Ch. 3 – Common Concepts",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 3 - Common Programming Concepts",
+              "pages": [
               "chapters/ch-3/vars-and-mutability",
               "chapters/ch-3/rust-scopes",
               "chapters/ch-3/data-types",
               "chapters/ch-3/functions",
               "chapters/ch-3/comments",
               "chapters/ch-3/control-flow"
-            ]
-          },
-          {
-            "group": "Ch. 4 – Ownership",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 4 - Understanding Ownership",
+              "pages": [
               "chapters/ch-4/ownership",
               "chapters/ch-4/references-and-borrowing",
               "chapters/ch-4/the-slice-type"
-            ]
-          },
-          {
-            "group": "Ch. 5 – Structs",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 5 - Using Structs to Structure Related Data",
+              "pages": [
               "chapters/ch-5/structs",
               "chapters/ch-5/example-program-using-structs",
               "chapters/ch-5/methods"
-            ]
-          },
-          {
-            "group": "Ch. 6 – Enums & Matching",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 6 - Enums and Pattern Matching",
+              "pages": [
               "chapters/ch-6/defining-an-enum",
               "chapters/ch-6/match-construct",
               "chapters/ch-6/if-let-and-let-else"
-            ]
-          },
-          {
-            "group": "Ch. 7 – Modules",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 7 - Packages, Crates, and Modules",
+              "pages": [
               "chapters/ch-7/packages-and-crates",
               "chapters/ch-7/modules",
               "chapters/ch-7/module-tree",
               "chapters/ch-7/use-keyword",
               "chapters/ch-7/separating-modules"
-            ]
-          },
-          {
-            "group": "Ch. 8 – Collections",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 8 - Common Collections",
+              "pages": [
               "chapters/ch-8/vectors",
               "chapters/ch-8/utf-8-with-strings",
               "chapters/ch-8/hash-maps"
-            ]
-          },
-          {
-            "group": "Ch. 9 – Error Handling",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 9 - Error Handling",
+              "pages": [
               "chapters/ch-9/panic",
               "chapters/ch-9/result",
               "chapters/ch-9/to-panic-or-not-to-panic"
-            ]
-          },
-          {
-            "group": "Ch. 10 – Generics & Traits",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 10 - Generic Types, Traits, and Lifetimes",
+              "pages": [
               "chapters/ch-10/generics",
               "chapters/ch-10/traits",
               "chapters/ch-10/lifetimes"
-            ]
-          },
-          {
-            "group": "Ch. 11 – Testing",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 11 - Writing Automated Tests",
+              "pages": [
               "chapters/ch-11/write-tests",
               "chapters/ch-11/control-tests",
               "chapters/ch-11/organize-tests"
-            ]
-          },
-          {
-            "group": "Ch. 12 – I/O Project",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 12 - An I/O Project: Building a Command Line Program",
+              "pages": [
               "chapters/ch-12/command-line-arguments",
               "chapters/ch-12/reading-a-file",
               "chapters/ch-12/refactoring",
               "chapters/ch-12/adding-functionality",
               "chapters/ch-12/environment-variables",
               "chapters/ch-12/std-error"
-            ]
-          },
-          {
-            "group": "Ch. 13 – Functional Features",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 13 - Functional Language Features: Iterators and Closures",
+              "pages": [
               "chapters/ch-13/closures",
               "chapters/ch-13/iterators",
               "chapters/ch-13/improving-io-project",
               "chapters/ch-13/performance"
-            ]
-          },
-          {
-            "group": "Ch. 14 – Cargo & Crates.io",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 14 - More about Cargo and Crates.io",
+              "pages": [
               "chapters/ch-14/release-profiles",
               "chapters/ch-14/crates-io",
               "chapters/ch-14/workspaces",
               "chapters/ch-14/cargo-install",
               "chapters/ch-14/custom-commands"
-            ]
-          },
-          {
-            "group": "Ch. 15 – Smart Pointers",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 15 - Smart Pointers",
+              "pages": [
               "chapters/ch-15/box-t",
               "chapters/ch-15/smart-pointers-as-references",
               "chapters/ch-15/drop-trait",
               "chapters/ch-15/rc-t",
               "chapters/ch-15/refcell-t",
               "chapters/ch-15/reference-cycles"
-            ]
-          },
-          {
-            "group": "Ch. 16 – Concurrency",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 16 - Fearless Concurrency",
+              "pages": [
               "chapters/ch-16/threads",
               "chapters/ch-16/message-passing",
               "chapters/ch-16/shared-state",
               "chapters/ch-16/send-and-sync"
-            ]
-          },
-          {
-            "group": "Ch. 17 – Async Programming",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 17 - Fundamentals of Asynchronous Programming: Async, Await, Futures, and Streams",
+              "pages": [
               "chapters/ch-17/futures-and-async",
               "chapters/ch-17/concurrency-with-async",
               "chapters/ch-17/working-with-futures",
               "chapters/ch-17/streams",
               "chapters/ch-17/traits-for-async",
               "chapters/ch-17/futures-tasks-and-threads"
-            ]
-          },
-          {
-            "group": "Ch. 18 – OOP",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 18 - Object Oriented Programming",
+              "pages": [
               "chapters/ch-18/oop",
               "chapters/ch-18/traits-objects",
               "chapters/ch-18/oo-design-pattern"
-            ]
-          },
-          {
-            "group": "Ch. 19 – Patterns",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 19 - Patterns and Matching",
+              "pages": [
               "chapters/ch-19/all-the-places-patterns-can-be-used",
               "chapters/ch-19/refutability",
               "chapters/ch-19/pattern-syntax"
-            ]
-          },
-          {
-            "group": "Ch. 20 – Advanced Features",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 20 - Advanced Features",
+              "pages": [
               "chapters/ch-20/unsafe",
               "chapters/ch-20/advanced-traits",
               "chapters/ch-20/advanced-types",
               "chapters/ch-20/advanced-functions-and-closures",
               "chapters/ch-20/macros"
-            ]
-          },
-          {
-            "group": "Ch. 21 – Final Project",
-            "pages": [
+              ]
+             },
+             {
+              "group": "Ch. 21 - Final Project: Building a Multithreaded Web Server",
+              "pages": [
               "chapters/ch-21/single-threaded-web-server",
               "chapters/ch-21/from-single-threaded-to-multi-threaded",
               "chapters/ch-21/graceful-shutdown"
+              ]
+             }
             ]
-          }
+           }
+          ]
+         }
         ]
-      }
-    ]
-  },
+      },
   "footer": {
     "socials": {
       "x": "https://x.com/_Z561",

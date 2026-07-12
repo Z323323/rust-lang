@@ -1,8 +1,7 @@
 ---
-title: "Cargo Package ID Specifications – Syntax and Examples"
-sidebarTitle: "Package ID Specs"
-description: "Reference guide for Cargo Package ID Specifications: grammar, abbreviated and fully qualified forms, and examples for registry, git, and path crates."
+title: "Package ID Specifications"
 mode: "wide"
+sidebarTitle: "1.7 - Package ID Specifications"
 ---
 
 This section is included here because it directly builds upon the previous topic, but it also serves a broader purpose. It showcases the full extent of Cargo's power in locating packages specific versions, whether online or offline, and is intended to act primarily as a reference guide for custom configurations. It is entirely acceptable—and even recommended—to simply skim this section for now and move on.
@@ -65,4 +64,5 @@ proto := "http" | "git" | "file" | ...
 ## Brevity of Specifications
 
 >The goal of this is to enable both succinct and exhaustive syntaxes for referring to packages in a dependency graph. Ambiguous references may refer to one or more packages. Most commands generate an error if more than one package could be referred to with the same specification.
+
 

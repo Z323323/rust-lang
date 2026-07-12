@@ -1,8 +1,7 @@
 ---
-title: "Build a Guessing Game in Rust – Practical Introduction"
-sidebarTitle: "Guessing Game"
-description: "Build a number-guessing game in Rust. Covers user input, random numbers with the rand crate, error handling, loops, and pattern matching."
+title: "Programming a Guessing Game"
 mode: "wide"
+sidebarTitle: "2.1 - Programming a Guessing Game"
 ---
 
 Ch. 2 focuses on practical examples to help you understand how Rust works in action. The primary goal of this chapter is to build a small guessing game. The program will prompt the user to enter a number in the terminal, generate a random secret number, and compare the two. If the numbers match, the user wins!
@@ -42,7 +41,7 @@ fn main() {
 }
 ```
 ```text Output 2.1.1.4
-   Compiling guessing_game v0.1.0 (~/rust_projects/guessing_game)
+   Compiling guessing_game v0.1.0 (/var/home/z561/rust_projects/guessing_game)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
      Running `target/debug/guessing_game`
 Hello, world!
@@ -100,7 +99,7 @@ I will get straight to the point here, commenting only the general behaviour of 
 
  The `expect` method essentially unwraps this `Result`. If the `Result` is an `Ok`, `expect` simply extracts and returns the byte count inside it (which we are choosing to ignore here). However, if it finds an `Err`, `expect` triggers a `panic!`. This immediately stops program execution and prints the custom message you provided (`"Failed to read line"`).
 
- If you don't call `expect`, the program will compile, but you'll get a warning. Rust warns that you haven't used the `Result` value returned from `read_line`, indicating that the program hasn't handled a possible error.
+ If you don’t call `expect`, the program will compile, but you’ll get a warning. Rust warns that you haven’t used the `Result` value returned from `read_line`, indicating that the program hasn’t handled a possible error.
  </li>
  <li>
  `println!("You guessed: {guess}")` simply prints our `guess` to the terminal if everything went well. The `{}` brackets act as placeholders for the specified variable, seamlessly interpolating its value into the string.
@@ -120,7 +119,7 @@ println!("x = {x} and y + 2 = {}", y + 2);
 
 ### Testing the First Part
 
->Let's test the first part of the guessing game.
+>Let’s test the first part of the guessing game.
 
 Run the following command, then copy and paste the previously provided code and save the file.
 
@@ -138,7 +137,7 @@ cd .. &&
 cargo run
 ```
 ```text Output 2.1.3
-   Compiling guessing_game v0.1.0 (~/rust_projects/guessing_game)
+   Compiling guessing_game v0.1.0 (/var/home/z561/rust_projects/guessing_game)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
      Running `target/debug/guessing_game`
 Guess the number!
@@ -152,7 +151,7 @@ You guessed: @@@@@@@@@@@@@@@@@@@@@@@@NiceNumberHuh?@@@@@@@@@@@@@@@@@@@@@@@@
 
 At this stage, despite the issue highlighted in the previous Output 2.1.3 (which we will resolve later), we are now successfully able to capture user input from the terminal.
 
->Next, we need to generate a secret number that the user will try to guess. The secret number should be different every time so that the game is fun to play more than once. We'll use a random number between 1 and 100 so that the game isn't too difficult. Rust doesn't yet include random number functionality in its standard library. However, the Rust team does provide a `rand` crate with said functionality.
+>Next, we need to generate a secret number that the user will try to guess. The secret number should be different every time so that the game is fun to play more than once. We’ll use a random number between 1 and 100 so that the game isn’t too difficult. Rust doesn’t yet include random number functionality in its standard library. However, the Rust team does provide a `rand` crate with said functionality.
 
 ### Increasing Functionality with a Crate
 
@@ -162,7 +161,7 @@ Cargo makes this process seamless: we simply need to add the following line to o
 rand = "0.8.5"
 ```
 
-Now, simply run `cargo build`, and Cargo will automatically download (and extract) and compile all the packages required to utilize the features provided by the `rand` crate. To do this, Cargo (after updating the registry) checks the `[dependencies]` section inside Cargo.toml and downloads any crates listed that aren't already downloaded. Once finished, Cargo will also generate the Cargo.lock file, as we saw previously.
+Now, simply run `cargo build`, and Cargo will automatically download (and extract) and compile all the packages required to utilize the features provided by the `rand` crate. To do this, Cargo (after updating the registry) checks the `[dependencies]` section inside Cargo.toml and downloads any crates listed that aren’t already downloaded. Once finished, Cargo will also generate the Cargo.lock file, as we saw previously.
 
 <CodeGroup>
 ```bash Command 2.1.4
@@ -177,7 +176,7 @@ cargo build
    Compiling ppv-lite86 v0.2.21
    Compiling rand_chacha v0.3.1
    Compiling rand v0.8.6
-   Compiling guessing_game v0.1.0 (~/rust_projects/guessing_game)
+   Compiling guessing_game v0.1.0 (/var/home/z561/rust_projects/guessing_game)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.69s
 ```
 </CodeGroup>
@@ -210,7 +209,7 @@ The ecosystem is highly resilient: if you attempt to publish a crate with depend
 
 At this point, we are finally ready to utilize the features of the `rand` crate provided by the Rust team. By adding `use rand::Rng`, we bring the `Rng` trait into scope, granting us access to the methods it defines.
 
->Next, we're adding two lines in the middle. In the first line, we call the `rand::thread_rng` function that gives us the particular random number generator we're going to use: one that is local to the current thread of execution and is seeded by the operating system. Then, we call the `gen_range` method on the random number generator. This method is defined by the `Rng` trait. The `gen_range` method takes a range expression as an argument and generates a random number in the range. The kind of range expression we're using here takes the form `start..=end` and is inclusive on the lower and upper bounds, so we need to specify `1..=100` to request a number between 1 and 100.
+>Next, we’re adding two lines in the middle. In the first line, we call the `rand::thread_rng` function that gives us the particular random number generator we’re going to use: one that is local to the current thread of execution and is seeded by the operating system. Then, we call the `gen_range` method on the random number generator. This method is defined by the `Rng` trait. The `gen_range` method takes a range expression as an argument and generates a random number in the range. The kind of range expression we’re using here takes the form `start..=end` and is inclusive on the lower and upper bounds, so we need to specify `1..=100` to request a number between 1 and 100.
 
 The outcome will appear exactly as shown below, storing the random value in the `secret_number` variable. The full code is provided in the next section. I included only one final implementation to shorten this chapter without losing any critical information.
 

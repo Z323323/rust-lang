@@ -1,15 +1,14 @@
 ---
-title: "Rust Keywords and Raw Identifiers (Appendix A, Pt. 1)"
-sidebarTitle: "Keywords"
-description: "Learn about Rust reserved keywords and how raw identifiers (r#) let you use keywords as function names or identifiers when needed."
+title: "Appendix A: Keywords - Pt. 1"
 mode: "wide"
+sidebarTitle: "1.5 - Appendix A: Keywords - Pt. 1"
 ---
 
 The previous section explained how transitioning to new Rust editions introduces compatibility issues alongside new features. Specifically, these issues primarily arise when the core developers introduce new **keywords**. Because Appendix A focuses entirely on keywords, it has been integrated at this point in the book. Furthermore, Appendix A has been intentionally split into two parts. This first part covers the concept of **raw identifiers**, as it is highly relevant to the preceding section. The second part remains at the end of the book, serving as a convenient reference for reviewing all the Rust keywords encountered throughout the chapters.
 
 ## Raw Identifiers
 
->Raw identifiers are the syntax that lets you use keywords where they wouldn't normally be allowed. You use a raw identifier by prefixing a keyword with `r#`.
+>Raw identifiers are the syntax that lets you use keywords where they wouldn’t normally be allowed. You use a raw identifier by prefixing a keyword with `r#`.
 
 >For example, `match` is a keyword. If you try to compile
 
@@ -19,7 +18,7 @@ fn match(needle: &str, haystack: &str) -> bool {
 }
 ```
 
->you'll get this error:
+>you’ll get this error:
 
 ```text
 error: expected identifier, found keyword `match`
@@ -29,7 +28,7 @@ error: expected identifier, found keyword `match`
   |    ^^^^^ expected identifier, found keyword
 ```
 
->The error shows that you can't use the keyword `match` as the function identifier. To use `match` as a function name, you need to use the raw identifier syntax, like this:
+>The error shows that you can’t use the keyword `match` as the function identifier. To use `match` as a function name, you need to use the raw identifier syntax, like this:
 
 ```rust
 fn r#match(needle: &str, haystack: &str) -> bool {
@@ -43,4 +42,4 @@ fn main() {
 
 >This code will compile without any errors. Note the `r#` prefix on the function name in its definition as well as where the function is called in main.
 
->Raw identifiers allow you to use any word you choose as an identifier, even if that word happens to be a reserved keyword. In addition, raw identifiers allow you to use libraries written in a different Rust edition than your crate uses. For example, `try` isn't a keyword in the 2015 edition but is in the 2018, 2021, and 2024 editions. If you depend on a library that is written using the 2015 edition and has a `try` function, you'll need to use the raw identifier syntax, `r#try` in this case, to call that function from your code on later editions.
+>Raw identifiers allow you to use any word you choose as an identifier, even if that word happens to be a reserved keyword. In addition, raw identifiers allow you to use libraries written in a different Rust edition than your crate uses. For example, `try` isn’t a keyword in the 2015 edition but is in the 2018, 2021, and 2024 editions. If you depend on a library that is written using the 2015 edition and has a `try` function, you’ll need to use the raw identifier syntax, `r#try` in this case, to call that function from your code on later editions.
