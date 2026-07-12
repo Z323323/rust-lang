@@ -1,10 +1,99 @@
 ---
-title: "Rust Functions: Parameters, Statements, and Return Values"
+title: "Rust Functions: Parameters, Return Values, Expressions"
 sidebarTitle: "Functions"
-description: "How to define and call functions in Rust. Covers parameters, statements vs. expressions, return values, and the snake_case naming convention."
+description: "Learn how to define Rust functions with typed parameters, explicit return types, and the difference between expressions and statements."
 mode: "wide"
 ---
 
-Functions are pervasive in Rust. You've already seen the most important function in the language: `fn main()`. In this chapter, you'll learn how to define functions, work with parameters, use statements and expressions, and return values.
+Functions are one of the most fundamental building blocks in Rust. The `main` function you have already seen is the program's entry point, but you can define as many additional functions as you need. Rust uses *snake_case* as the conventional style for function and variable names—all lowercase letters with underscores separating words.
 
-<Note>This chapter is coming soon. Refer to the [official Rust Book chapter on functions](https://doc.rust-lang.org/stable/book/ch03-03-how-functions-work.html) in the meantime.</Note>
+## Defining a Function
+
+Use the `fn` keyword, followed by the function name, a parenthesised parameter list, an optional return-type annotation, and a body enclosed in curly brackets.
+
+```rust
+fn greet(name: &str) {
+    println!("Hello, {name}!");
+}
+
+fn main() {
+    greet("Alice");
+    greet("Bob");
+}
+```
+
+## Parameters
+
+Every parameter in a Rust function **must** have an explicit type annotation. Rust will not infer parameter types—this is a deliberate design choice that makes function signatures self-documenting.
+
+```rust
+fn add(x: i32, y: i32) -> i32 {
+    x + y // expression — no semicolon means this is the return value
+}
+
+fn describe_point(x: f64, y: f64) {
+    println!("Point is at ({x}, {y})");
+}
+
+fn main() {
+    let sum = add(3, 7);
+    println!("3 + 7 = {sum}");   // prints: 3 + 7 = 10
+
+    describe_point(1.5, -2.0);
+}
+```
+
+## Return Values
+
+Declare a return type after an arrow (`->`). In Rust, the **last expression** in a function body is its return value—you do not need (and should not use) a `return` keyword for the final value. Use `return` only for early returns.
+
+```rust
+fn square(n: i32) -> i32 {
+    n * n           // implicit return: no semicolon
+}
+
+fn absolute(n: i32) -> i32 {
+    if n < 0 {
+        return -n;  // explicit early return
+    }
+    n               // implicit return for the non-negative case
+}
+
+fn main() {
+    println!("5² = {}", square(5));        // prints: 5² = 25
+    println!("|−8| = {}", absolute(-8));   // prints: |−8| = 8
+}
+```
+
+## Expressions vs. Statements
+
+Understanding the distinction between *expressions* and *statements* is key to writing idiomatic Rust.
+
+- A **statement** performs an action and does *not* return a value (e.g., `let x = 5;`).
+- An **expression** evaluates to a value (e.g., `x + 1`, a block `{ ... }`, a function call).
+
+```rust
+fn main() {
+    // let bindings are statements — you cannot assign a let to another variable
+    let y = {
+        let x = 3;
+        x + 1   // expression inside block — no semicolon, so the block returns 4
+    };           // y is now 4
+
+    println!("y = {y}"); // prints: y = 4
+
+    // Adding a semicolon turns an expression into a statement and discards its value
+    let z = {
+        let a = 10;
+        a * 2;  // semicolon makes this a statement — block now returns ()
+    };
+    // z is () here — the unit type
+    let _ = z; // suppress unused-variable warning
+}
+```
+
+A common mistake is to accidentally add a semicolon to what should be a function's return expression, causing the function to return `()` instead of the intended value.
+
+<Note>
+This page covers the core mechanics of functions. For a deeper look—including function pointers, closures, and diverging functions—see the official [Functions chapter in The Rust Book](https://doc.rust-lang.org/book/ch03-03-how-functions-work.html).
+</Note>

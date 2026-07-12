@@ -1,5 +1,5 @@
 ---
-title: "Pattern Syntax in Rust: A Comprehensive Reference"
+title: "Rust Pattern Syntax: A Comprehensive Reference Guide"
 sidebarTitle: "Pattern Syntax"
 description: "Complete reference for Rust pattern syntax: literals, variables, wildcards, ranges, destructuring structs/enums/tuples, @ bindings, and guards."
 mode: "wide"
@@ -109,7 +109,7 @@ let category = match age {
     0..=12  => "child",
     13..=17 => "teenager",
     18..=64 => "adult",
-    65..=   => "senior",
+    _       => "senior",
 };
 println!("{category}");
 

@@ -1,10 +1,150 @@
 ---
-title: "Control Flow in Rust: if, loop, while, and for"
+title: "Rust Control Flow: if, loop, while, and for Explained"
 sidebarTitle: "Control Flow"
-description: "Use if expressions, loop, while, and for in Rust to direct program flow. Includes returning values from loops and iterating over collections."
+description: "Master Rust control flow: if/else as expressions, loop with typed break return values, while loops, and for..in range and slice iteration."
 mode: "wide"
 ---
 
-Control flow lets you run different code depending on conditions or repeat code while a condition holds true. Rust provides `if` expressions, `loop`, `while`, and `for` loops for this purpose.
+Control flow determines which parts of your code run and how many times they run. Rust provides the constructs you would expect—`if`, `loop`, `while`, and `for`—but with a few Rust-specific twists: conditions must be `bool` values (no implicit integer coercions), `if` is an expression that can return a value, and `loop` can return a value through `break`.
 
-<Note>This chapter is coming soon. Refer to the [official Rust Book chapter on control flow](https://doc.rust-lang.org/stable/book/ch03-05-control-flow.html) in the meantime.</Note>
+## `if` Expressions
+
+An `if` expression evaluates a boolean condition and executes one of two branches. The condition must be of type `bool`—Rust will not automatically convert integers or other types to `bool`.
+
+```rust
+fn main() {
+    let number = 7;
+
+    if number < 5 {
+        println!("condition was true");
+    } else {
+        println!("condition was false"); // this branch runs
+    }
+}
+```
+
+### `if` in a `let` Statement
+
+Because `if` is an expression, you can use it on the right-hand side of a `let` binding. Both branches must return the same type.
+
+```rust
+fn main() {
+    let condition = true;
+    let number = if condition { 5 } else { 6 };
+    println!("The value of number is: {number}"); // prints: 5
+}
+```
+
+### `else if` Chains
+
+```rust
+fn main() {
+    let n = 13;
+
+    if n % 4 == 0 {
+        println!("divisible by 4");
+    } else if n % 3 == 0 {
+        println!("divisible by 3"); // this runs for 13? No — falls through to else
+    } else if n % 2 == 0 {
+        println!("divisible by 2");
+    } else {
+        println!("not divisible by 4, 3, or 2"); // this runs
+    }
+}
+```
+
+## `loop`
+
+`loop` creates an infinite loop that runs until a `break` statement is encountered. Unlike `while true`, `loop` is recognised by the borrow checker as unconditionally repeating, which matters for exhaustiveness analysis.
+
+```rust
+fn main() {
+    let mut counter = 0;
+
+    let result = loop {
+        counter += 1;
+        if counter == 10 {
+            break counter * 2; // break returns a value from the loop
+        }
+    };
+
+    println!("The result is {result}"); // prints: The result is 20
+}
+```
+
+You can label nested loops with a lifetime-like label (`'outer:`) and use `break 'outer` or `continue 'outer` to target a specific loop level.
+
+```rust
+fn main() {
+    let mut count = 0;
+    'outer: loop {
+        let mut remaining = 10;
+        loop {
+            if remaining == 9 {
+                break;          // breaks the inner loop only
+            }
+            if count == 2 {
+                break 'outer;   // breaks the outer loop
+            }
+            remaining -= 1;
+        }
+        count += 1;
+    }
+    println!("count = {count}"); // prints: count = 2
+}
+```
+
+## `while`
+
+A `while` loop checks a condition before each iteration and stops when the condition is `false`.
+
+```rust
+fn main() {
+    let mut number = 3;
+
+    while number != 0 {
+        println!("{number}!");
+        number -= 1;
+    }
+
+    println!("LIFTOFF!!!");
+}
+```
+
+## `for` — Iterating Collections
+
+`for..in` is the idiomatic way to iterate over a collection or range. It is safer than indexing with `while` because it eliminates the risk of off-by-one errors and out-of-bounds panics.
+
+```rust
+fn main() {
+    let a = [10, 20, 30, 40, 50];
+
+    for element in a {
+        println!("the value is: {element}");
+    }
+}
+```
+
+### Ranges with `for`
+
+The `(start..end)` syntax produces a range that is exclusive at the upper bound; `(start..=end)` is inclusive. Calling `.rev()` reverses the iteration order.
+
+```rust
+fn main() {
+    // Exclusive range: prints 1, 2, 3, 4, 5
+    for i in 1..6 {
+        print!("{i} ");
+    }
+    println!();
+
+    // Inclusive range reversed: prints 5, 4, 3, 2, 1
+    for i in (1..=5).rev() {
+        print!("{i} ");
+    }
+    println!();
+}
+```
+
+<Note>
+This page covers the core control-flow constructs. For more advanced patterns—such as `while let`, pattern matching in `for` loops, and iterator adaptors like `map`, `filter`, and `enumerate`—see the official [Control Flow chapter in The Rust Book](https://doc.rust-lang.org/book/ch03-05-control-flow.html).
+</Note>

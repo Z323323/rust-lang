@@ -1,10 +1,121 @@
 ---
-title: "Rust Data Types: Scalars, Tuples, and Arrays"
+title: "Rust Data Types: Scalars, Tuples, and Arrays Explained"
 sidebarTitle: "Data Types"
-description: "Rust's scalar and compound data types: integers, floats, booleans, characters, tuples, and arrays. Understand type annotations and type inference."
+description: "Explore all of Rust's built-in data types: integers, floats, booleans, chars, tuples, and fixed-size arrays, with runnable code examples."
 mode: "wide"
 ---
 
-Rust is a statically typed language—the compiler must know the type of every variable at compile time. This chapter covers Rust's scalar types (integers, floating-point numbers, booleans, and characters) and compound types (tuples and arrays).
+Every value in Rust has a data type, and the compiler must know that type at compile time. Most of the time Rust can infer the type automatically, but when multiple types are possible—for example when parsing a string into a number—you must add a type annotation. This section covers all of Rust's built-in scalar types as well as the two fundamental compound types: tuples and arrays.
 
-<Note>This chapter is coming soon. In the meantime, refer to the [official Rust Book chapter on data types](https://doc.rust-lang.org/stable/book/ch03-02-data-types.html).</Note>
+## Scalar Types
+
+A *scalar* type represents a single value. Rust has four primary scalar types: integers, floating-point numbers, booleans, and characters.
+
+### Integer Types
+
+Rust offers signed (`i`) and unsigned (`u`) integers in sizes 8, 16, 32, 64, and 128 bits, plus `isize`/`usize` which match the pointer width of your target platform.
+
+```rust
+fn main() {
+    let a: i32  = -42;          // signed 32-bit — the most common default
+    let b: u64  = 1_000_000;    // unsigned 64-bit; underscores improve readability
+    let c: u8   = 255;          // unsigned 8-bit, range 0–255
+    let d: isize = -1;          // pointer-sized signed integer
+
+    println!("a={a}, b={b}, c={c}, d={d}");
+}
+```
+
+Integer literals can be written in decimal (`98_222`), hex (`0xff`), octal (`0o77`), binary (`0b1111_0000`), or byte (`b'A'` for `u8` only).
+
+### Floating-Point Types
+
+Rust has `f32` (single precision) and `f64` (double precision). The default inferred type is `f64` because on modern CPUs it is roughly the same speed as `f32` while offering more precision.
+
+```rust
+fn main() {
+    let x: f64 = 2.0;
+    let y: f32 = 3.14_f32;
+    let result = x + 1.5;
+    println!("x={x}, y={y}, result={result}");
+}
+```
+
+### Boolean Type
+
+The `bool` type has exactly two values, `true` and `false`. It is one byte in size.
+
+```rust
+fn main() {
+    let is_ready: bool = true;
+    let has_errors = false; // type inferred as bool
+
+    if is_ready && !has_errors {
+        println!("All systems go!");
+    }
+}
+```
+
+### Character Type
+
+The `char` type is Rust's most primitive alphabetic type. It is always four bytes in size and represents a Unicode scalar value, so it can store far more than ASCII.
+
+```rust
+fn main() {
+    let letter = 'R';
+    let emoji: char = '🦀';
+    println!("{letter} stands for Rust  {emoji}");
+}
+```
+
+## Compound Types
+
+Compound types group multiple values into one type. Rust has two primitive compound types: tuples and arrays.
+
+### Tuple Type
+
+A tuple groups a fixed number of values that can have different types. Once declared, a tuple's length cannot change.
+
+```rust
+fn main() {
+    let tup: (i32, f64, u8) = (500, 6.4, 1);
+
+    // Destructure into individual variables
+    let (x, y, z) = tup;
+    println!("x={x}, y={y}, z={z}");
+
+    // Or access by index using dot notation
+    println!("First element: {}", tup.0);
+    println!("Second element: {}", tup.1);
+}
+```
+
+The unit type `()` is a special zero-element tuple; it is the implicit return type of functions that return no meaningful value.
+
+### Array Type
+
+An array stores a fixed number of elements of the *same* type. Arrays live on the stack. Use a `Vec` when you need a growable collection.
+
+```rust
+fn main() {
+    let months = [
+        "January", "February", "March",
+        "April",   "May",      "June",
+        "July",    "August",   "September",
+        "October", "November", "December",
+    ];
+
+    // Explicit type and length annotation
+    let zeros: [i32; 5] = [0; 5]; // shorthand for [0, 0, 0, 0, 0]
+
+    println!("First month: {}", months[0]);
+    println!("zeros[2] = {}", zeros[2]);
+    println!("Array length: {}", months.len());
+}
+```
+
+Accessing an array with an out-of-bounds index causes a *runtime panic*—Rust checks array bounds automatically to prevent unsafe memory access.
+
+<Note>
+This page covers the essentials. For the full reference—including integer overflow behavior, all numeric operations, and additional compound types—see the official [Data Types chapter in The Rust Book](https://doc.rust-lang.org/book/ch03-02-data-types.html).
+</Note>

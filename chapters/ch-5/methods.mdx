@@ -1,5 +1,5 @@
 ---
-title: "Defining Methods on Structs with impl in Rust"
+title: "Rust Methods and impl Blocks: &self, &mut self, and More"
 sidebarTitle: "Methods"
 description: "Add methods to Rust structs using impl blocks. Covers &self, &mut self, associated functions, and multiple impl blocks for the same struct."
 mode: "wide"
@@ -126,6 +126,10 @@ A type can have more than one `impl` block. While usually one block is fine, mul
 
 ```rust
 impl Rectangle {
+    fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
     fn area(&self) -> u32 {
         self.width * self.height
     }
