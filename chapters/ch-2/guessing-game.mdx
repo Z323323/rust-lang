@@ -50,9 +50,9 @@ Hello, world!
 
 ## Processing a Guess
 
-The code provided below is an initial, incomplete version designed strictly to handle user input. We will implement the actual game logic in the next, upgraded version of the code.
+Code 2.1.1 below is an initial, incomplete version designed strictly to handle user input. We will implement the actual game logic in the next, upgraded version of the code.
 
-```rust
+```rust Code 2.1.1
 use std::io; // #1
 
 fn main() {
@@ -104,16 +104,14 @@ I will get straight to the point here, commenting only the general behaviour of 
  <li>
  `println!("You guessed: {guess}")` simply prints our `guess` to the terminal if everything went well. The `{}` brackets act as placeholders for the specified variable, seamlessly interpolating its value into the string.
  
- There is also a syntax more similar to C for evaluating expressions or passing multiple arguments to the `println!` macro. For example, if we write
+ There is also a syntax more similar to C for evaluating expressions or passing multiple arguments to the `println!` macro. For example, executing Code 2.1.2 will output: `x = 5 and y + 2 = 12`.
  
- ```rust
-let x = 5;
-let y = 10;
-
-println!("x = {x} and y + 2 = {}", y + 2);
+ ```rust Code 2.1.2
+ let x = 5;
+ let y = 10;
+ 
+ println!("x = {x} and y + 2 = {}", y + 2);
  ```
- 
- the program will output `x = 5 and y + 2 = 12` upon execution.
  </li>
 </ol>
 
@@ -121,14 +119,14 @@ println!("x = {x} and y + 2 = {}", y + 2);
 
 >Let’s test the first part of the guessing game.
 
-Run the following command, then copy and paste the previously provided code and save the file.
+Run Command 2.1.2, then copy and paste Code 2.1.1 and save the file.
 
 ```bash Command 2.1.2
 cd src &&
 gedit main.rs
 ```
 
-Execute the next command to build and run the binary.
+Execute Command 2.1.3 to build and run the binary.
 
 <CodeGroup>
 ```bash Command 2.1.3
@@ -181,7 +179,7 @@ cargo build
 ```
 </CodeGroup>
 
->You may see different version numbers but they will all be compatible with the code, thanks to SemVer!
+>You may see different version numbers in Output 2.1.4, but they will all be compatible with the code, thanks to SemVer!
 
 >**In this case, although we only listed `rand` as a dependency, Cargo also grabbed other crates that `rand` depends on to work.** After downloading the crates, Rust compiles them and then compiles the project with the dependencies available.
 
@@ -213,7 +211,7 @@ At this point, we are finally ready to utilize the features of the `rand` crate 
 
 The outcome will appear exactly as shown below, storing the random value in the `secret_number` variable. The full code is provided in the next section. I included only one final implementation to shorten this chapter without losing any critical information.
 
-```rust
+```rust Code 2.1.3
 // --snip--
 use rand::Rng;
 
@@ -228,7 +226,7 @@ fn main() {
 
 In this section, I have condensed several parts of the official Ch. 2. Any skipped concepts will be explained directly during the code analysis, where they naturally fit. To keep the explanation concise and avoid unnecessary repetition, we will only analyze the lines of code that haven't been covered yet.
 
-```rust
+```rust Code 2.1.4
 use std::io;
 use std::cmp::Ordering; // #1
 use rand::Rng;
@@ -293,7 +291,7 @@ fn main() {
  </li>
 </ol>
 
-At this point, we are finally ready to run the game. Copy and paste the code directly into ~/rust_projects/guessing_game/src/main.rs and save it, then execute the following command. I have included a sample playthrough to demonstrate how the game behaves.
+At this point, we are finally ready to run the game. Copy and paste Code 2.1.4 directly into ~/rust_projects/guessing_game/src/main.rs and save it, then execute Command 2.1.5. I have included a sample playthrough to demonstrate how the game behaves.
 
 <CodeGroup>
 ```bash Command 2.1.5

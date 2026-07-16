@@ -4,15 +4,16 @@ mode: "wide"
 sidebarTitle: "3.2 - Understanding Rust Scopes"
 ---
 
-Before moving on to Rust’s scalar types, let's revisit the inner scope from the previous shadowing example. We will use it as a foundation to explore how scopes work in Rust in much greater depth.
+Before moving on to Rust’s scalar types, let's revisit the inner scope from the previous shadowing example (Code 3.1.2). We will use it as a foundation to explore how scopes work in Rust in much greater depth.
 
 ## Down the Rabbit Hole
 
-You can already spot a key characteristic of scopes just by looking at that code: **the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends** (which is why we printed it while still inside).
+You can already spot a key characteristic of scopes just by looking at Code 3.1.2: **the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends** (which is why we printed it while still inside).
 
-One subtle detail that might be easy to overlook in the previous section example is this: **we can print the value of `x` in the outer scope after exiting the inner scope simply because shadowing a variable inside an inner block is exactly like defining a completely new variable**. Consider the following example:
+One subtle detail that might be easy to overlook in the previous section example is this: **we can print the value of `x` in the outer scope after exiting the inner scope simply because shadowing a variable inside an inner block is exactly like defining a completely new variable**. Consider Code 3.2.1. Executing it with `cargo run` produces E-Output 3.2.1, demonstrating that both code examples behave exactly the same way.
 
-```rust
+<CodeGroup>
+```rust Code 3.2.1
 fn main() {
     let x = 5;
 
@@ -24,20 +25,19 @@ fn main() {
     println!("The value of x is: {x}"); // Here, the outer 'x' is bound to the value 5.
 }
 ```
-
-Executing this latest snippet with `cargo run` produces the following output, demonstrating that both code examples behave exactly the same way.
-
-```text
+```text E-Output 3.2.1
    Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
      Running `target/debug/scopes`
 The value of not_x in the inner scope is: 10
 The value of x is: 5
 ```
+</CodeGroup>
 
-Now, however, let's observe what happens when we try to access the value of `not_x` outside the inner scope. For example, by writing:
+Now, however, let's observe what happens when we try to access the value of `not_x` outside the inner scope. For example, by writing Code 3.2.2 we would encounter the C-Output 3.2.2 error.
 
-```rust focus={1-7, 9}
+<CodeGroup>
+```rust Code 3.2.2 focus={1-7, 9}
 fn main() {
     // --snip--
     {
@@ -48,10 +48,7 @@ fn main() {
     // println!("The value of x is: {x}"); // Here, the outer 'x' is bound to the value 5.
 }
 ```
-
-we would encounter the following error during compilation.
-
-```text
+```text C-Output 3.2.2
    Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
 error[E0425]: cannot find value `not_x` in this scope
  --> src/main.rs:9:58
@@ -65,12 +62,13 @@ help: the binding `not_x` is available in a different scope in the same function
 5 |         let not_x = x * 2; // 10 = 5 * 2
   |             ^^^^^
 ```
+</CodeGroup>
 
-It is easy to deduce a straightforward solution to this last error: we could simply define `not_x` in the outer scope and remove the inner block entirely. Another valid approach would be to follow the shadowing example from the previous section, where we declare `not_x` in the outer scope and reassign it **temporarily** within the inner scope.
+It is easy to deduce a straightforward solution to this last error: we could simply define `not_x` in the outer scope and remove the inner block entirely (Code 3.2.3). Another valid approach would be to follow the shadowing example from Code 3.1.2, where we declare `not_x` in the outer scope and reassign it **temporarily** within the inner scope.
 
-For example, this next snippet compiles flawlessly:
+For example, Code 3.2.3 compiles flawlessly:
 
-```rust
+```rust Code 3.2.3
 fn main() {
     let x = 5;
 
@@ -125,39 +123,32 @@ Once that's done, we will finally answer question <span style={{ color: "#FF8C00
 
 While functions will be analyzed in depth later on, we can already look at a couple of basic examples.
 
-Let's start with an example of a simple function that takes a `String` typed variable as a parameter and returns nothing. The function merely prints the passed variable `s_x` to the terminal.
+Let's start with an example of a simple function that takes a `String` typed variable as a parameter and returns nothing. The function merely prints the passed variable `s_x` to the terminal. When compiling and running Code 3.2.4 we obtain E-Output 3.2.4.
 
-```rust
+<CodeGroup>
+```rust Code 3.2.4
 fn print_var(s_x: String) {
     println!("{s_x}");
 }
-```
-
-When compiling and running the following code
-
-```rust
-// --snip--
 
 fn main() {
     let s_x: String = String::from("17");
     print_var(s_x);
 }
 ```
-
-the output will be as follows:
-
-```
+```text E-Output 3.2.4
    Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
      Running `target/debug/scopes`
 17
 ```
+</CodeGroup>
 
 What might not be immediately obvious when first looking at functions is that **they introduce a (completely independent) scope**. **For every parameter defined in the function's signature, Rust creates a brand-new local variable bound strictly within that scope.** _(Note: Methods are simply functions attached to a specific type and follow these exact same scoping rules, so we will not cover them separately.)_
 
-**The preceding code is closely related to the following snippet. However, they are not strictly equivalent because function scopes are entirely isolated.**
+**The preceding Code 3.2.4 is closely related to the following Code 3.2.5. However, they are not strictly equivalent because function scopes are entirely isolated.**
 
-```rust
+```rust Code 3.2.5
 fn main() {
     let s_x: String = String::from("17");
     {
@@ -171,11 +162,11 @@ Now, let's examine a less trivial example that perfectly illustrates the direct 
 
 Let's define a new function, `inner_print`, that does the exact same thing as `print_var`, but performs the work from inside `print_var`.
 
-Take a moment to compare the two snippets; they are practically—though not strictly—equivalent!
+Take a moment to compare Code 3.2.6 to Code 3.2.7; they are practically—though not strictly—equivalent!
 
 <Columns cols={2}>
   <Column>
-  ```rust
+  ```rust Code 3.2.6
   fn main() {
       let s_x: String = String::from("17");
       print_var(s_x);
@@ -195,7 +186,7 @@ Take a moment to compare the two snippets; they are practically—though not str
   ```
   </Column>
   <Column>
-  ```rust
+  ```rust Code 3.2.7
   fn main() {
       let s_x: String = String::from("17");
       
@@ -225,9 +216,9 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
 - <span style={{ color: "#FF8C00" }}><b>Q-4</b>: If the preceding paragraph code snippets are related, why should we use bare scopes instead of functions, and viceversa? What are the actual differences between using functions and using bare scopes?</span>
 - <span style={{ color: "#0050FF" }}><b>A-4</b>: There are primarily two differences between these two approaches.</span><br /><br />
 
-  <span style={{ color: "#0050FF" }}>The first is that <b>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</b>. Take the following code as an example:</span>
+  <span style={{ color: "#0050FF" }}>The first is that <b>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</b>. Take Code 3.2.8 as an example:</span>
   
-  ```rust
+  ```rust Code 3.2.8
   fn main() {
       let x: u32 = 17;
       let y: u32 = 1337;
@@ -240,9 +231,9 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   }
   ```
   
-  <span style={{ color: "#0050FF" }}>In this case, <b>had we used the functions shown previously, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function!</b> Attempting to do so would result in a compilation error, as shown below.</span>
+  <span style={{ color: "#0050FF" }}>In this case, <b>had we used the functions shown previously in Code 3.2.6, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function!</b> Attempting to do so would result in a compilation error, as shown below.</span>
   
-  ```rust
+  ```rust Code 3.2.9
   fn main() {
       let x: u32 = 17;
       let y: u32 = 1337;
@@ -266,9 +257,9 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   
   <span style={{ color: "#0050FF" }}>The second difference between the two approaches is the more important one. Although <b>functions</b> are less 'open' in terms of variable capture, they <b>allow you to define much more precise and controllable workflows, enable code reuse, and lead to a significantly more readable and organized code structure</b>. For example, if we wanted to call `print_value` multiple times, we could do so simply by writing `print_value(value)`. <b>This behaviour would not be possible using bare scopes, as we would have to rewrite the code responsible for printing the values every single time.</b> While in this simple example using `println!` takes up roughly the same amount of space as calling `print_value`, functions typically contain complex logic and several lines of code. <b>To avoid duplicating that code over and over, we use named identifiers like `print_value`!</b> Ultimately, because of these factors, <b>the practical use case for bare scopes narrows down exclusively to the one explained earlier</b>. <b>In that specific scenario—namely, freeing memory from temporary variables—using a function instead would not be viable. This is because a function's parameters must be explicitly defined and have a fixed count.</b></span><br /><br />
   
-  <span style={{ color: "#0050FF" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <b>`println!` accepts an arbitrary number of them</b>. For instance, the following code will compile without any problems:</span>
+  <span style={{ color: "#0050FF" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <b>`println!` accepts an arbitrary number of them</b>. For instance, Code 3.2.10 will compile without any problems:</span>
   
-  ```rust
+  ```rust Code 3.2.10
   println!("{}, {}, {}, {}, ...", 1, 2, 3, 4); // Outputs '1, 2, 3, 4, ...'.
   ```
   
@@ -280,15 +271,9 @@ There is a primary way (**one of two possible approaches**) to preserve the resu
 
 ### Expressions
 
-As you will see later on, distinguishing between an **expression** and a variable is crucial in practically any programming language. Given the snippet
+As you will see later on, distinguishing between an **expression** and a variable is crucial in practically any programming language. Given Code 3.2.11, `x`, `y`, and `z` serve as variables of type `u32`, whereas **`17`, `1337`, and `x + y` are evaluated as expressions**.
 
-```rust
-let x: u32 = 17;
-```
-
-`x` acts as a variable of type `u32`, while **`17` is an expression** made up of a single **numeric literal**. To clarify this further: if you write
-
-```rust
+```rust Code 3.2.11
 fn main() {
     let x: u32 = 17; /* This statement is entirely equivalent to the following:
                         let x = 17_u32; */
@@ -300,13 +285,11 @@ fn main() {
 }
 ```
 
-`x`, `y`, and `z` serve as variables of type `u32`, whereas **`17`, `1337`, and `x + y` are evaluated as expressions**.
-
 #### Inspecting the Type of Any Expression
 
-Determining the resulting type of any expression can be easily achieved by binding the expression to a variable using the `let` keyword, and subsequently inspecting the variable's type. Explicitly inspecting a variable's type at runtime is, however, somewhat complex in Rust. The code below is included only to let readers verify that `z` is indeed a `u32`. The underlying syntax and language mechanics will be thoroughly explored in later chapters.
+Determining the resulting type of any expression can be easily achieved by binding the expression to a variable using the `let` keyword, and subsequently inspecting the variable's type. Explicitly inspecting a variable's type at runtime is, however, somewhat complex in Rust. Code 3.2.12 below is included only to let readers verify that `z` is indeed a `u32`. The underlying syntax and language mechanics will be thoroughly explored in later chapters.
 
-```rust focus={5-8}
+```rust Code 3.2.12 focus={5-8}
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
 }
@@ -325,15 +308,15 @@ In Rust, you can explicitly return a result **from a function** using the `retur
 
 This means there is no explicit keyword to return values from a bare block scope, although there is an advanced technique that allows you to return values semi-explicitly from bare blocks. We will not analyze it in this section, but we will explore it shortly.
 
-The following code provides a basic example of evaluating expressions and returning their results from bare blocks for assignments.
+The following Code 3.2.13 provides a basic example of evaluating expressions and returning their results from bare blocks for assignments.
 
-```rust
+```rust Code 3.2.13
 fn main() {
-    let x: u32 = { 17 }; /* We return the literal '17' back to
-                            the main function's scope! */
+    let x: u32 = { 17 }; /* We return the literal expression '17'
+                            back to the main function's scope! */
                             
-    let y: u32 = { 1337 }; /* We return the literal '1337' back to
-                              the main function's scope! */
+    let y: u32 = { 1337 }; /* We return the literal expression '1337'
+                              back to the main function's scope! */
 
     let z = { x + y }; /* We return the expression '1354' back to
                           the main function's scope! */
@@ -342,15 +325,15 @@ fn main() {
 }
 ```
 
-By contrast, the next snippet demonstrates how to explicitly return a value from the `ret_explicitly` function, and how to implicitly return one from `ret_implicitly`.
+By contrast, Code 3.2.14 demonstrates how to explicitly return a value from the `ret_explicitly` function, and how to implicitly return one from `ret_implicitly`.
 
-```rust
+```rust Code 3.2.14
 fn ret_explicitly(x: u32) -> u32 {
-    return x; // We return the literal '17' back to the main function's scope!
+    return x; // We return the expression '17' back to the main function's scope!
 }
 
 fn ret_implicitly(x: u32) -> u32 {
-    x // We return the literal '1337' back to the main function's scope!
+    x // We return the expression '1337' back to the main function's scope!
 }
 
 fn main() {
@@ -381,13 +364,14 @@ The second issue—which is significantly more cumbersome—is that **if you wan
 
 Up to this point, we have deliberately avoided a detail that tends to cause a significant amount of confusion, one that directly relates to the final point of 'The Anatomy and Rules of Scopes' paragraph. Now, it is time to analyze and clarify this mechanic once and for all.
 
-In the first example at the beginning of this section (and in the shadowing example from the previous section), you may have noticed that **the variable `x`—despite being assigned/shadowed in the inner scope—is successfully read again in the outer scope**. **This behavior is absolutely not guaranteed for types that do not implement the `Copy` trait.**
+In Code 3.2.1 (and in Code 3.1.2), you may have noticed that **the variable `x`—despite being assigned/shadowed in the inner scope—is successfully read again in the outer scope**. **This behavior is absolutely not guaranteed for types that do not implement the `Copy` trait.**
 
 ### Introducing the Problem Through Block Scopes
 
-Let's look at why. First, observe the following code.
+Let's look at why. First, observe Code 3.2.15. If you try to execute `cargo run`, the compiler will throw C-Output 3.2.15, in stark contrast to the example we saw earlier. A simple comparison reveals that Code 3.2.15 and Code 3.2.1/3.1.2 are practically identical; aside from the variable's name, the only thing that changes is its **type**.
 
-```rust
+<CodeGroup>
+```rust Code 3.2.15
 fn main() {
     let s_x: String = String::from("17");
     
@@ -401,10 +385,7 @@ fn main() {
                           the example at the beginning of the chapter. */
 }
 ```
-
-If you try to execute `cargo run`, the compiler will throw the following error, in stark contrast to the example we saw earlier. A simple comparison reveals that the two code snippets are practically identical; aside from the variable's name, the only thing that changes is its **type**.
-
-```text
+```text C-Output 3.2.15
    Compiling scopes v0.1.0 (/var/home/z561/rust_projects/scopes)
 error[E0382]: borrow of moved value: `s_x`
  --> src/main.rs:9:16
@@ -423,6 +404,7 @@ help: consider cloning the value if the performance cost is acceptable
 5 |         let s_x = s_x.clone(); /* Here, we shadow s_x, exactly as we did in the example at the
   |                      ++++++++
 ```
+</CodeGroup>
 
 This issue occurs because, **whenever a value is assigned to a new variable, some data must be transferred**. **Because duplicating dynamic and potentially massive data structures (like `String`) is incredibly expensive in terms of memory allocation and execution time, the compiler outright refuses to implicitly copy the actual data the way it does for simple scalar types (like `u32`).**
 
@@ -434,9 +416,10 @@ For this reason, when we try to access `s_x` in the outer scope after it has bee
 
 ### Solving the Problem for Block Scopes
 
-The following snippet demonstrates a simple way to fix the previous error and preserve the address within the outer scope's `s_x` variable.
+Code 3.2.16 demonstrates a simple way to fix the previous error and preserve the address within the outer scope's `s_x` variable. As E-Output 3.2.16 clearly shows, this approach works perfectly!
 
-```rust
+<CodeGroup>
+```rust Code 3.2.16
 fn main() {
     let s_x: String = String::from("17");
     
@@ -452,14 +435,12 @@ fn main() {
                           the example at the beginning of the chapter. */
 }
 ```
-
-The following output clearly demonstrates the behavior we just analyzed.
-
-```text
+```text E-Output 3.2.16
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
      Running `target/debug/scopes`
 17
 ```
+</CodeGroup>
 
 The core concept you must understand is this: **copying a value (in this case, a memory address) effectively generates TWO completely separate instances of that value**.
 
@@ -469,9 +450,9 @@ In fact, **memory addresses themselves have specific types in Rust, and these ty
 
 Because of this distinction, **when the inner scope terminates, the outer `s_x` variable still holds its own copy of the address, completely unaffected by the fact that the inner copy was dropped at the end of the inner scope**!
 
-With this in mind, we can even repurpose our previous code snippet to see exactly **what type a memory address is under the hood**!
+With this in mind, we can even repurpose Code 3.2.12 to see exactly **what type a memory address is under the hood**!
 
-```rust focus={5-8}
+```rust Code 3.2.17 focus={5-8}
 fn print_type<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
 }
@@ -484,9 +465,9 @@ fn main() {
 
 ### Extending the Concept to Function Scopes
 
-The following code demonstrates a closely related, non-trivial example that is able to trigger the exact same error we just observed. However, this time, we will rely on functions—and consequently, isolated function scopes. Try compiling and running the following code using `cargo run` just by copying and pasting it exactly as it is. For now, the code will execute perfectly without throwing any errors.
+The following Code 3.2.18 demonstrates a closely related, non-trivial example that is able to trigger the exact same error we just observed. However, this time, we will rely on functions—and consequently, isolated function scopes. Try compiling and running Code 3.2.18 using `cargo run` just by copying and pasting it exactly as it is. For now, the code will execute perfectly without throwing any errors.
 
-```rust focus={1-4,8-11,13-15,20,21}
+```rust Code 3.2.18 focus={1-4,8-11,13-15,20,21}
 fn drops_s_x_and_s_y(s_x: String, s_y: String) -> String {
     format!("{s_x} + {s_y}")
 }
@@ -514,7 +495,7 @@ You do not need to understand every single line of this code just yet. The key t
 
 However, if we now uncomment the `println!("{s_x}")` (or `println!("{s_y}")`) statement, we observe the following output:
 
-```text
+```text C-Output 3.2.18
 error[E0382]: borrow of moved value: `s_x`
   --> src/main.rs:18:16
    |
@@ -544,11 +525,11 @@ In this instance, the compiler flags an error indicating that the value `s_x` ha
 
 To summarize, **the issue arises because we are passing `s_x` into the `drops_s_x_and_s_y` function**. By doing this, **the value (address) is moved (transferring ownership) and is effectively destroyed**—or **dropped**—**when the function's scope ends**. **As a result, it is completely invalid to reference or use it in any way back in the `main` function's scope.**
 
-To maintain the approach outlined throughout this section, the following snippet recreates the previous example using block scopes. This illustration is crucial. When you pass arguments to a function, it is not always immediately obvious exactly when and how the transfer of ownership takes place. The code below clearly exposes exactly where this shift occurs.
+To maintain the approach outlined throughout this section, **Code 3.2.20 recreates Code 3.2.18/3.2.19 using block scopes**. This illustration is crucial. When you pass arguments to a function, it is not always immediately obvious exactly when and how the transfer of ownership takes place. Code 3.2.20 below clearly exposes exactly where this shift occurs.
 
 <Columns cols={2}>
   <Column>
-  ```rust
+  ```rust Code 3.2.19
   fn drops_s_x_and_s_y(
       s_x: String,
       s_y: String,
@@ -565,7 +546,7 @@ To maintain the approach outlined throughout this section, the following snippet
   ```
   </Column>
   <Column>
-  ```rust
+  ```rust Code 3.2.20
   fn main() {
       let s_x = String::from("17");
       let s_y = String::from("1337");
@@ -587,9 +568,9 @@ To maintain the approach outlined throughout this section, the following snippet
 
 ### Solving the Problem for Function Scopes
 
-Conversely, if we utilize `doesnt_drop_s_x_and_s_y` instead (by uncommenting the line `doesnt_drop_s_x_and_s_y(&s_x, &s_y, &mut s_z)`), you will see that we can also safely uncomment both `println!` macros. If you run the code below with `cargo run`, it will compile perfectly without throwing any errors.
+Conversely, if we utilize `doesnt_drop_s_x_and_s_y` instead (by uncommenting the line `doesnt_drop_s_x_and_s_y(&s_x, &s_y, &mut s_z)`), you will see that we can also safely uncomment both `println!` macros. If you run Code 3.2.21 with `cargo run`, it will compile perfectly without throwing any errors.
 
-```rust lines focus={5-12,16-21}
+```rust Code 3.2.21 focus={5-12,16-21}
 fn drops_s_x_and_s_y(s_x: String, s_y: String) -> String {
     format!("{s_x} + {s_y}")
 }
@@ -613,11 +594,11 @@ fn main() {
 }
 ```
 
-To conclude this section, below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` alongside its corresponding block scope version.
+Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.21/3.2.22) alongside its corresponding block scope version (Code 3.2.23).
 
 <Columns cols={2}>
   <Column>
-  ```rust
+  ```rust Code 3.2.22
   fn doesnt_drop_s_x_and_s_y(
       s_x: &String,
       s_y: &String,
@@ -643,7 +624,7 @@ To conclude this section, below is a comparison of the code utilizing `doesnt_dr
   ```
   </Column>
   <Column>
-  ```rust
+  ```rust Code 3.2.23
   fn main() {
       let s_x = String::from("17");
       let s_y = String::from("1337");
@@ -668,3 +649,13 @@ To conclude this section, below is a comparison of the code utilizing `doesnt_dr
   ```
   </Column>
 </Columns>
+
+## Q&A Pt. 3
+
+To bring this matter to a close, let us address <span style={{ color: "#FF8C00" }}><b>Q-3</b></span>. The answer will mostly just serve as a refresher on what we have seen in the last few paragraphs.
+
+- <span style={{ color: "#FF8C00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
+- <span style={{ color: "#0050FF" }}><b>A-3</b>: As we have just observed, there are two fundamental methods to <b>'extract' results</b> or <b>preserve modified variables</b> from any scope—whether it is a block scope or a function scope:</span>
+
+  - <span style={{ color: "#0050FF" }}><b>Returning expressions</b>: You can return expressions as results directly from the function or block scope, either explicitly or implicitly.</span>
+  - <span style={{ color: "#0050FF" }}><b>Using references (`&`)</b>: You can preserve the underlying variables by working with their <b>memory addresses</b>. Instead of moving the data, you capture the address using the `&` symbol—either by passing it as a function argument, or by explicitly assigning it inside a block scope using the `=` operator (which, as we have seen, are functionally identical, since passing an argument acts as an `=` assignment under the hood).</span>

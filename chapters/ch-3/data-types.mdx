@@ -1,0 +1,410 @@
+---
+title: "Data Types"
+mode: "wide"
+sidebarTitle: "3.3 - Data Types"
+---
+
+>Every value in Rust is of a certain _data type_, which tells Rust what kind of data is being specified so that it knows how to work with that data. We’ll look at two data type subsets: scalar and compound.
+
+>Keep in mind that Rust is a _statically typed_ language, which means that it must know the types of all variables at compile time. The compiler can usually infer what type we want to use based on the value and how we use it. In cases where multiple types are possible, we must add a type annotation, as shown in Code 3.3.1 below. If we omit the `: u32` annotation, Rust will display the compilation error seen in C-Output 3.3.1.
+
+<CodeGroup>
+```rust Code 3.3.1
+let guess: u32 = "42".parse().expect("Not a number!");
+```
+```text C-Output 3.3.1
+   Compiling no_type_annotations v0.1.0 (file:///projects/no_type_annotations)
+error[E0284]: type annotations needed
+ --> src/main.rs:2:9
+  |
+2 |     let guess = "42".parse().expect("Not a number!");
+  |         ^^^^^        ----- type must be known at this point
+  |
+  = note: cannot satisfy `<_ as FromStr>::Err == _`
+help: consider giving `guess` an explicit type
+  |
+2 |     let guess: /* Type */ = "42".parse().expect("Not a number!");
+  |              ++++++++++++
+```
+</CodeGroup>
+
+## Scalar Types
+
+>A _scalar_ type represents a single value. Rust has four primary scalar types: integers, floating-point numbers, Booleans, and characters.
+
+### Integer Types
+
+>An _integer_ is a number without a fractional component.
+
+| Length | Signed  | Unsigned |
+| ---: | :---: |  :---  |
+| 8-bit | `i8` | `u8` |
+| 16-bit | `i16` | `u16` |
+| 32-bit | `i32` | `u32` |
+| 64-bit | `i64` | `u64` |
+| 128-bit | `i128` | `u128` |
+| Arch.-dependent | `isize` | `usize` |
+
+>Each signed variant can store numbers from $-2^{n - 1}$ to $2^{n - 1} - 1$ inclusive, where $n$ is the number of bits that variant uses. So, an `i8` can store numbers from $-2^{7}$ to $2^{7 - 1}$, which equals $-128$ to $127$. Unsigned variants can store numbers from $0$ to $2^{n} - 1$, so a `u8` can store numbers from $0$ to $2^{8} - 1$, which equals $0$ to $255$.
+
+>Additionally, the `isize` and `usize` types depend on the architecture of the computer your program is running on: 64 bits if you’re on a 64-bit architecture and 32 bits if you’re on a 32-bit architecture.
+
+Let $b_{j} \in \{ 0, 1 \}$ for $j \in \{ 0, \dots, n - 1 \}$ and $c \in \{ - 1, 0 \}$. Then we have
+
+```math
+\mathtt{i8} = [c]_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
+```
+```math
+\text{from}
+```
+```math
+[c = - (1)]_{7}0_{6}0_{5}0_{4}0_{3}0_{2}0_{1}0_{0} = [- (2^{7})] + 0 + 0 + \dots + 0 = - 2^{7} = - 2^{n - 1}
+```
+```math
+\text{to}
+```
+```math
+[c = - (1)]_{7}1_{6}1_{5}1_{4}1_{3}1_{2}1_{1}1_{0} = [- (2^{7})] + 2^{6} + 2^{5} + 2^{4} + 2^{3} + 2^{2} + 2^{1} + 2^{0} = [- 2^{7}] + 2^{7} - 1 = - 1
+```
+```math
+\text{to}
+```
+```math
+[c = - (0)]_{7}0_{6}0_{5}0_{4}0_{3}0_{2}0_{1}0_{0} = [- (0)] + 0 + 0 + \dots + 0 = 0
+```
+```math
+\text{to}
+```
+```math
+[c = - (0)]_{7}1_{6}1_{5}1_{4}1_{3}1_{2}1_{1}1_{0} = [- (0)] + 2^{6} + 2^{5} + 2^{4} + 2^{3} + 2^{2} + 2^{1} + 2^{0} = [0] + 2^{7} - 1 = 2^{n - 1} - 1
+```
+```math
+\text{and}
+```
+```math
+\mathtt{u8} = b_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
+```
+```math
+\text{from}
+```
+```math
+0_{7}0_{6}0_{5}0_{4}0_{3}0_{2}0_{1}0_{0} = 0 + 0 + \dots + 0 = 0
+```
+```math
+\text{to}
+```
+```math
+1_{7}1_{6}1_{5}1_{4}1_{3}1_{2}1_{1}1_{0} = 2^{7} + 2^{6} + 2^{5} + 2^{4} + 2^{3} + 2^{2} + 2^{1} + 2^{0} = 2^{8} - 1 = 2^{n} - 1
+```
+
+The exact same reasoning applies to any number of bits (`i16`/`u16`, `i32`/`u32` etc.). To see this in action, let's write a simple project and let the Rust compiler clarify it for us. Follow along!
+
+```bash Command 3.3.1
+cd ~/rust_projects &&
+cargo new integer_lab &&
+cd integer_lab &&
+gedit src/main.rs
+```
+
+Write the following Code 3.3.2 (which has already been formatted using `cargo fmt`). Save and close the file, then execute it using `cargo run`. You should see E-Output 3.3.2.
+
+<CodeGroup>
+```rust Code 3.3.2
+fn main() {
+    let minus_one: i8 = -1;
+    println!("(- 1) byte representation -> {:08b}", minus_one);
+    let minus_two: i8 = -2;
+    println!("(- 2) byte representation -> {:08b}", minus_two);
+    let minus_three: i8 = -3;
+    println!("(- 3) byte representation -> {:08b}", minus_three);
+    let s_i8_min: i8 = (-2_i8).pow(7);
+    println!(
+        "(min signed value for an i8 variable = - 2^7) byte representation -> {:08b}",
+        s_i8_min
+    );
+    let s_zero: i8 = 0;
+    println!("(0 signed) byte representation -> {:08b}", s_zero);
+    let s_one: i8 = 1;
+    println!("(1 signed) byte representation -> {:08b}", s_one);
+    let s_i8_max: i8 = 2_i8.pow(6) + (2_i8.pow(6) - 1);
+    println!(
+        "(max signed value for an i8 variable = 2^7 - 1) byte representation -> {:08b}",
+        s_i8_max
+    );
+    let u_zero: u8 = 0;
+    println!("(0 unsigned) byte representation -> {:08b}", u_zero);
+    let u_one: u8 = 1;
+    println!("(1 unsigned) byte representation -> {:08b}", u_one);
+    let u_two: u8 = 2;
+    println!("(2 unsigned) byte representation -> {:08b}", u_two);
+    let u_u8_max: u8 = 2_u8.pow(7) + (2_u8.pow(7) - 1);
+    println!(
+        "(max unsigned value for an u8 variable = 2^8 - 1) byte representation -> {:08b}",
+        u_u8_max
+    );
+}
+```
+```text E-Output 3.3.2
+   Compiling integer_lab v0.1.0 (/var/home/z561/rust_projects/integer_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/integer_lab`
+(- 1) byte representation -> 11111111
+(- 2) byte representation -> 11111110
+(- 3) byte representation -> 11111101
+(min signed value for an i8 variable = - 2^7) byte representation -> 10000000
+(0 signed) byte representation -> 00000000
+(1 signed) byte representation -> 00000001
+(max signed value for an i8 variable = 2^7 - 1) byte representation -> 01111111
+(0 unsigned) byte representation -> 00000000
+(1 unsigned) byte representation -> 00000001
+(2 unsigned) byte representation -> 00000010
+(max unsigned value for an u8 variable = 2^8 - 1) byte representation -> 11111111
+```
+</CodeGroup>
+
+If you notice anything 'strange' in Code 3.3.2, it is likely a workaround to avoid compiler errors related to integer overflow. **For example, we cannot directly compute `2_i8.pow(7) - 1` because the compiler evaluates the exponentiation $2^7$ before subtracting $1$; the intermediate step overflows the maximum capacity of an `i8` variable (which is $2^{7} - 1$).** The Rust compiler is incredibly strict and will reject the code if it detects a guaranteed overflow at compile time. **This strictness also explains why writing `-2_i8.pow(7)` fails to compile (notice that we instead wrote `(-2_i8).pow(7)`; there are parentheses around `-2_i8`!), even though the final mathematical result ($- 2^{7} = - 128$) is the exact minimum value that fits into an `i8`. The issue is operator precedence: the compiler attempts to evaluate `2_i8.pow(7)` first, triggering an overflow before the minus sign is ever applied! To fix this, we must wrap the negative number in parentheses, writing `(-2_i8).pow(7)`, ensuring the base is negative from the start (as I did in Code 3.3.2 above).**
+
+>Let’s say you have a variable of type `u8` that can hold values between 0 and 255. If you try to change the variable to a value outside that range, such as 256, integer overflow will occur, which can result in **one of two** behaviors. **(1)** When you’re compiling in debug mode, Rust includes checks for integer overflow that cause your program to panic at runtime if this behavior occurs.
+
+>**(2)** When you’re compiling in release mode with the `--release` flag, Rust does not include checks for integer overflow that cause panics. Instead, if overflow occurs, Rust performs two’s complement wrapping. In short, values greater than the maximum value the type can hold “wrap around” to the minimum of the values the type can hold. In the case of a `u8`, the value 256 becomes 0, the value 257 becomes 1, and so on. The program won’t panic, but the variable will have a value that probably isn’t what you were expecting it to have. **Relying on integer overflow’s wrapping behavior is considered an error.**
+
+>To explicitly handle the possibility of overflow, you can use these families of methods provided by the standard library for primitive numeric types:
+
+>- Wrap in all modes with the `wrapping_*` methods, such as `wrapping_add`.
+>- Return the `None` value if there is overflow with the `checked_*` methods.
+>- Return the value and a Boolean indicating whether there was overflow with the `overflowing_*` methods.
+>- Saturate at the value’s minimum or maximum values with the `saturating_*` methods.
+
+Let's write a revised version of the previous program that follows the guidelines from the official Rust Book.
+
+<CodeGroup>
+```rust Code 3.3.3
+fn main() {
+    let s_i8_min: i8 = 2_i8.wrapping_pow(7);
+    println!(
+        "(min signed value for an i8 variable = - 2^7) byte representation -> {:08b}",
+        s_i8_min
+    );
+    println!(
+        "(- 2^7 + [2^7 - 1] = - 1) byte representation -> {:08b}",
+        s_i8_min + 2_i8.wrapping_pow(7).wrapping_sub(1)
+    );
+    let s_i8_max: i8 = 2_i8.wrapping_pow(7).wrapping_sub(1);
+    println!(
+        "(max signed value for an i8 variable = 2^7 - 1) byte representation -> {:08b}",
+        s_i8_max
+    );
+    let u_u8_max: u8 = 2_u8.wrapping_pow(8).wrapping_sub(1);
+    println!(
+        "(max unsigned value for an u8 variable = 2^8 - 1) byte representation -> {:08b}",
+        u_u8_max
+    );
+}
+```
+```text E-Output 3.3.3
+   Compiling integer_lab v0.1.0 (/home/z561/rust_projects/integer_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/integer_lab`
+(min signed value for an i8 variable = - 2^7) byte representation -> 10000000
+(- 2^7 + [2^7 - 1] = - 1) byte representation -> 11111111
+(max signed value for an i8 variable = 2^7 - 1) byte representation -> 01111111
+(max unsigned value for an u8 variable = 2^8 - 1) byte representation -> 11111111
+```
+</CodeGroup>
+
+Of the example calculations in Code 3.3.3, the first is probably the strangest and most difficult to grasp. To understand it, simply note that the overflow produced by $2^7$ exceeds the maximum limit of an `i8` by exactly 1. As a result, `wrapping_pow` simply wraps around to the lowest possible value, which is exactly $-2^7$.
+
+At this point, you might be wondering if you can use the `wrapping_*` methods to implement some form of general modular arithmetic. The answer is a definitive **no**. With these methods, the arithmetic is strictly bound to the limits of the integer types—meaning it only wraps around a modulus equal to the maximum value of the type plus one. Therefore, this is absolutely not the right approach for true modular arithmetic (though there might be some ingenious implementations out there that manage to exploit them!).
+
+>Number literals that can be multiple numeric types allow a type suffix, such as `57u8`, to designate the type. Number literals can also use `_` as a visual separator to make the number easier to read, such as `1_000`, which will have the same value as if you had specified `1000`.
+
+| Number literals | Example |
+| ---: | :--- |
+| Decimal | `98_222` |
+| Hex | `0xff` |
+| Octal | `0o77` |
+| Binary | `0b1111_0000` |
+| Byte (`u8` only) | `b'A'` |
+
+### Floating-Point Types
+
+>Rust also has two primitive types for _floating-point numbers_, which are numbers with decimal points. Rust’s floating-point types are `f32` and `f64`, which are 32 bits and 64 bits in size, respectively. The default type is `f64` because on modern CPUs, it’s roughly the same speed as `f32` but is capable of more precision. All floating-point types are signed.
+
+```rust Code 3.3.4
+fn main() {
+    let x = 2.0; // f64
+
+    let y: f32 = 3.0; // f32
+}
+```
+
+### Numeric Operations
+
+>Rust supports the basic mathematical operations you’d expect for all the number types: addition, subtraction, multiplication, division, and remainder. Integer division truncates toward zero to the nearest integer.
+
+In simpler terms, this just means that **the decimal portion is discarded from the quotient for both positive and negative numbers**.
+
+```rust Code 3.3.5
+fn main() {
+    // ADDITION
+    let sum = 5 + 10;
+
+    // SUBTRACTION
+    let difference = 95.5 - 4.3;
+
+    // MULTIPLICATION
+    let product = 4 * 30;
+
+    // DIVISION
+    let quotient = 56.7 / 32.2;
+    let truncated = -5 / 3; // Results in -1.
+
+    // REMAINDER
+    let remainder = 43 % 5;
+}
+```
+
+It is worth highlighting a subtle distinction regarding the mathematical **floor function**. While flooring produces the exact same result as truncation for positive numbers, it behaves quite differently with negative numbers. This difference is demonstrated in Code 3.3.6 below!
+
+```rust Code 3.3.6
+fn main() {
+    let num = -1.6_f32;
+    println!("Truncate: {}", num.trunc()); // 'Truncate: -1'
+    println!("Floor: {}", num.floor()); // 'Floor: -2'
+}
+```
+
+_**Floor** ($\lfloor x \rfloor$): The greatest integer less than or equal to $x$._
+
+### The Boolean Type
+
+>As in most other programming languages, a Boolean type in Rust has two possible values: `true` and `false`. Booleans are one byte in size. The Boolean type in Rust is specified using `bool`.
+
+```rust Code 3.3.6
+fn main() {
+    let t = true;
+
+    let f: bool = false; // With explicit type-annotation.
+}
+```
+
+>The main way to use Boolean values is through conditionals, such as an `if` expression.
+
+### The Character Type
+
+>Rust’s `char` type is the language’s most primitive alphabetic type. Here are some examples of declaring `char` values.
+
+```rust Code 3.3.7
+fn main() {
+    let c = 'z';
+    let z: char = 'ℤ'; // With explicit type-annotation.
+    let heart_eyed_cat = '😻';
+}
+```
+
+>**Note that we specify `char` literals with single quotation marks, as opposed to string literals, which use double quotation marks. Rust’s `char` type is 4 bytes in size and represents a Unicode scalar value, which means it can represent a lot more than just ASCII. Accented letters; Chinese, Japanese, and Korean characters; emojis; and zero-width spaces are all valid `char` values in Rust.** Unicode scalar values range from `U+0000` to `U+D7FF` and `U+E000` to `U+10FFFF` inclusive. However, a “character” isn’t really a concept in Unicode, so your human intuition for what a “character” is may not match up with what a `char` is in Rust.
+
+**As we'll discover later, assuming every character always takes up exactly 4 bytes in memory can lead to trouble. While Rust's built-in `char` type is exactly 4 bytes, when characters are stored inside a `String` or a `&str`, they are UTF-8 encoded. Inside a string, a character can take up anywhere from 1 to 4 bytes depending on what it is (e.g., standard ASCII is 1 byte, while an emoji might be 4 bytes). It can get complicated, but don't worry—later on, we will write some code that handles this UTF-8 complexity effortlessly!**
+
+## Compound Types
+
+>_Compound types_ can group multiple values into one type. Rust has two primitive compound types: tuples and arrays.
+
+Do you remember back in section 3.2 when I mentioned that it is actually possible to return an arbitrary number of values from an inner scope? Compound types are a prime—though not the only—example of how this is achieved.
+
+### The Tuple Type
+
+>A _tuple_ is a general way of grouping together a number of values with a variety of types into one compound type. Tuples have a fixed length: Once declared, they cannot grow or shrink in size.
+
+>We create a tuple by writing a comma-separated list of values inside parentheses. Each position in the tuple has a type, and the types of the different values in the tuple don’t have to be the same. 
+
+```rust Code 3.3.8
+fn main() {
+    let tup: (i32, f64, u8) = (500, 6.4, 1);
+}
+```
+
+>The variable `tup` binds to the entire tuple because a tuple is considered a single compound element. To get the individual values out of a tuple, we can use pattern matching to destructure a tuple value, like this:
+
+```rust Code 3.3.9
+fn main() {
+    let tup = (500, 6.4, 1);
+
+    let (x, y, z) = tup;
+
+    println!("The value of y is: {y}");
+}
+```
+
+>This program first creates a tuple and binds it to the variable `tup`. It then uses a pattern with `let` to take `tup` and turn it into three separate variables, `x`, `y`, and `z`. This is called _destructuring_ because it breaks the single tuple into three parts. Finally, the program prints the value of `y`, which is `6.4`.
+
+>We can also access a tuple element directly by using a period (`.`) followed by the index of the value we want to access. For example:
+
+```rust Code 3.3.10
+fn main() {
+    let x: (i32, f64, u8) = (500, 6.4, 1);
+
+    let five_hundred = x.0;
+
+    let six_point_four = x.1;
+
+    let one = x.2;
+}
+```
+
+>This program creates the tuple `x` and then accesses each element of the tuple using their respective indices. As with most programming languages, the first index in a tuple is 0.
+
+>The tuple without any values has a special name, _unit_. **This value and its corresponding type are both written `()` and represent an empty value or an empty return type. Expressions implicitly return the unit value if they don’t return any other value.**
+
+### The Array Type
+
+>Another way to have a collection of multiple values is with an _array_. **Unlike a tuple, every element of an array must have the same type. Arrays in Rust have a fixed length.**
+
+>We write the values in an array as a comma-separated list inside square brackets.
+
+```rust Code 3.3.11
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+}
+```
+
+>**Arrays are useful when you want your data allocated on the stack rather than the heap or when you want to ensure that you always have a fixed number of elements.** An array isn’t as flexible as the vector type, though. **A vector is a similar collection type provided by the standard library that is allowed to grow or shrink in size because its contents live on the heap. If you’re unsure whether to use an array or a vector, chances are you should use a vector.** However, arrays are more useful when you know the number of elements will not need to change. 
+
+>For example, if you were using the names of the month in a program, you would probably use an array rather than a vector because you know it will always contain 12 elements:
+
+```rust Code 3.3.12
+let months = ["January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December"];
+
+```
+
+>You write an array’s type using square brackets with the type of each element, a semicolon, and then the number of elements in the array, like so:
+
+```rust Code 3.3.13
+let a: [i32; 5] = [1, 2, 3, 4, 5];
+```
+
+>Here, `i32` is the type of each element. After the semicolon, the number `5` indicates the array contains five elements.
+
+>You can also initialize an array to contain the same value for each element by specifying the initial value, followed by a semicolon, and then the length of the array in square brackets, as shown here:
+
+```rust Code 3.3.14
+let a = [3; 5];
+```
+
+>The array named `a` will contain `5` elements that will all be set to the value `3` initially. This is the same as writing `let a = [3, 3, 3, 3, 3];` but in a more concise way.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
