@@ -45,14 +45,14 @@ help: consider giving `guess` an explicit type
 | 128-bit | `i128` | `u128` |
 | Arch.-dependent | `isize` | `usize` |
 
->Each signed variant can store numbers from $-2^{n - 1}$ to $2^{n - 1} - 1$ inclusive, where $n$ is the number of bits that variant uses. So, an `i8` can store numbers from $-2^{7}$ to $2^{7 - 1}$, which equals $-128$ to $127$. Unsigned variants can store numbers from $0$ to $2^{n} - 1$, so a `u8` can store numbers from $0$ to $2^{8} - 1$, which equals $0$ to $255$.
+>The `isize` and `usize` types depend on the architecture of the computer your program is running on: 64 bits if you’re on a 64-bit architecture and 32 bits if you’re on a 32-bit architecture.
 
->Additionally, the `isize` and `usize` types depend on the architecture of the computer your program is running on: 64 bits if you’re on a 64-bit architecture and 32 bits if you’re on a 32-bit architecture.
+>Each signed variant can store numbers from $-2^{n - 1}$ to $2^{n - 1} - 1$ inclusive, where $n$ is the number of bits that variant uses. So, an `i8` can store numbers from $-2^{7}$ to $2^{7 - 1}$, which equals $-128$ to $127$. Unsigned variants can store numbers from $0$ to $2^{n} - 1$, so a `u8` can store numbers from $0$ to $2^{8} - 1$, which equals $0$ to $255$.
 
 Let $b_{j} \in \{ 0, 1 \}$ for $j \in \{ 0, \dots, n - 1 \}$ and $c \in \{ - 1, 0 \}$. Then we have
 
 ```math
-\mathtt{i8} = [c]_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
+\textcolor{#4EC9B0}{\text{i8}} = [c]_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
 ```
 ```math
 \text{from}
@@ -82,7 +82,7 @@ Let $b_{j} \in \{ 0, 1 \}$ for $j \in \{ 0, \dots, n - 1 \}$ and $c \in \{ - 1, 
 \text{and}
 ```
 ```math
-\mathtt{u8} = b_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
+\textcolor{#4EC9B0}{\text{u8}} = b_{7}b_{6}b_{5}b_{4}b_{3}b_{2}b_{1}b_{0}
 ```
 ```math
 \text{from}
@@ -117,11 +117,17 @@ fn main() {
     println!("(- 2) byte representation -> {:08b}", minus_two);
     let minus_three: i8 = -3;
     println!("(- 3) byte representation -> {:08b}", minus_three);
+
+    let s_i8_min_plus_two: i8 = (-2_i8).pow(7) + 2;
+    println!("(- 2^7 + 2) byte representation -> {:08b}", s_i8_min_plus_two);
+    let s_i8_min_plus_one: i8 = (-2_i8).pow(7) + 1;
+    println!("(- 2^7 + 1) byte representation -> {:08b}", s_i8_min_plus_one);
     let s_i8_min: i8 = (-2_i8).pow(7);
     println!(
         "(min signed value for an i8 variable = - 2^7) byte representation -> {:08b}",
         s_i8_min
     );
+
     let s_zero: i8 = 0;
     println!("(0 signed) byte representation -> {:08b}", s_zero);
     let s_one: i8 = 1;
@@ -131,6 +137,7 @@ fn main() {
         "(max signed value for an i8 variable = 2^7 - 1) byte representation -> {:08b}",
         s_i8_max
     );
+
     let u_zero: u8 = 0;
     println!("(0 unsigned) byte representation -> {:08b}", u_zero);
     let u_one: u8 = 1;
@@ -146,11 +153,13 @@ fn main() {
 ```
 ```text E-Output 3.3.2
    Compiling integer_lab v0.1.0 (/var/home/z561/rust_projects/integer_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
      Running `target/debug/integer_lab`
 (- 1) byte representation -> 11111111
 (- 2) byte representation -> 11111110
 (- 3) byte representation -> 11111101
+(- 2^7 + 2) byte representation -> 10000010
+(- 2^7 + 1) byte representation -> 10000001
 (min signed value for an i8 variable = - 2^7) byte representation -> 10000000
 (0 signed) byte representation -> 00000000
 (1 signed) byte representation -> 00000001
@@ -394,17 +403,59 @@ let a = [3; 5];
 
 >The array named `a` will contain `5` elements that will all be set to the value `3` initially. This is the same as writing `let a = [3, 3, 3, 3, 3];` but in a more concise way.
 
+### Array Element Access
 
+>You can access elements of an array using indexing, like this:
 
+```rust Code 3.3.15
+fn main() {
+    let a = [1, 2, 3, 4, 5];
 
+    let first = a[0];
+    let second = a[1];
+}
+```
 
+>In this example, the variable named `first` will get the value `1` because that is the value at index `[0]` in the array. The variable named `second` will get the value `2` from index `[1]` in the array.
 
+### Invalid Array Element Access
 
+>Let’s see what happens if you try to access an element of an array that is past the end of the array. **Code 3.3.16 compiles successfully.** If you run Code 3.3.16 using `cargo run` and enter `0`, `1`, `2`, `3`, or `4`, the program will print out the corresponding value at that index in the array. If you instead enter a number past the end of the array, such as `10`, you’ll see E-Output 3.3.16.
 
+<CodeGroup>
+```rust Code 3.3.16
+use std::io;
 
+fn main() {
+    let a = [1, 2, 3, 4, 5];
 
+    println!("Please enter an array index.");
 
+    let mut index = String::new();
 
+    io::stdin()
+        .read_line(&mut index)
+        .expect("Failed to read line");
 
+    let index: usize = index
+        .trim()
+        .parse()
+        .expect("Index entered was not a number");
 
+    let element = a[index];
 
+    println!("The value of the element at index {index} is: {element}");
+}
+```
+```text E-Output 3.3.16
+thread 'main' panicked at src/main.rs:19:19:
+index out of bounds: the len is 5 but the index is 10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+</CodeGroup>
+
+This is one of the rare instances I warned you about, where E-Output X.Y.Z actually shows a runtime error!
+
+>The program resulted in a runtime error at the point of using an invalid value in the indexing operation. The program exited with an error message and didn’t execute the final `println!` statement. When you attempt to access an element using indexing, Rust will check that the index you’ve specified is less than the array length. If the index is greater than or equal to the length, Rust will panic. This check has to happen at runtime, especially in this case, because the compiler can’t possibly know what value a user will enter when they run the code later.
+
+>This is an example of Rust’s memory safety principles in action. In many low-level languages, this kind of check is not done, and when you provide an incorrect index, invalid memory can be accessed. Rust protects you against this kind of error by immediately exiting instead of allowing the memory access and continuing. Ch. 9 discusses more of Rust’s error handling and how you can write readable, safe code that neither panics nor allows invalid memory access.

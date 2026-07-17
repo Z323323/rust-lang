@@ -1,151 +1,33 @@
 ---
-title: "Ownership in Rust: Rules, Move, and Clone Explained"
-sidebarTitle: "Ownership"
-description: "Learn Rust's ownership system: the three ownership rules, how values are moved vs. copied, and why ownership enables memory safety without a GC."
+title: "What Is Ownership"
 mode: "wide"
+sidebarTitle: "4.1 - What Is Ownership"
 ---
 
-Ownership is Rust's most distinctive feature — a set of compile-time rules that governs how memory is managed without a garbage collector. By enforcing ownership statically, Rust guarantees that you will never have dangling pointers, double-frees, or data races, all while giving you the performance of manual memory management.
+>Ownership is a set of rules that govern how a Rust program manages memory. If any of the rules are violated, the program won’t compile. None of the features of ownership will slow down your program while it’s running.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+>In this chapter, you’ll learn ownership by working through some examples that focus on a very common data structure: strings.
 
-## The Three Ownership Rules
+The choice, of course, is not arbitrary. The underlying rationale is identical to what was addressed in section 3.2. In this chapter, however, the issue will be analyzed in much greater depth.
 
-Every value in Rust obeys three fundamental rules enforced at compile time:
+<Callout icon="key" color="#A855F7" iconType="regular">
+**The Stack and the Heap**
 
-1. **Each value in Rust has an owner.**
-2. **There can only be one owner at a time.**
-3. **When the owner goes out of scope, the value is dropped.**
+>In a systems programming language like Rust, whether a value is on the stack or the heap affects how the language behaves and why you have to make certain decisions.
 
-These rules are simple, but their implications are deep. There is no need to call `free()` or wait for a GC pause — Rust automatically inserts a `drop` call when the owner leaves scope.
+>Both the stack and the heap are parts of memory available to your code to use at runtime, but they are structured in different ways. The stack stores values in the order it gets them and removes the values in the opposite order. This is referred to as _last in, first out (LIFO)_. Adding data is called _pushing onto the stack_, and removing data is called _popping off the stack_. **All data stored on the stack must have a known, fixed size. Data with an unknown size at compile time or a size that might change must be stored on the heap instead.**
 
-```rust
-fn main() {
-    {
-        let s = String::from("hello"); // s is the owner
-        // s is valid here
-    }
-    // s goes out of scope; String memory is freed automatically
-}
-```
+>**When you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a _pointer_, which is the address of that location.** This process is called _allocating on the heap_ (pushing values onto the stack is not considered allocating). **Because the pointer to the heap is a known, fixed size, you can store the pointer on the stack, but when you want the actual data, you must follow the pointer.**
 
-## Move Semantics
+>**Pushing to the stack is faster than allocating on the heap because the allocator never has to search for a place to store new data; that location is always at the top of the stack. Comparatively, allocating space on the heap requires more work because the allocator must first find a big enough space to hold the data and then perform bookkeeping to prepare for the next allocation.**
 
-When you assign a heap-allocated value to another variable, Rust *moves* ownership rather than copying the data. The original variable becomes invalid.
+>**Accessing data in the heap is generally slower than accessing data on the stack because you have to follow a pointer to get there. Contemporary processors are faster if they jump around less in memory. A processor can usually do its job better if it works on data that’s close to other data (as it is on the stack) rather than farther away (as it can be on the heap).**
 
-```rust
-fn main() {
-    let s1 = String::from("hello");
-    let s2 = s1; // ownership moves to s2
+>**When your code calls a function, the values passed into the function (including, potentially, pointers to data on the heap) and the function’s local variables get pushed onto the stack. When the function is over, those values get popped off the stack.**
 
-    // println!("{}", s1); // ❌ compile error: s1 has been moved
-    println!("{}", s2);    // ✅ s2 is the new owner
-}
-```
+The exact same thing, actually, applies to all the scopes we looked at in section 3.2 as well. In fact, whenever an inner scope ends, all the variables defined within it are dropped as they are popped off the stack. It's all starting to make more sense now, isn't it?
 
-This prevents a *double-free* error: if both `s1` and `s2` tried to free the same memory when they went out of scope, the program would be unsound. Rust solves this by invalidating the original binding at compile time.
+>Keeping track of what parts of code are using what data on the heap, minimizing the amount of duplicate data on the heap, and cleaning up unused data on the heap so that you don’t run out of space are all problems that ownership addresses. Once you understand ownership, you won’t need to think about the stack and the heap very often. But knowing that the main purpose of ownership is to manage heap data can help explain why it works the way it does.
+</Callout>
 
-### Move in Function Calls
 
-Passing a value to a function also transfers ownership:
-
-```rust
-fn takes_ownership(s: String) {
-    println!("{}", s);
-} // s is dropped here
-
-fn main() {
-    let my_string = String::from("world");
-    takes_ownership(my_string);
-    // println!("{}", my_string); // ❌ moved into the function
-}
-```
-
-If you want to use the value after calling a function, you must either return it back out, or use borrowing (covered in the next section).
-
-## Clone: Explicit Deep Copy
-
-When you *do* want a full copy of heap data, call `.clone()`. This is an explicit signal that an allocation is happening:
-
-```rust
-fn main() {
-    let s1 = String::from("hello");
-    let s2 = s1.clone(); // deep copy — both are valid
-
-    println!("s1 = {}, s2 = {}", s1, s2);
-}
-```
-
-Use `.clone()` sparingly; prefer borrowing when you only need temporary access to a value.
-
-## Copy Types: Stack-Only Data
-
-Types that live entirely on the stack — integers, booleans, floats, `char`, and tuples of `Copy` types — implement the `Copy` trait. For these types, assignment copies the bits; the original remains valid:
-
-```rust
-fn main() {
-    let x = 5;
-    let y = x; // copied, not moved
-
-    println!("x = {}, y = {}", x, y); // ✅ both valid
-}
-```
-
-`String` does **not** implement `Copy` because it owns heap memory. `&str` (a string slice) does implement `Copy` because it is just a pointer and a length living on the stack.
-
-## `String` vs `&str`
-
-Understanding the difference between `String` and `&str` is essential:
-
-| Type | Ownership | Location | Mutable |
-|------|-----------|----------|---------|
-| `String` | Owned | Heap | Yes (`mut`) |
-| `&str` | Borrowed view | Usually static / stack | No |
-
-```rust
-fn greet(name: &str) {
-    println!("Hello, {}!", name);
-}
-
-fn main() {
-    let owned: String = String::from("Alice");
-    let literal: &str = "Bob";
-
-    greet(&owned);   // &String coerces to &str
-    greet(literal);  // already a &str
-}
-```
-
-Prefer `&str` in function signatures when you only need to read the string — it accepts both `String` references and string literals, making your API more flexible.
-
-## Ownership and Returning Values
-
-A function can transfer ownership back to the caller by returning a value:
-
-```rust
-fn gives_ownership() -> String {
-    let s = String::from("hello");
-    s // ownership moves to the caller
-}
-
-fn takes_and_gives_back(s: String) -> String {
-    s // ownership moves back out
-}
-
-fn main() {
-    let s1 = gives_ownership();
-    let s2 = String::from("world");
-    let s3 = takes_and_gives_back(s2);
-    // s2 is invalid; s1 and s3 are valid
-}
-```
-
-Having to return values just to continue using them is verbose. That's why Rust also provides *references and borrowing*, which let a function use a value without taking ownership.
-
-## Summary
-
-- Every value has exactly one owner; when the owner goes out of scope the value is freed.
-- Assignment and function calls *move* heap-allocated values.
-- Use `.clone()` for an explicit deep copy.
-- Stack-only `Copy` types are copied automatically.
-- `String` is an owned, heap-allocated string; `&str` is a borrowed string slice.
