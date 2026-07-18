@@ -6,8 +6,8 @@ sidebarTitle: "1.8 - Naming Conventions"
 
 Before diving back into the Rust book, we need to highlight two important concepts:
 
-- Proper **naming conventions** are essential for writing Rust code and building projects correctly.
-- The packages versions we have seen all utilize the **SemVer** (Semantic Versioning) specification.
+- Proper _naming conventions_ are essential for writing Rust code and building projects correctly.
+- The packages versions we have seen all utilize the _SemVer_ (_Semantic Versioning_) specification.
 
 Unlike the previous section, the following content is completely original and does not appear in the official documentation.
 
@@ -44,7 +44,7 @@ Early versions follow special rules because their APIs are inherently unstable:
 
 ### Dependency Requirement Operators
 
-When you declare a dependency in your Cargo.toml file, Cargo uses specific operators to determine which updates are permitted when you run `cargo update`.
+When you declare a dependency in your _Cargo.toml_ file, Cargo uses specific operators to determine which updates are permitted when you run `cargo update`.
 
 | Operand | Example | <div className="text-center">Meaning</div> |
 | :--- | :---: | :--- |
@@ -53,6 +53,6 @@ When you declare a dependency in your Cargo.toml file, Cargo uses specific opera
 | **Wildcard** (`*`) | `1.2.*` | Any version starting with `1.2`. |
 | **Inequality** | `>= 1.2.0` | It specifies a minimum or maximum range. |
 
-**While Cargo.toml defines the version ranges you accept, Cargo.lock pins the exact versions that were successfully downloaded and resolved.**
+**While _Cargo.toml_ defines the version ranges you accept, _Cargo.lock_ pins the exact versions that were successfully downloaded and resolved.**
 
-**To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your Cargo.toml file.**
+**To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your _Cargo.toml_ file.**

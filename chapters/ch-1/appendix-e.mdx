@@ -4,17 +4,17 @@ mode: "wide"
 sidebarTitle: "1.4 - Appendix E: Editions"
 ---
 
-This is the first example of how the official content has been reorganized. The previous section introduced the concept of Rust **edition** in relation to the Cargo.toml file. Appendix E specifically covers this exact topic, which is why its content has been moved to this position in the book.
+This is the first example of how the official content has been reorganized. The previous section introduced the concept of Rust **edition** in relation to the _Cargo.toml_ file. Appendix E specifically covers this exact topic, which is why its content has been moved to this position in the book.
 
->`cargo new` adds a bit of metadata to your Cargo.toml file about an edition.
+>`cargo new` adds a bit of metadata to your _Cargo.toml_ file about an edition.
 
->The Rust language and compiler have a six-week release cycle, meaning users get a constant stream of new features. After a while, all of these tiny changes add up. Every three years or so, the Rust team produces a new Rust edition. Each edition brings together the features that have landed into a clear package with fully updated documentation and tooling. New editions ship as part of the usual six-week release process.
+>The Rust language and compiler have a six-week release cycle, meaning users get a constant stream of new features. After a while, all of these tiny changes add up. Every three years or so, the Rust team produces a new Rust _edition_. Each edition brings together the features that have landed into a clear package with fully updated documentation and tooling. New editions ship as part of the usual six-week release process.
 
 >For active Rust users, a new edition brings together incremental changes into an easy-to-understand package.
 
 >At the time of this writing, four Rust editions are available: Rust 2015, Rust 2018, Rust 2021, and Rust 2024. This book is written using Rust 2024 edition idioms.
 
->The `edition` key in Cargo.toml indicates which edition the compiler should use for your code. If the key doesn’t exist, Rust uses `2015` as the edition value for backward compatibility reasons.
+>The `edition` key in _Cargo.toml_ indicates which edition the compiler should use for your code. If the key doesn’t exist, Rust uses `2015` as the edition value for backward compatibility reasons.
 
 >**Editions can contain incompatible changes, such as including a new keyword that conflicts with identifiers in code.** However, unless you opt in to those changes, your code will continue to compile even as you upgrade the Rust compiler version you use.
 

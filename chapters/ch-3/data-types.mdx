@@ -173,9 +173,12 @@ fn main() {
 
 If you notice anything 'strange' in Code 3.3.2, it is likely a workaround to avoid compiler errors related to integer overflow. **For example, we cannot directly compute `2_i8.pow(7) - 1` because the compiler evaluates the exponentiation $2^7$ before subtracting $1$; the intermediate step overflows the maximum capacity of an `i8` variable (which is $2^{7} - 1$).** The Rust compiler is incredibly strict and will reject the code if it detects a guaranteed overflow at compile time. **This strictness also explains why writing `-2_i8.pow(7)` fails to compile (notice that we instead wrote `(-2_i8).pow(7)`; there are parentheses around `-2_i8`!), even though the final mathematical result ($- 2^{7} = - 128$) is the exact minimum value that fits into an `i8`. The issue is operator precedence: the compiler attempts to evaluate `2_i8.pow(7)` first, triggering an overflow before the minus sign is ever applied! To fix this, we must wrap the negative number in parentheses, writing `(-2_i8).pow(7)`, ensuring the base is negative from the start (as I did in Code 3.3.2 above).**
 
->Let’s say you have a variable of type `u8` that can hold values between 0 and 255. If you try to change the variable to a value outside that range, such as 256, integer overflow will occur, which can result in **one of two** behaviors. **(1)** When you’re compiling in debug mode, Rust includes checks for integer overflow that cause your program to panic at runtime if this behavior occurs.
+<Info>
+**Integer Overflow**
 
->**(2)** When you’re compiling in release mode with the `--release` flag, Rust does not include checks for integer overflow that cause panics. Instead, if overflow occurs, Rust performs two’s complement wrapping. In short, values greater than the maximum value the type can hold “wrap around” to the minimum of the values the type can hold. In the case of a `u8`, the value 256 becomes 0, the value 257 becomes 1, and so on. The program won’t panic, but the variable will have a value that probably isn’t what you were expecting it to have. **Relying on integer overflow’s wrapping behavior is considered an error.**
+>Let’s say you have a variable of type `u8` that can hold values between 0 and 255. If you try to change the variable to a value outside that range, such as 256, _integer overflow_ will occur, which can result in **one of two** behaviors. **(1)** When you’re compiling in debug mode, Rust includes checks for integer overflow that cause your program to _panic_ at runtime if this behavior occurs. Rust uses the term _panicking_ when a program exits with an error.
+
+>**(2)** When you’re compiling in release mode with the `--release` flag, Rust does not include checks for integer overflow that cause panics. Instead, if overflow occurs, Rust performs _two’s complement wrapping_. In short, values greater than the maximum value the type can hold “wrap around” to the minimum of the values the type can hold. In the case of a `u8`, the value 256 becomes 0, the value 257 becomes 1, and so on. The program won’t panic, but the variable will have a value that probably isn’t what you were expecting it to have. **Relying on integer overflow’s wrapping behavior is considered an error.**
 
 >To explicitly handle the possibility of overflow, you can use these families of methods provided by the standard library for primitive numeric types:
 
@@ -183,6 +186,7 @@ If you notice anything 'strange' in Code 3.3.2, it is likely a workaround to avo
 >- Return the `None` value if there is overflow with the `checked_*` methods.
 >- Return the value and a Boolean indicating whether there was overflow with the `overflowing_*` methods.
 >- Saturate at the value’s minimum or maximum values with the `saturating_*` methods.
+</Info>
 
 Let's write a revised version of the previous program that follows the guidelines from the official Rust Book.
 

@@ -32,7 +32,7 @@ Throughout the book, I will assume you are using Linux. Nevertheless, you can ex
   <Step title="Checking Installation">
    <Tabs>
     <Tab title="Checking Cargo Version">
-    After installing `rustup`, the installer should automatically add the ~/.cargo/bin directory to your system's `PATH` environment variable. To verify that everything is configured correctly, simply open a new terminal and run:
+    After installing `rustup`, the installer should automatically add the _~/.cargo/bin_ directory to your system's `PATH` environment variable. To verify that everything is configured correctly, simply open a new terminal and run:
     
     <CodeGroup>
     ```bash Command 1.1.2-1
@@ -46,13 +46,13 @@ Throughout the book, I will assume you are using Linux. Nevertheless, you can ex
     If the terminal outputs the version number, your setup is complete. If the command is not recognized, the environment variable hasn't been updated in your current session. You can resolve this by running `source $HOME/.cargo/env` to apply the changes immediately, or by simply restarting your terminal.
     </Tab>
     <Tab title="Checking Environment Variable">
-    Once the installation of `rustup` and Cargo is complete, you should verify that your `PATH` environment variable has been updated correctly. The ~/.cargo/bin directory must be present in your `PATH` to execute Rust tools from the command line. You can check this by printing the variable to your terminal:
+    Once the installation of `rustup` and Cargo is complete, you should verify that your `PATH` environment variable has been updated correctly. The _~/.cargo/bin_ directory must be present in your `PATH` to execute Rust tools from the command line. You can check this by printing the variable to your terminal:
     
     ```bash Command 1.1.2-2
     echo $PATH
     ```
     
-    Check the output for /home/your_username/.cargo/bin. If it is missing, you need to reload your shell configuration by running `source $HOME/.cargo/env`, or close and reopen your terminal window.
+    Check the output for _/home/your_username/.cargo/bin_. If it is missing, you need to reload your shell configuration by running `source $HOME/.cargo/env`, or close and reopen your terminal window.
     
     </Tab>
    </Tabs> 

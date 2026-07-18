@@ -10,14 +10,18 @@ sidebarTitle: "4.1 - What Is Ownership"
 
 The choice, of course, is not arbitrary. The underlying rationale is identical to what was addressed in section 3.2. In this chapter, however, the issue will be analyzed in much greater depth.
 
-<Callout icon="key" color="#A855F7" iconType="regular">
+<Callout icon="key" color="#12A0D7" iconType="regular">
 **The Stack and the Heap**
 
 >In a systems programming language like Rust, whether a value is on the stack or the heap affects how the language behaves and why you have to make certain decisions.
 
 >Both the stack and the heap are parts of memory available to your code to use at runtime, but they are structured in different ways. The stack stores values in the order it gets them and removes the values in the opposite order. This is referred to as _last in, first out (LIFO)_. Adding data is called _pushing onto the stack_, and removing data is called _popping off the stack_. **All data stored on the stack must have a known, fixed size. Data with an unknown size at compile time or a size that might change must be stored on the heap instead.**
 
+**All of the standard scalar types provided by Rust—which we explored in section 3.3—have a known, fixed size at compile time. Because of this, they are stored directly on the stack and inherently implement the `Copy` trait!**
+
 >**When you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a _pointer_, which is the address of that location.** This process is called _allocating on the heap_ (pushing values onto the stack is not considered allocating). **Because the pointer to the heap is a known, fixed size, you can store the pointer on the stack, but when you want the actual data, you must follow the pointer.**
+
+**Data types that have a dynamic size (such as `String`) must allocate their underlying data on the heap. Because they are responsible for managing this heap memory, they absolutely cannot implement the `Copy` trait!**
 
 >**Pushing to the stack is faster than allocating on the heap because the allocator never has to search for a place to store new data; that location is always at the top of the stack. Comparatively, allocating space on the heap requires more work because the allocator must first find a big enough space to hold the data and then perform bookkeeping to prepare for the next allocation.**
 
@@ -29,5 +33,33 @@ The exact same thing, actually, applies to all the scopes we looked at in sectio
 
 >Keeping track of what parts of code are using what data on the heap, minimizing the amount of duplicate data on the heap, and cleaning up unused data on the heap so that you don’t run out of space are all problems that ownership addresses. Once you understand ownership, you won’t need to think about the stack and the heap very often. But knowing that the main purpose of ownership is to manage heap data can help explain why it works the way it does.
 </Callout>
+
+## Ownership Rules
+
+This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text. The identical approach will be pursued in several subsequent sections of Ch. 4.
+
+>First, let’s take a look at the ownership rules. Keep these rules in mind as we work through the examples that illustrate them:
+
+>- Each value in Rust has an _owner_.<br />
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, at the end of the day, the only mechanism you truly need to worry about is the `=` assignment for variables whose types do not implement `Copy`. This is because, in these specific cases, <b>the variable on the right side of the equals sign is moved</b>. <b>When this happens, it permanently loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself.</b>
+>     </div>
+>   </div>
+>- There can only be one _owner_ at a time.<br />
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <b>two distinct copies of that value in memory, bound to two distinct variables (the owners)</b>. This principle remains valid even when the values being copied are identical memory addresses referencing the same data on the heap. It applies equally to the stack: copying memory addresses that point to stack data is entirely possible using references. <b>Ultimately, the `Copy` trait simply performs a direct copy of the value's bits—whether those bits represent the actual data itself or just an address pointing to it.</b> Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated from memory, as demonstrated in section 3.2.
+>     </div>
+>   </div>
+>- When the _owner_ goes out of scope, the value will be dropped.<br />
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>       This absolute rule directly reflects our observations from section 3.2 and needs no further breakdown.
+>     </div>
+>   </div>
 
 

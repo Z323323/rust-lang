@@ -81,9 +81,9 @@ fn main() {
 
 Consequently, some questions should naturally arise:
 
-- <span style={{ color: "#FF8C00" }}><b>Q-1</b>: Why shadow a variable by reusing the same name if it is actually a totally separate variable?</span>
-- <span style={{ color: "#FF8C00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
-- <span style={{ color: "#FF8C00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
+- <span style={{ color: "#964B00" }}><b>Q-1</b>: Why shadow a variable by reusing the same name if it is actually a totally separate variable?</span>
+- <span style={{ color: "#964B00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
+- <span style={{ color: "#964B00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
 
 We will answer each question in the following paragraphs. Before doing so, however, we need to cover a couple of fundamental concepts and distinguish the **generic block scopes** we just explored from the **scopes introduced by functions**.
 
@@ -103,21 +103,21 @@ If you think about it, this makes perfect sense. First, an outer scope cannot 'c
 
 Finally, note that our previous example showed the simplest form of an inner scope—one created explicitly with bare `{ ... }` brackets. In general, a new scope is created almost every time you see curly brackets. For instance, **defining a function or calling a method introduces a new scope**. However, there is a crucial difference: **unlike bare blocks, functions and methods do not automatically see the variables of the scope that called them**. **The parameters you explicitly pass to the function are the only outer variables allowed into that new scope.**
 
-We are now prepared to address <span style={{ color: "#FF8C00" }}><b>Q-1</b></span> and <span style={{ color: "#FF8C00" }}><b>Q-2</b></span>. Prior to doing so, however, it is necessary to introduce two final, critical concepts directly related to <span style={{ color: "#FF8C00" }}><b>Q-3</b></span> to conclude this section effectively.
+We are now prepared to address <span style={{ color: "#964B00" }}><b>Q-1</b></span> and <span style={{ color: "#964B00" }}><b>Q-2</b></span>. Prior to doing so, however, it is necessary to introduce two final, critical concepts directly related to <span style={{ color: "#964B00" }}><b>Q-3</b></span> to conclude this section effectively.
 
 - **It is possible to return values—whether explicitly or implicitly—from any scope, ensuring that local temporary variables are dropped while a resulting value is successfully captured by the enclosing scope.**
 - **We can explicitly pass variables from an outer scope into an inner scope, mutate them, and 'protect' them. This mechanism ensures that the cleanup and 'destruction' of the inner scope's variables does not trigger the destruction of the borrowed variables we require in the outer scope!**
 
 ## Q&A Pt. 1
 
-- <span style={{ color: "#FF8C00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
-- <span style={{ color: "#0050FF" }}><b>A-2</b>: While it is entirely possible to use bare scopes in a completely pointless way, there are specific scenarios where they become highly beneficial. <b>Utilizing bare scopes is primarily useful when you want to discard specific modifications or temporary variables at the end of a set of operations.</b> This ensures that any variable defined within that scope—including those modified via shadowing—is automatically dropped once the scope ends, <b>eliminating the need to track these variables later and ensuring their memory is released immediately</b>.</span>
-- <span style={{ color: "#FF8C00" }}><b>Q-1</b>: Why shadow a variable by reusing the same name if it is actually a totally separate variable?</span>
-- <span style={{ color: "#0050FF" }}><b>A-1</b>: When defining an entirely new variable in a nested scope, <b>its only logical purpose is to serve as a temporary variable</b>. In the context of shadowing, the reason for reusing a name for this temporary variable is now clear: <b>the temporary variable is logically related to the original variable in the outer scope</b>. This is why I mostly referred to <b>temporary modifications</b> when discussing shadowing: the values of the shadowed variables are seamlessly restored as soon as the inner scope ends. Nevertheless, this behavior is merely an illusion. Under the hood, <b>shadowed variables within inner scopes are entirely new variables</b>, as demonstrated earlier.</span>
+- <span style={{ color: "#964B00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
+- <span style={{ color: "#008080" }}><b>A-2</b>: While it is entirely possible to use bare scopes in a completely pointless way, there are specific scenarios where they become highly beneficial. <b>Utilizing bare scopes is primarily useful when you want to discard specific modifications or temporary variables at the end of a set of operations.</b> This ensures that any variable defined within that scope—including those modified via shadowing—is automatically dropped once the scope ends, <b>eliminating the need to track these variables later and ensuring their memory is released immediately</b>.</span>
+- <span style={{ color: "#964B00" }}><b>Q-1</b>: Why shadow a variable by reusing the same name if it is actually a totally separate variable?</span>
+- <span style={{ color: "#008080" }}><b>A-1</b>: When defining an entirely new variable in a nested scope, <b>its only logical purpose is to serve as a temporary variable</b>. In the context of shadowing, the reason for reusing a name for this temporary variable is now clear: <b>the temporary variable is logically related to the original variable in the outer scope</b>. This is why I mostly referred to <b>temporary modifications</b> when discussing shadowing: the values of the shadowed variables are seamlessly restored as soon as the inner scope ends. Nevertheless, this behavior is merely an illusion. Under the hood, <b>shadowed variables within inner scopes are entirely new variables</b>, as demonstrated earlier.</span>
 
 Let's now dive into a simple function to see how variables are passed into its scope. Afterward, we will highlight the key similarities and differences between function scopes and the bare blocks we explored earlier.
 
-Once that's done, we will finally answer question <span style={{ color: "#FF8C00" }}><b>Q-3</b></span> raised earlier, definitively clearing up the topic of scopes—a fundamental concept in Rust. This is exactly why I dedicated an entire section to it. Grasping how scopes work right from the start will massively accelerate and improve your understanding of Rust's more complex core mechanisms, such as its famous **ownership model**.
+Once that's done, we will finally answer question <span style={{ color: "#964B00" }}><b>Q-3</b></span> raised earlier, definitively clearing up the topic of scopes—a fundamental concept in Rust. This is exactly why I dedicated an entire section to it. Grasping how scopes work right from the start will massively accelerate and improve your understanding of Rust's more complex core mechanisms, such as its famous **ownership model**.
 
 ## Connecting Block Scopes with Function Scopes
 
@@ -211,12 +211,12 @@ Take a moment to compare Code 3.2.6 to Code 3.2.7; they are practically—though
 
 ## Q&A Pt. 2
 
-Building on the previous paragraph, we can now define and answer <span style={{ color: "#FF8C00" }}><b>Q-4</b></span> as follows.
+Building on the previous paragraph, we can now define and answer <span style={{ color: "#964B00" }}><b>Q-4</b></span> as follows.
 
-- <span style={{ color: "#FF8C00" }}><b>Q-4</b>: If the preceding paragraph code snippets are related, why should we use bare scopes instead of functions, and viceversa? What are the actual differences between using functions and using bare scopes?</span>
-- <span style={{ color: "#0050FF" }}><b>A-4</b>: There are primarily two differences between these two approaches.</span><br /><br />
+- <span style={{ color: "#964B00" }}><b>Q-4</b>: If the preceding paragraph code snippets are related, why should we use bare scopes instead of functions, and viceversa? What are the actual differences between using functions and using bare scopes?</span>
+- <span style={{ color: "#008080" }}><b>A-4</b>: There are primarily two differences between these two approaches.</span><br /><br />
 
-  <span style={{ color: "#0050FF" }}>The first is that <b>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</b>. Take Code 3.2.8 as an example:</span>
+  <span style={{ color: "#008080" }}>The first is that <b>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</b>. Take Code 3.2.8 as an example:</span>
   
   ```rust Code 3.2.8
   fn main() {
@@ -231,7 +231,7 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   }
   ```
   
-  <span style={{ color: "#0050FF" }}>In this case, <b>had we used the functions shown previously in Code 3.2.6, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function!</b> Attempting to do so would result in a compilation error, as shown below.</span>
+  <span style={{ color: "#008080" }}>In this case, <b>had we used the functions shown previously in Code 3.2.6, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function!</b> Attempting to do so would result in a compilation error, as shown below.</span>
   
   ```rust Code 3.2.9
   fn main() {
@@ -255,15 +255,15 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   }
   ```
   
-  <span style={{ color: "#0050FF" }}>The second difference between the two approaches is the more important one. Although <b>functions</b> are less 'open' in terms of variable capture, they <b>allow you to define much more precise and controllable workflows, enable code reuse, and lead to a significantly more readable and organized code structure</b>. For example, if we wanted to call `print_value` multiple times, we could do so simply by writing `print_value(value)`. <b>This behaviour would not be possible using bare scopes, as we would have to rewrite the code responsible for printing the values every single time.</b> While in this simple example using `println!` takes up roughly the same amount of space as calling `print_value`, functions typically contain complex logic and several lines of code. <b>To avoid duplicating that code over and over, we use named identifiers like `print_value`!</b> Ultimately, because of these factors, <b>the practical use case for bare scopes narrows down exclusively to the one explained earlier</b>. <b>In that specific scenario—namely, freeing memory from temporary variables—using a function instead would not be viable. This is because a function's parameters must be explicitly defined and have a fixed count.</b></span><br /><br />
+  <span style={{ color: "#008080" }}>The second difference between the two approaches is the more important one. Although <b>functions</b> are less 'open' in terms of variable capture, they <b>allow you to define much more precise and controllable workflows, enable code reuse, and lead to a significantly more readable and organized code structure</b>. For example, if we wanted to call `print_value` multiple times, we could do so simply by writing `print_value(value)`. <b>This behaviour would not be possible using bare scopes, as we would have to rewrite the code responsible for printing the values every single time.</b> While in this simple example using `println!` takes up roughly the same amount of space as calling `print_value`, functions typically contain complex logic and several lines of code. <b>To avoid duplicating that code over and over, we use named identifiers like `print_value`!</b> Ultimately, because of these factors, <b>the practical use case for bare scopes narrows down exclusively to the one explained earlier</b>. <b>In that specific scenario—namely, freeing memory from temporary variables—using a function instead would not be viable. This is because a function's parameters must be explicitly defined and have a fixed count.</b></span><br /><br />
   
-  <span style={{ color: "#0050FF" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <b>`println!` accepts an arbitrary number of them</b>. For instance, Code 3.2.10 will compile without any problems:</span>
+  <span style={{ color: "#008080" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <b>`println!` accepts an arbitrary number of them</b>. For instance, Code 3.2.10 will compile without any problems:</span>
   
   ```rust Code 3.2.10
   println!("{}, {}, {}, {}, ...", 1, 2, 3, 4); // Outputs '1, 2, 3, 4, ...'.
   ```
   
-  <span style={{ color: "#0050FF" }}>The reality is that `println!` is not a function at all, but rather a <b>macro</b>. One of the major limitations of standard functions in Rust is that they require a fixed, explicit number of parameters. Macros bypass this limitation entirely, allowing them to accept an arbitrary number of arguments (though the fundamental purpose of macros is <b>metaprogramming</b>, and implementing them is significantly more complex than defining a standard function).</span>
+  <span style={{ color: "#008080" }}>The reality is that `println!` is not a function at all, but rather a <b>macro</b>. One of the major limitations of standard functions in Rust is that they require a fixed, explicit number of parameters. Macros bypass this limitation entirely, allowing them to accept an arbitrary number of arguments (though the fundamental purpose of macros is <b>metaprogramming</b>, and implementing them is significantly more complex than defining a standard function).</span>
   
 ## Returning Expression Results from Scopes
 
@@ -652,10 +652,10 @@ Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.
 
 ## Q&A Pt. 3
 
-To bring this matter to a close, let us address <span style={{ color: "#FF8C00" }}><b>Q-3</b></span>. The answer will mostly just serve as a refresher on what we have seen in the last few paragraphs.
+To bring this matter to a close, let us address <span style={{ color: "#964B00" }}><b>Q-3</b></span>. The answer will mostly just serve as a refresher on what we have seen in the last few paragraphs.
 
-- <span style={{ color: "#FF8C00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
-- <span style={{ color: "#0050FF" }}><b>A-3</b>: As we have just observed, there are two fundamental methods to <b>'extract' results</b> or <b>preserve modified variables</b> from any scope—whether it is a block scope or a function scope:</span>
+- <span style={{ color: "#964B00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
+- <span style={{ color: "#008080" }}><b>A-3</b>: As we have just observed, there are two fundamental methods to <b>'extract' results</b> or <b>preserve modified variables</b> from any scope—whether it is a block scope or a function scope:</span>
 
-  - <span style={{ color: "#0050FF" }}><b>Returning expressions</b>: You can return expressions as results directly from the function or block scope, either explicitly or implicitly.</span>
-  - <span style={{ color: "#0050FF" }}><b>Using references (`&`)</b>: You can preserve the underlying variables by working with their <b>memory addresses</b>. Instead of moving the data, you capture the address using the `&` symbol—either by passing it as a function argument, or by explicitly assigning it inside a block scope using the `=` operator (which, as we have seen, are functionally identical, since passing an argument acts as an `=` assignment under the hood).</span>
+  - <span style={{ color: "#008080" }}><b>Returning expressions</b>: You can return expressions as results directly from the function or block scope, either explicitly or implicitly.</span>
+  - <span style={{ color: "#008080" }}><b>Using references (`&`)</b>: You can preserve the underlying variables by working with their <b>memory addresses</b>. Instead of moving the data, you capture the address using the `&` symbol—either by passing it as a function argument, or by explicitly assigning it inside a block scope using the `=` operator (which, as we have seen, are functionally identical, since passing an argument acts as an `=` assignment under the hood).</span>

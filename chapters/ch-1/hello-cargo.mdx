@@ -41,22 +41,22 @@ fn main() {
 
 <Steps>
   <Step title={<span className="code-comment"># Output 1.3.1.[1, 2]</span>}>
-  >`cargo new` creates a new directory and project called `hello_cargo`. We’ve named our project `hello_cargo`, and Cargo creates its files in a directory of the same name.
+  >`cargo new` creates a new directory and project called _hello_cargo_. We’ve named our project _hello_cargo_, and Cargo creates its files in a directory of the same name.
   
-  >You’ll see that Cargo has generated two files and one directory for us: a Cargo.toml file and a src directory with a main.rs file inside.
+  >You’ll see that Cargo has generated two files and one directory for us: a _Cargo.toml_ file and a _src_ directory with a _main.rs_ file inside.
   
-  >It has also initialized a new Git repository along with a .gitignore file. Git files won’t be generated if you run `cargo new` within an existing Git repository; you can override this behavior by using `cargo new --vcs=git`. You can change `cargo new` to use a different version control system or no version control system (`none`) by using the `--vcs` flag.
+  >It has also initialized a new Git repository along with a _.gitignore_ file. Git files won’t be generated if you run `cargo new` within an existing Git repository; you can override this behavior by using `cargo new --vcs=git`. You can change `cargo new` to use a different version control system or no version control system (`none`) by using the `--vcs` flag.
   </Step>
   <Step title={<span className="code-comment"># Output 1.3.1.[3, 4]</span>}>
-  >Cargo has generated a “Hello, world!” program for you. So far, the differences between our project (`hello_world`) and the project Cargo generated (`hello_cargo`) are that Cargo placed the code in the src directory, and we have a Cargo.toml configuration file in the top directory.
+  >Cargo has generated a “Hello, world!” program for you. So far, the differences between our project (_hello_world_) and the project Cargo generated (_hello_cargo_) are that Cargo placed the code in the _src_ directory, and we have a _Cargo.toml_ configuration file in the top directory.
   
-  >**Cargo expects your source files to live inside the src directory. The top-level project directory is just for README files, license information, configuration files, and anything else not related to your code. Using Cargo helps you organize your projects.** There’s a place for everything, and everything is in its place.
+  >**Cargo expects your source files to live inside the _src_ directory. The top-level project directory is just for README files, license information, configuration files, and anything else not related to your code. Using Cargo helps you organize your projects.** There’s a place for everything, and everything is in its place.
   
-  >If you started a project that doesn’t use Cargo, as we did with the “Hello, world!” project, you can convert it to a project that does use Cargo. Move the project code into the src directory and create an appropriate Cargo.toml file. One easy way to get that Cargo.toml file is to run `cargo init`, which will create it for you automatically.
+  >If you started a project that doesn’t use Cargo, as we did with the “Hello, world!” project, you can convert it to a project that does use Cargo. Move the project code into the _src_ directory and create an appropriate _Cargo.toml_ file. One easy way to get that _Cargo.toml_ file is to run `cargo init`, which will create it for you automatically.
   </Step>
 </Steps>
 
-Cargo.toml is the configuration file used to specify your project's version, alongside various other details and package dependencies (and their versions).
+_Cargo.toml_ is the configuration file used to specify your project's version, alongside various other details and package dependencies (and their versions).
 
 <CodeGroup>
 ```bash Command 1.3.2
@@ -100,9 +100,9 @@ Hello, world!
 
 <Steps>
   <Step title={<span className="code-comment"># Output 1.3.3.1</span>}>
->This command creates an executable file in target/debug/hello_cargo rather than in your current directory. Because the default build is a debug build, Cargo puts the binary in a directory named debug.
+>This command creates an executable file in _target/debug/hello_cargo_ rather than in your current directory. Because the default build is a debug build, Cargo puts the binary in a directory named _debug_.
   
->Running `cargo build` for the first time also causes Cargo to create a new file at the top level: **Cargo.lock**. **This file keeps track of the exact versions of dependencies in your project.** This project doesn’t have dependencies, so the file is a bit sparse. You won’t ever need to change this file manually; Cargo manages its contents for you.
+>Running `cargo build` for the first time also causes Cargo to create a new file at the top level: **_Cargo.lock_**. **This file keeps track of the exact versions of dependencies in your project.** This project doesn’t have dependencies, so the file is a bit sparse. You won’t ever need to change this file manually; Cargo manages its contents for you.
   </Step>
   <Step title={<span className="code-comment"># Output 1.3.3.2</span>}>
 Executing `./target/debug/hello_cargo` runs the program built by `cargo build`.
@@ -122,7 +122,7 @@ Hello, world!
 ```
 </CodeGroup>
 
->This time we didn’t see output indicating that Cargo was compiling `hello_cargo`. Cargo figured out that the files hadn’t changed, so it didn’t rebuild but just ran the binary.
+>This time we didn’t see output indicating that Cargo was compiling _hello_cargo_. Cargo figured out that the files hadn’t changed, so it didn’t rebuild but just ran the binary.
 
 >Cargo also provides a command called `cargo check`. This command quickly checks your code to make sure it compiles but doesn’t produce an executable.
 
@@ -152,4 +152,4 @@ In the upcoming sections and chapters, we will gradually phase out the approach 
 
 ## Building for Release
 
->When your project is finally ready for release, you can use `cargo build --release` to compile it with optimizations. This command will create an executable in target/release instead of target/debug. The optimizations make your Rust code run faster, but turning them on lengthens the time it takes for your program to compile. This is why there are two different **profiles**: one for development, when you want to rebuild quickly and often, and another for building the final program you’ll give to a user that won’t be rebuilt repeatedly and that will run as fast as possible. If you’re benchmarking your code’s running time, be sure to run `cargo build --release` and benchmark with the executable in target/release.
+>When your project is finally ready for release, you can use `cargo build --release` to compile it with optimizations. This command will create an executable in _target/release_ instead of _target/debug_. The optimizations make your Rust code run faster, but turning them on lengthens the time it takes for your program to compile. This is why there are two different **profiles**: one for development, when you want to rebuild quickly and often, and another for building the final program you’ll give to a user that won’t be rebuilt repeatedly and that will run as fast as possible. If you’re benchmarking your code’s running time, be sure to run `cargo build --release` and benchmark with the executable in _target/release_.
