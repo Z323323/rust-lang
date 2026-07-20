@@ -6,8 +6,8 @@ sidebarTitle: "1.8 - Naming Conventions"
 
 Before diving back into the Rust book, we need to highlight two important concepts:
 
-- Proper _naming conventions_ are essential for writing Rust code and building projects correctly.
-- The packages versions we have seen all utilize the _SemVer_ (_Semantic Versioning_) specification.
+- Proper <u>naming conventions</u> are essential for writing Rust code and building projects correctly.
+- The packages versions we have seen all utilize the **SemVer** (Semantic Versioning) specification.
 
 Unlike the previous section, the following content is completely original and does not appear in the official documentation.
 
@@ -15,14 +15,14 @@ The following table outlines the naming conventions for files, directories, and 
 
 | Element | Style | Example |
 | :--- | :---: | :---: |
-| Vars | **snake_case** | `let user_id = 10` |
-| Funcs and Methods | **snake_case** | `fn get_data() { ... }` |
-| Structs (Classes) | **PascalCase** | `struct UserProfile { ... }` |
-| Enums | **PascalCase** | `enum WebEvent { ... }` |
-| Traits | **PascalCase** | `trait Printable { ... }` |
-| Constants | **SCREAMING_SNAKE_CASE** | `const MAX_POINTS: u32 = 100` |
-| Macros | **snake_case!** | `println!` |
-| Files and Directories | **snake_case** | `payment_manager.rs` |
+| Vars | snake_case | `let user_id = 10` |
+| Funcs and Methods | snake_case | `fn get_data() { ... }` |
+| Structs (Classes) | PascalCase | `struct UserProfile { ... }` |
+| Enums | PascalCase | `enum WebEvent { ... }` |
+| Traits | PascalCase | `trait Printable { ... }` |
+| Constants | SCREAMING_SNAKE_CASE | `const MAX_POINTS: u32 = 100` |
+| Macros | snake_case! | `println!` |
+| Files and Directories | snake_case | `payment_manager.rs` |
 
 ## SemVer
 
@@ -53,6 +53,6 @@ When you declare a dependency in your _Cargo.toml_ file, Cargo uses specific ope
 | **Wildcard** (`*`) | `1.2.*` | Any version starting with `1.2`. |
 | **Inequality** | `>= 1.2.0` | It specifies a minimum or maximum range. |
 
-**While _Cargo.toml_ defines the version ranges you accept, _Cargo.lock_ pins the exact versions that were successfully downloaded and resolved.**
+<p><u>While _Cargo.toml_ defines the version ranges you accept, _Cargo.lock_ pins the exact versions that were successfully downloaded and resolved.</u></p>
 
-**To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your _Cargo.toml_ file.**
+<p><u>To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your _Cargo.toml_ file.</u></p>

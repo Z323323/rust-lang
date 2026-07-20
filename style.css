@@ -8,11 +8,24 @@
   --comment-color: #6A9955; 
 }
 
-/* Stile della lista personalizzata */
-.list-comments {
-  list-style-type: none;
-  counter-reset: step-counter;
-  padding-left: 1rem;
+u {
+  text-decoration: none; /* Strips out the default, problematic underline */
+  border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  padding-bottom: 0.3px; /* Acts as your text-underline-offset */
+}
+
+/* 1. Default Highlighter (White Mode: Exact match to standard inline code blocks) */
+mark {
+  background-color: rgba(0, 0, 0, 0.06); 
+  color: inherit;
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.125rem;
+}
+
+/* 2. Night Mode Highlighter (Dark Mode: Exact match to standard inline code blocks) */
+.dark mark {
+  background-color: rgba(255, 255, 255, 0.06); 
+  color: inherit;
 }
 
 .list-comments li {

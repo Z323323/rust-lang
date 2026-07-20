@@ -4,9 +4,9 @@ mode: "wide"
 sidebarTitle: "1.6 - Cargo.toml vs Cargo.lock"
 ---
 
-In the 'Hello, Cargo!' section, alongside the concept of an _edition_, we also introduced the _Cargo.lock_ file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between _Cargo.toml_ and _Cargo.lock_, as well as the underlying reasons for having a lock file in the first place.
+In the 'Hello, Cargo!' section, alongside the concept of an **edition**, we also introduced the _**Cargo.lock**_ file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between _**Cargo.toml**_ and _**Cargo.lock**_, as well as the underlying reasons for having a lock file in the first place.
 
-Returning to the `hello_cargo` project, there is a specific detail that was not shown at the end of the 'Hello, Cargo!' section. By executing Command 1.6.1 you will notice that, alongside the previously discussed _src_ and _target_ directories, the _Cargo.lock_ file is now present (Output 1.6.1). This file did not exist prior to executing `cargo build` (or `cargo run`, which automatically runs a build behind the scenes).
+Returning to the _hello_cargo_ project, there is a specific detail that was not shown at the end of the 'Hello, Cargo!' section. By executing Command 1.6.1 you will notice that, alongside the previously discussed _src_ and _target_ directories, the _Cargo.lock_ file is now present (Output 1.6.1). This file did not exist prior to executing `cargo build` (or `cargo run`, which automatically runs a build behind the scenes).
 
 <CodeGroup>
 ```bash Command 1.6.1
@@ -39,9 +39,9 @@ Next, add the `regex` package under the `[dependencies]` section as shown below,
 regex = { git = "https://github.com/rust-lang/regex.git" }
 ```
 
->This package has a single dependency, on the `regex` library. It states in this case to rely on a particular Git repository that lives on GitHub. **Since you haven’t specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.**
+>This package has a single dependency, on the `regex` library. <u>It states in this case to rely on a particular Git repository that lives on GitHub. Since you haven’t specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.</u>
 
->Sound good? Well, there’s one problem: **If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.** This would be bad because we want reproducible builds.
+>Sound good? Well, there’s one problem: <u>If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.</u> This would be bad because we want reproducible builds.
 
 >You could fix this problem by defining a specific `rev` value in our _Cargo.toml_, so Cargo could know exactly which **revision** to use when building the package.
 
@@ -50,9 +50,9 @@ regex = { git = "https://github.com/rust-lang/regex.git" }
 regex = { git = "https://github.com/rust-lang/regex.git", rev = "9f9f693" }
 ```
 
->Now our builds will be the same. But there’s a big drawback: **now you have to manually think about SHA-1s every time you want to update our library**. This is both tedious and error prone.
+>Now our builds will be the same. But there’s a big drawback: <u>now you have to manually think about SHA-1s every time you want to update our library</u>. This is both tedious and error prone.
 
->**Enter the _Cargo.lock_. Because of its existence, you don’t need to manually keep track of the exact revisions: Cargo will do it for you.** When you have a manifest like this:
+><u>Enter the _Cargo.lock_. Because of its existence, you don’t need to manually keep track of the exact revisions: Cargo will do it for you.</u> When you have a manifest like this:
 
 ```toml ~/rust_projects/hello_cargo/Cargo.toml
 [package]
@@ -64,7 +64,7 @@ edition = "2024"
 regex = { git = "https://github.com/rust-lang/regex.git" }
 ```
 
->**Cargo will take the latest commit and write that information out into your _Cargo.lock_ when you build for the first time.**
+><p><u>Cargo will take the latest commit and write that information out into your _Cargo.lock_ when you build for the first time.</u></p>
 
 <CodeGroup>
 ```bash Command 1.6.3
@@ -148,9 +148,9 @@ source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d
 ```
 </CodeGroup>
 
->You can see that there’s a lot more information here (Output 1.6.3.2), including the exact **revision** you used to build. **Now when you give your package to someone else, they’ll use the exact same SHA, even though you didn’t specify it in your _Cargo.toml_.**
+>You can see that there’s a lot more information here (Output 1.6.3.2), including the exact revision you used to build. <u>Now when you give your package to someone else, they’ll use the exact same SHA, even though you didn’t specify it in your _Cargo.toml_.</u>
 
->**When you’re ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.**
+><p><u>When you’re ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.</u></p>
 
 <Columns cols={2}>
   <Column>
@@ -167,14 +167,14 @@ cargo update regex
   </Column>
 </Columns>
 
->**This will write out a new _Cargo.lock_ with the new version information.** Note that the argument to `cargo update` is actually a **Package ID Specification** and `regex` is just a short specification.
+><u>This will write out a new _Cargo.lock_ with the new version information.</u> Note that the argument to `cargo update` is actually a **Package ID Specification** and `regex` is just a short specification.
 
-We will revisit how to configure your _Cargo.toml_ file to **permit only specific updates** for the crates listed under `[dependencies]` in the 'Naming Conventions' section.
+We will revisit how to configure your _Cargo.toml_ file to <u>permit only specific updates</u> for the crates listed under `[dependencies]` in the 'Naming Conventions' section.
 
 ## Extra Information about Packages
 
 While you can pull dependencies directly from a Git repository—where specific code states are fetched from commit history—modern Cargo primarily relies on its package registry, [[crates.io](https://crates.io)], which operates on a completely different philosophy.
 
-Unlike a Git repository, where authors can rewrite history or delete old commits (e.g., using `git push --force`), every package published to [[crates.io](https://crates.io)] is **strictly immutable**. Once a specific version is uploaded as a compressed archive, it cannot be deleted or modified. This guarantees that if your project compiles today, it will always compile in the future, as the underlying code on the server is permanent.
+Unlike a Git repository, where authors can rewrite history or delete old commits (e.g., using `git push --force`), <u>every package published to [[crates.io](https://crates.io)] is strictly immutable</u>. Once a specific version is uploaded as a compressed archive, it cannot be deleted or modified. This guarantees that if your project compiles today, it will always compile in the future, as the underlying code on the server is permanent.
 
 Under the hood, Cargo uploads your packages as compressed archives to [[crates.io](https://crates.io)]. When you download a dependency, Cargo retrieves these archives, caches them inside _~/.cargo/registry/cache_, and extracts their contents into _~/.cargo/registry/src_ (which is exactly where `rustc` looks for the files to compile your project).

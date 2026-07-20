@@ -20,25 +20,25 @@ Let's get straight to the point regarding:
 
 ## Motivations
 
-The primary motivation that drove me to rewrite the Rust book was fundamentally tied to my own study of the language. To make the learning process as dynamic as possible, I authored a version of the book contained entirely within a single `README.md` file spanning over 20,000 lines.
+The primary motivation that drove me to rewrite the Rust book was fundamentally tied to my own study of the language. To make the learning process as dynamic as possible, I authored a version of the book contained entirely within a single _README_ file spanning over 20,000 lines.
 
-Initially, my goal was to minimize the amount of superfluous or repetitive concepts found in the official Rust book. However, despite my best efforts to reduce the length, I realized that the text became absolutely unreadable for anyone once it surpassed the 10,000-line mark. The truth is, there are many crucial concepts you must know to program correctly in Rust. Rust is NOT a simple language. To ignore these concepts would simply mean exactly that: ignoring them. For this reason, it is impossible to condense the length beyond a certain point, even though I tried to do so wherever appropriate.
+Initially, my goal was to minimize the amount of superfluous or repetitive concepts found in the official Rust book. However, despite my best efforts to reduce the length, I realized that the text became absolutely unreadable for anyone once it surpassed the 10,000-line mark. The truth is, there are many crucial concepts you must know to program correctly in Rust. <u>Rust is not a simple language.</u> To ignore these concepts would simply mean exactly that: ignoring them. For this reason, it is impossible to condense the length beyond a certain point, even though I tried to do so wherever appropriate.
 
 While writing the initial file, I came across Mintlify, a platform for creating visually spectacular documentations. After a brief brainstorming session using Gemini Pro, I realized it would be entirely feasible to rewrite the whole book using Mintlify without getting bogged down by excessive configuration work. Mintlify is indeed an outstanding platform, offering the ability to easily write excellent documentation and host your documentation website for free.
 
-Therefore, upon completing the initial draft, I chose to rewrite the entire `README.md` file using Mintlify, making it accessible for anyone to read.
+Therefore, upon completing the initial draft, I chose to rewrite the entire _README_ file using Mintlify, making it accessible for anyone to read.
 
 ## How This Differs from the Official Version
 
 Although this version of the book is, generally speaking, almost entirely based on the official one (the majority of the text is literally copied and pasted), there are some important differences to highlight:
 
-- **Reduced verbosity**: As I mentioned earlier, I tried to cut down the verbosity of the official book as much as possible, getting straight to the point whenever it felt overly wordy about intuitive concepts. In this sense, _I have reduced the overall length of the book_.
+- **Reduced verbosity**: As I mentioned earlier, I tried to cut down the verbosity of the official book as much as possible, getting straight to the point whenever it felt overly wordy about intuitive concepts. In this sense, <u>I have reduced the overall length of the book</u>.
 
-- **Expanded explanations**: In contrast to the previous point, whenever the official text didn't seem clear enough on complex and critical concepts, _I aimed to expand the content_, also utilizing Gemini Pro (and carefully reviewing its output).
+- **Expanded explanations**: In contrast to the previous point, whenever the official text didn't seem clear enough on complex and critical concepts, <u>I aimed to expand the content</u>, also utilizing Gemini Pro (and carefully reviewing its output).
 
-- **Professional code standards**: A similar effort was applied to the code itself. For some of the non-trivial examples analyzed in the official book, I rewrote some codes to be _less academic and more geared toward professional standards_.
+- **Professional code standards**: A similar effort was applied to the code itself. For some of the non-trivial examples analyzed in the official book, I rewrote some codes to be <u>less academic and more geared toward professional standards</u>.
 
-- **Content reorganization**: Wherever I felt it was appropriate, I reorganized certain sections of the official documentation. For instance, I distributed the content of various Appendices across the main chapters when they were highly relevant to the topics being discussed. In my view, this approach makes reading the book from start to finish much easier; cramming all the Appendix material at the very end makes finishing the book quite exhausting. Therefore, I integrated several appendices directly into the first chapter, and placed others wherever they fit most naturally. By doing this, once you reach the end of Ch. 21, you will only have a small amount of leftover material to read to complete the entire official version.
+- **Content reorganization**: Wherever I felt it was appropriate, I reorganized certain sections of the official documentation.
 
 - **Mintlify over mdbook**: Mintlify is better than mdbook, end of story. While mdbook is an excellent system for writing books, from my personal perspective, it simply cannot compare to documentation built with Mintlify.
 
@@ -46,12 +46,12 @@ Although this version of the book is, generally speaking, almost entirely based 
 
 To distinguish the content taken from the official book [[doc.rust-lang.org/stable/book](https://doc.rust-lang.org/stable/book/)] from my own personal additions, I have formatted the official content as follows:
 
->Welcome to _The Rust Programming Language_, an introductory book about Rust. The Rust programming language helps you write faster, more reliable software. High-level ergonomics and low-level control are often at odds in programming language design; Rust challenges that conflict. Through balancing powerful technical capacity and a great developer experience, Rust gives you the option to control low-level details (such as memory usage) without all the hassle traditionally associated with such control.
+>Welcome to **The Rust Programming Language**, an introductory book about Rust. The Rust programming language helps you write faster, more reliable software. High-level ergonomics and low-level control are often at odds in programming language design; Rust challenges that conflict. Through balancing powerful technical capacity and a great developer experience, Rust gives you the option to control low-level details (such as memory usage) without all the hassle traditionally associated with such control.
 
 As for the stylistic choices regarding the Mintlify configuration, I literally copied the settings from the Starknet documentation [[docs.starknet.io](https://docs.starknet.io/)] built with Mintlify, simply because it is gorgeous.
 
 ## Advices
 
-I highly recommend that anyone wanting to learn the language through a structured approach takes their time reading this book. **Rust is not a language you can rush through.** You can certainly try—no one is stopping you—but you will quickly find that it doesn't work. You need to get into a mindset where you actively appreciate what you are doing. Try to enjoy the journey from start to finish without burning yourself out (though this doesn't mean you shouldn't put in the hard work).
+I highly recommend that anyone wanting to learn the language through a structured approach takes their time reading this book. <u>Rust is not a language you can rush through.</u> You can certainly try—no one is stopping you—but you will quickly find that it doesn't work. You need to get into a mindset where you actively appreciate what you are doing. Try to enjoy the journey from start to finish without burning yourself out (though this doesn't mean you shouldn't put in the hard work).
 
 Make sure to put what you read into practice; there is no such thing as a good Rust programmer who has never written a line of code. To that end, I suggest splitting your screen between this documentation and the resource [[rarecode.ai](https://rarecode.ai)]. The latter will guide your Rust learning journey in a structured way. By following it, you will be able to immediately apply what you have learned from reading this book.
