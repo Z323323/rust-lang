@@ -39,9 +39,9 @@ Next, add the `regex` package under the `[dependencies]` section as shown below,
 regex = { git = "https://github.com/rust-lang/regex.git" }
 ```
 
->This package has a single dependency, on the `regex` library. <u>It states in this case to rely on a particular Git repository that lives on GitHub. Since you haven’t specified any other information, Cargo assumes that you intend to use the latest commit on the default branch to build our package.</u>
+>This package has a single dependency, on the `regex` library. It states in this case to rely on a particular <u>Git repository that lives on GitHub</u>. Since you haven’t specified any other information, Cargo assumes that you intend to use the <u>latest commit on the default branch</u> to build our package.
 
->Sound good? Well, there’s one problem: <u>If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, we would get different builds.</u> This would be bad because we want reproducible builds.
+>Sound good? Well, there’s one problem: If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, <u>we would get different builds</u>. This would be bad because we want reproducible builds.
 
 >You could fix this problem by defining a specific `rev` value in our _Cargo.toml_, so Cargo could know exactly which **revision** to use when building the package.
 
@@ -50,9 +50,9 @@ regex = { git = "https://github.com/rust-lang/regex.git" }
 regex = { git = "https://github.com/rust-lang/regex.git", rev = "9f9f693" }
 ```
 
->Now our builds will be the same. But there’s a big drawback: <u>now you have to manually think about SHA-1s every time you want to update our library</u>. This is both tedious and error prone.
+>Now our builds will be the same. But there’s a big drawback: <u>now you have to manually think about SHA-1s</u> every time you want to update our library. This is both tedious and error prone.
 
-><u>Enter the _Cargo.lock_. Because of its existence, you don’t need to manually keep track of the exact revisions: Cargo will do it for you.</u> When you have a manifest like this:
+>Enter the _Cargo.lock_. Because of its existence, <u>you don’t need to manually keep track of the exact revisions</u>: Cargo will do it for you. When you have a manifest like this:
 
 ```toml ~/rust_projects/hello_cargo/Cargo.toml
 [package]
@@ -64,7 +64,7 @@ edition = "2024"
 regex = { git = "https://github.com/rust-lang/regex.git" }
 ```
 
-><p><u>Cargo will take the latest commit and write that information out into your _Cargo.lock_ when you build for the first time.</u></p>
+><u>Cargo will take the latest commit and write that information out into your _Cargo.lock_</u> when you build for the first time.
 
 <CodeGroup>
 ```bash Command 1.6.3
@@ -148,9 +148,9 @@ source = "git+https://github.com/rust-lang/regex.git#b9d2cf724f89754ea879b6c223d
 ```
 </CodeGroup>
 
->You can see that there’s a lot more information here (Output 1.6.3.2), including the exact revision you used to build. <u>Now when you give your package to someone else, they’ll use the exact same SHA, even though you didn’t specify it in your _Cargo.toml_.</u>
+>You can see that there’s a lot more information here (Output 1.6.3.2), including the exact revision you used to build. Now when you give your package to someone else, <u>they’ll use the exact same SHA</u>, even though you didn’t specify it in your _Cargo.toml_.
 
-><p><u>When you’re ready to opt in to a new version of the library, Cargo can re-calculate the dependencies and update things for you.</u></p>
+>When you’re ready to opt in to a new version of the library, <u>Cargo can re-calculate the dependencies and update things for you</u>.
 
 <Columns cols={2}>
   <Column>

@@ -26,7 +26,7 @@ The following table outlines the naming conventions for files, directories, and 
 
 ## SemVer
 
-SemVer is the standard convention Cargo uses to manage dependencies. In the Rust ecosystem, a version number consists of three components: `MAJOR.MINOR.PATCH`. Each **increment** signals specific information regarding backward compatibility.
+SemVer is the standard convention Cargo uses to manage dependencies. In the Rust ecosystem, a version number consists of three components: `MAJOR.MINOR.PATCH`. Each <u>increment</u> signals specific information regarding backward compatibility.
 
 - **MAJOR** (`X.0.0`): Incremented for breaking changes (modifications to the API that are incompatible with previous versions). Upgrading to a new Major version means your code might require updates to compile successfully.
 
@@ -55,4 +55,4 @@ When you declare a dependency in your _Cargo.toml_ file, Cargo uses specific ope
 
 <p><u>While _Cargo.toml_ defines the version ranges you accept, _Cargo.lock_ pins the exact versions that were successfully downloaded and resolved.</u></p>
 
-<p><u>To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your _Cargo.toml_ file.</u></p>
+To summarize, whenever you execute the `cargo update` command, Cargo will update all dependencies to their latest available versions, while strictly adhering to the version constraints defined within your _Cargo.toml_ file.

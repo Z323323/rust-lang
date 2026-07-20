@@ -27,6 +27,9 @@
     "dark": "/assets/logo/dark.svg"
   },
   "css": "style.css",
+  "interaction": {
+    "drilldown": false
+  },
   "navigation": {
     "groups": [
       {

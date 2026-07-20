@@ -54,3 +54,21 @@ mark {
   padding-left: 1rem !important;
   padding-right: 1rem !important;
 }
+
+/* Fallback: Pushes the signature underneath without breaking the top row */
+footer {
+  flex-wrap: wrap; /* Allows content to drop to a new line if needed */
+}
+
+footer::after {
+  content: "With 💙 by Z561";
+  display: block;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #9CA3AF;
+}
+
+.dark footer::after {
+  color: #6B7280;
+}
