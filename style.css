@@ -11,7 +11,6 @@
 u {
   text-decoration: none; /* Strips out the default, problematic underline */
   border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  padding-bottom: 0.08px; /* Acts as your text-underline-offset */
 }
 
 /* 1. Default Highlighter (White Mode: Exact match to standard inline code blocks) */
