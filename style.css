@@ -11,7 +11,7 @@
 u {
   text-decoration: none; /* Strips out the default, problematic underline */
   border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  padding-bottom: 0.1px; /* Acts as your text-underline-offset */
+  padding-bottom: 0.09px; /* Acts as your text-underline-offset */
 }
 
 /* 1. Default Highlighter (White Mode: Exact match to standard inline code blocks) */
@@ -55,15 +55,10 @@ mark {
   padding-right: 1rem !important;
 }
 
-/* Fallback: Pushes the signature underneath without breaking the top row */
-footer {
-  flex-wrap: wrap; /* Allows content to drop to a new line if needed */
-}
 
 footer::after {
   content: "With 💙 by Z561";
   display: block;
-  text-align: center;
   font-size: 0.9rem;
   font-weight: 500;
   color: #9CA3AF;
