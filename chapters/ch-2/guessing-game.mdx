@@ -75,36 +75,36 @@ I will get straight to the point here, commenting only the general behaviour of 
 
 <ol className="list-comments">
  <li>
- `use std::io` brings the `io` (input/output) module from the `std` (standard) library into scope. This is strictly necessary to handle data from the standard input, such as capturing user keystrokes from the terminal across any operating system.
+ `use std::io` brings the `io` (input/output) **module** from the `std` (standard) library into scope. This is strictly necessary to handle data from the standard input, such as capturing user keystrokes from the terminal across any operating system.
  </li>
  <li>
- `let mut guess = String::new()` declares a mutable _variable_ named `guess` and initializes it by calling the `new` _associated function_ of the `String` type, which creates a new, empty string. In Rust, variables are immutable by default; therefore, to allow their values to change, we must explicitly declare them with the `mut` (mutable) keyword. Note that immutable is not the same as constant.
+ `let mut guess = String::new()` declares a mutable variable named `guess` and initializes it by calling the `new` **associated function** of the `String` **type**, which creates a new, empty string. In Rust, <u>variables are immutable by default</u>; therefore, to allow their values to change, we must explicitly declare them with the `mut` (mutable) keyword. Note that immutable is not the same as **constant**.
  </li>
  <li>
  `io::stdin()` calls the `stdin` function from the `io` module, which returns an instance of `std::io::Stdin`—a handle to the standard input of your terminal.
  </li>
  <li>
- `.read_line(&mut guess)` calls the `read_line` _method_ on `std::io::Stdin`. This method does not read immediately; it waits for the user to type something and press <kbd>Enter</kbd>.
+ `.read_line(&mut guess)` calls the `read_line` **method** on `std::io::Stdin`. This method does not read immediately; it waits for the user to type something and press <kbd>Enter</kbd>.
  
- Crucially, we pass our mutable variable as an argument (`&mut guess`). `read_line` will take the user's input and append it to this string without overwriting its existing content (though in this case, the string is initially empty).
+ Crucially, we pass our mutable variable as an **argument** (`&mut guess`). `read_line` will take the user's input and append it to this string without overwriting its existing content (though in this case, the string is initially empty).
 
- >The `&` indicates that this argument is a _reference_, which gives you a way to let multiple parts of your code access one piece of data without needing to copy that data into memory multiple times. You need to write `&mut guess` rather than `&guess` to make it mutable.
+ >The `&` indicates that this argument is a **reference**, which gives you a way to let multiple parts of your code access one piece of data without needing to copy that data into memory multiple times. <u>You need to write `&mut guess` rather than `&guess` to make it mutable.</u>
 
- To expand on this briefly: the `&` symbol is closely related to memory addresses in languages like C. By passing a mutable reference (`&mut`)—which acts as a pointer to a specific memory address with permission to alter its contents—we avoid making inefficient copies of our data. Instead, `read_line` is granted direct access to modify the exact memory block where the `guess` string is already stored, safely injecting the user's input.
+ To expand on this briefly: the `&` symbol is closely related to <u>memory addresses</u> in languages like C. By passing a mutable reference (`&mut`)—which acts as a <u>pointer to a specific memory address with permission to alter its contents</u>—we avoid making inefficient copies of our data. Instead, `read_line` is granted direct access to modify the exact memory block where the `guess` string is already stored, safely injecting the user's input.
  </li>
  <li>
- `expect` is a method called on the `Result` _enum_ returned by `read_line`. To understand how this works, you must understand what `read_line` actually returns. It does not return the user's string (that is already stored safely in the `guess` buffer). Instead, it returns an enum of type `Result<usize, io::Error>`.
+ `expect` is a method called on the `Result` **enum** returned by `read_line`. To understand how this works, you must understand what `read_line` actually returns. It does not return the user's string (that is already stored safely in the `guess` buffer). Instead, it returns an enum of type `Result<usize, io::Error>`.
 
- The `Result` enum is fundamentally defined as `pub enum Result<T, E> { Ok(T), Err(E), }`. If `read_line` executes successfully, it returns an `Ok` _variant_ containing the number of bytes read (`usize`). If something goes wrong while handling the input, it returns an `Err` variant containing the underlying system error.
+ The `Result` enum is fundamentally defined as `pub enum Result<T, E> { Ok(T), Err(E), }`. If `read_line` executes successfully, it returns an `Ok` <u>variant</u> containing the number of bytes read (`usize`). If something goes wrong while handling the input, it returns an `Err` <u>variant</u> containing the underlying system error.
 
- The `expect` method essentially unwraps this `Result`. If the `Result` is an `Ok`, `expect` simply extracts and returns the byte count inside it (which we are choosing to ignore here). However, if it finds an `Err`, `expect` triggers a `panic!`. This immediately stops program execution and prints the custom message you provided (`"Failed to read line"`).
+ The `expect` method essentially <u>unwraps</u> this `Result`. If the `Result` is an `Ok`, `expect` simply extracts and returns the byte count inside it (which we are choosing to ignore here). However, if it finds an `Err`, `expect` triggers a `panic!`. This immediately stops program execution and prints the custom message you provided (`"Failed to read line"`).
 
  If you don’t call `expect`, the program will compile, but you’ll get a warning. Rust warns that you haven’t used the `Result` value returned from `read_line`, indicating that the program hasn’t handled a possible error.
  </li>
  <li>
  `println!("You guessed: {guess}")` simply prints our `guess` to the terminal if everything went well. The `{}` brackets act as placeholders for the specified variable, seamlessly interpolating its value into the string.
  
- There is also a syntax more similar to C for evaluating _expressions_ or passing multiple arguments to the `println!` macro. For example, executing Code 2.1.2 will output: `x = 5 and y + 2 = 12`.
+ There is also a syntax more similar to C for evaluating **expressions** or passing multiple arguments to the `println!` **macro**. For example, executing Code 2.1.2 will output: `x = 5 and y + 2 = 12`.
  
  ```rust Code 2.1.2
  let x = 5;
@@ -179,24 +179,24 @@ cargo build
 ```
 </CodeGroup>
 
->You may see different version numbers in Output 2.1.4, but they will all be compatible with the code, thanks to _SemVer_!
+>You may see different version numbers in Output 2.1.4, but they will all be compatible with the code, thanks to SemVer!
 
->**In this case, although we only listed `rand` as a dependency, Cargo also grabbed other crates that `rand` depends on to work.** After downloading the crates, Rust compiles them and then compiles the project with the dependencies available.
+>In this case, although we only listed `rand` as a dependency, <u>Cargo also grabbed other crates that `rand` depends on to work</u>. After downloading the crates, Rust compiles them and then compiles the project with the dependencies available.
 
 ### Ensuring Reproducible Builds
 
->Cargo has a mechanism that ensures you can rebuild the same artifact every time you or anyone else builds your code: Cargo will use only the versions of the dependencies you specified until you indicate otherwise. For example, say that next week version 0.8.6 of the `rand` crate comes out, and that version contains an important bug fix, but it also contains a regression that will break your code. To handle this, Rust creates the _Cargo.lock_ file the first time you run `cargo build` (successfully).
+>Cargo has a mechanism that ensures you can rebuild the same <u>artifact</u> every time you or anyone else builds your code: Cargo will use only the versions of the dependencies you specified until you indicate otherwise. For example, say that next week version 0.8.6 of the `rand` crate comes out, and that version contains an important bug fix, but it also contains a regression that will break your code. To handle this, Rust creates the _Cargo.lock_ file the first time you run `cargo build` (successfully).
 
->When you build a project for the first time, Cargo figures out all the versions of the dependencies that fit the criteria and then writes them to the _Cargo.lock_ file. When you build your project in the future, Cargo will see that the _Cargo.lock_ file exists and will use the versions specified there rather than doing all the work of figuring out versions again. This lets you have a reproducible build automatically. **In other words, your project will remain at 0.8.5 until you explicitly upgrade, thanks to the _Cargo.lock_ file.**
+>When you build a project for the first time, Cargo figures out all the versions of the dependencies that fit the criteria and then writes them to the _Cargo.lock_ file. When you build your project in the future, Cargo will see that the _Cargo.lock_ file exists and will use the versions specified there rather than doing all the work of figuring out versions again. This lets you have a reproducible build automatically. In other words, <u>your project will remain at 0.8.5 until you explicitly upgrade</u>, thanks to the _Cargo.lock_ file.
 
 ### Updating a Crate to Get a New Version
 
->**When you do want to update a crate, Cargo provides the command `update`, which will ignore the _Cargo.lock_ file and figure out all the latest versions that fit your specifications in _Cargo.toml_.** Cargo will then write those versions to the _Cargo.lock_ file. Otherwise, by default, Cargo will only look for versions greater than 0.8.5 and less than 0.9.0 (because of the caret `^` default).
+>When you do want to update a crate, Cargo provides the command `update`, which will <u>ignore the _Cargo.lock_ file and figure out all the latest versions that fit your specifications in _Cargo.toml_</u>. Cargo will then write those versions to the _Cargo.lock_ file. Otherwise, by default, Cargo will only look for versions greater than 0.8.5 and less than 0.9.0 (because of the caret `^` default).
 
 This is a fascinating mechanism when you think about it deeply. Every version of every package explicitly defines its dependency constraints in its _Cargo.toml_, allowing Cargo to meticulously calculate, download, and compile the exact dependency tree required. All of this happens seamlessly within a complex ecosystem where different crates might even be written using different Rust editions.
 
 <Note>
-It is crucial to understand how Cargo handles dependencies under the hood. When downloading a library from a registry, Cargo completely ignores the _Cargo.lock_ file of that specific dependency. Instead, **it relies exclusively on the version constraints defined in the dependency's _Cargo.toml_**. **Cargo's resolver dynamically calculates the latest compatible versions across your entire dependency tree and writes the final result into your project's _Cargo.lock_. As a result, every time you run `cargo update`, Cargo repeats this entire resolution process.**
+It is crucial to understand how Cargo handles dependencies under the hood. <u>When downloading a library from a registry, Cargo completely ignores the _Cargo.lock_ file of that specific dependency. Instead, it relies exclusively on the version constraints defined in the dependency's _Cargo.toml_.</u> Cargo's resolver dynamically calculates <u>the latest compatible versions</u> across your entire dependency tree and writes the final result into your project's _Cargo.lock_. As a result, <u>every time you run `cargo update`, Cargo repeats this entire resolution process</u>.
 </Note>
 
 Every single version of any published package is stored compressed on [[crates.io](https://crates.io)] (a staggering amount of data).
@@ -205,7 +205,7 @@ The ecosystem is highly resilient: if you attempt to publish a crate with depend
 
 ### Generating a Random Number
 
-At this point, we are finally ready to utilize the features of the `rand` crate provided by the Rust team. By adding `use rand::Rng`, we bring the `Rng` _trait_ into scope (Ch. 10 will cover traits in detail), granting us access to the methods it defines.
+At this point, we are finally ready to utilize the features of the `rand` crate provided by the Rust team. By adding `use rand::Rng`, we bring the `Rng` **trait** into scope (Ch. 10 will cover traits in detail), granting us access to the methods it defines.
 
 >Next, we’re adding two lines in the middle. In the first line, we call the `rand::thread_rng` function that gives us the particular random number generator we’re going to use: one that is local to the current thread of execution and is seeded by the operating system. Then, we call the `gen_range` method on the random number generator. This method is defined by the `Rng` trait. The `gen_range` method takes a range expression as an argument and generates a random number in the range. The kind of range expression we’re using here takes the form `start..=end` and is inclusive on the lower and upper bounds, so we need to specify `1..=100` to request a number between 1 and 100.
 
@@ -269,20 +269,20 @@ fn main() {
  `use std::cmp::Ordering` brings the `Ordering` enum from the standard library into scope. We need this to handle the result of the `cmp` method, which returns one of three possible variants: `Less`, `Greater`, or `Equal`.
  </li>
  <li>
- `loop { ... }` simply creates an infinite _loop_ that continues until the program encounters a `break` instruction. In our case, the `break` is located in the block of code that handles the user winning, meaning the program will keep asking for input until the user guesses correctly.
+ `loop { ... }` simply creates an infinite loop that continues until the program encounters a `break` instruction. In our case, the `break` is located in the block of code that handles the user winning, meaning the program will keep asking for input until the user guesses correctly.
  </li>
  <li>
- `let guess: u32 = match guess.trim().parse() { Ok(num) => num, Err(_) => continue, }` is the block that converts the `guess` variable from a `String` type to a `u32` type (a 32-bit unsigned integer). This is absolutely necessary to compare the user's input with the secret number (we cannot compare a string with a number).
+ `let guess: u32 = match guess.trim().parse() { Ok(num) => num, Err(_) => continue, }` is the block that converts the `guess` variable from a `String` type to a `u32` type (a 32-bit **unsigned integer**). This is absolutely necessary to compare the user's input with the secret number (we cannot compare a string with a number).
  
- You might have noticed that we are declaring a new variable with the exact same name (`guess`). This is called _**shadowing**_. As we will see later, Rust doesn't allow assigning a value of a different type to an existing variable, but shadowing allows us to reuse the variable name `guess` rather than forcing us to create a new one.
+ You might have noticed that we are declaring a new variable with the exact same name (`guess`). This is called **shadowing**. As we will see later, Rust doesn't allow assigning a value of a different type to an existing variable, but shadowing allows us to reuse the variable name `guess` rather than forcing us to create a new one.
 
  `trim` is a method of the `String` type that removes any whitespace at the beginning and end of the string, including the newline character (`\n`) generated when the user presses <kbd>Enter</kbd>. If we type `5` in the terminal, the string actually contains `5\n` (the UTF-8 string representation). We must transform this string representation into a real integer using the `parse` method.
  
- This works correctly in our case because the `guess` variable is explicitly shadowed and **annotated as a `u32`** (which tells the `parse` method exactly what type we want to extract).
+ This works correctly in our case because the `guess` variable is explicitly shadowed and **annotated** as a `u32` (which tells the `parse` method exactly what type we want to extract).
 
  After these steps, a `match` expression is performed. The `parse` method doesn't directly return an integer; it returns a `Result` enum, which can be either an `Ok` variant (wrapping the successful integer) or an `Err` variant (wrapping an error).
 
- In summary, we use _pattern matching_ to extract (or unwrap) the integer value from the `Ok(num)` variant. If the user types something invalid (like letters), `parse` produces an `Err`. The `_` is a wildcard that matches any error value, and the `continue` instruction tells the program to skip the rest of the loop and start the next iteration.
+ In summary, we use **pattern matching** to extract (or unwrap) the integer value from the `Ok(num)` variant. If the user types something invalid (like letters), `parse` produces an `Err`. The `_` is a wildcard that matches any error value, and the `continue` instruction tells the program to skip the rest of the loop and start the next iteration.
   
  This is our first example of proper error handling: instead of crashing the program, we safely handle the error and let the user try again.
  </li>

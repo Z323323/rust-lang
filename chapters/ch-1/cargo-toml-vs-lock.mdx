@@ -4,7 +4,7 @@ mode: "wide"
 sidebarTitle: "1.6 - Cargo.toml vs Cargo.lock"
 ---
 
-In the 'Hello, Cargo!' section, alongside the concept of an **edition**, we also introduced the _**Cargo.lock**_ file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between _**Cargo.toml**_ and _**Cargo.lock**_, as well as the underlying reasons for having a lock file in the first place.
+In the 'Hello, Cargo!' section, alongside the concept of an edition, we also introduced the _Cargo.lock_ file. Because understanding its role is crucial to grasping how Cargo manages data overall, I have included a section from the official Cargo Book right here. This excerpt clearly explains the differences between _Cargo.toml_ and _Cargo.lock_, as well as the underlying reasons for having a lock file in the first place.
 
 Returning to the _hello_cargo_ project, there is a specific detail that was not shown at the end of the 'Hello, Cargo!' section. By executing Command 1.6.1 you will notice that, alongside the previously discussed _src_ and _target_ directories, the _Cargo.lock_ file is now present (Output 1.6.1). This file did not exist prior to executing `cargo build` (or `cargo run`, which automatically runs a build behind the scenes).
 
@@ -24,7 +24,7 @@ Cargo.lock  Cargo.toml  src  target
 >- _Cargo.toml_ is about describing your dependencies in a broad sense, and is written by you.
 >- _Cargo.lock_ contains exact information about your dependencies. It is maintained by Cargo and should not be manually edited.
 
->_Cargo.toml_ is a **manifest** file in which you can specify a bunch of different **metadata** about your **package**. For example, you can say that you depend on another package.
+>_Cargo.toml_ is a <u>manifest</u> file in which you can specify a bunch of different <u>metadata about your package</u>. For example, you can say that you depend on another package.
 
 Execute Command 1.6.2.
 
@@ -43,7 +43,7 @@ regex = { git = "https://github.com/rust-lang/regex.git" }
 
 >Sound good? Well, there’s one problem: If you build this package today, and then you send a copy to me, and I build this package tomorrow, something bad could happen. There could be more commits to `regex` in the meantime, and my build would include new commits while yours would not. Therefore, <u>we would get different builds</u>. This would be bad because we want reproducible builds.
 
->You could fix this problem by defining a specific `rev` value in our _Cargo.toml_, so Cargo could know exactly which **revision** to use when building the package.
+>You could fix this problem by defining a specific `rev` value in our _Cargo.toml_, so Cargo could know exactly which <u>revision</u> to use when building the package.
 
 ```toml
 [dependencies]

@@ -4,17 +4,17 @@ mode: "wide"
 sidebarTitle: "3.1 - Variables and Mutability"
 ---
 
-As mentioned in the previous section, variables in Rust are immutable by default. This means that once a value is bound to a variable name, you cannot reassign it unless the variable was explicitly declared with `mut`. Attempting to reassign it will result in a compiler error.
+As mentioned in the previous section, variables in Rust are immutable by default. This means that once a value is bound to a variable name, you cannot reassign it unless the variable was explicitly declared with `mut`. <u>Attempting to reassign it will result in a compiler error.</u>
 
 ## Declaring Constants
 
->Like immutable variables, _constants_ are values that are bound to a name and are not allowed to change, but there are a few differences between constants and variables.
+>Like immutable variables, constants are values that are bound to a name and are not allowed to change, but there are a few differences between constants and variables.
 
->First, you aren’t allowed to use `mut` with constants. Constants aren’t just immutable by default—they’re always immutable. You declare constants using the `const` keyword instead of the `let` keyword, and **the type of the value must be annotated**.
+>First, you aren’t allowed to use `mut` with constants. Constants aren’t just immutable by default—they’re always immutable. You declare constants using the `const` keyword instead of the `let` keyword, and <u>the type of the value must be annotated</u>.
 
->Constants can be declared in any scope, including the **global scope**, which makes them useful for values that many parts of code need to know about.
+>Constants can be declared in any **scope**, including the <u>global</u> scope, which makes them useful for values that many parts of code need to know about.
 
->The last difference is that constants may be set only to a **constant expression**, not the result of a value that could only be computed at runtime.
+>The last difference is that constants may be set only to a <u>constant expression</u>, not the result of a value that could only be computed at runtime.
 
 >Here’s an example of a constant declaration:
 
@@ -26,7 +26,7 @@ const THREE_HOURS_IN_SECONDS: u32 = 60 * 60 * 3;
 
 ## Shadowing
 
->As you saw in Ch. 2, you can declare a new variable with the same name as a previous variable. Rustaceans say that the first variable is _shadowed_ by the second. In effect, the second variable overshadows the first, taking any uses of the variable name to itself until either it itself is shadowed **or the scope ends**. Code 3.1.2 illustrates how to shadow a variable. Running this code via `cargo run` produces E-Output 3.1.2:
+>As you saw in Ch. 2, you can declare a new variable with the same name as a previous variable. Rustaceans say that the first variable is <u>shadowed</u> by the second. In effect, the second variable overshadows the first, taking any uses of the variable name to itself until either it itself is shadowed <u>or the scope ends</u>. Code 3.1.2 illustrates how to shadow a variable. Running this code via `cargo run` produces E-Output 3.1.2:
 
 <CodeGroup>
 ```rust Code 3.1.2
@@ -54,6 +54,6 @@ The value of x is: 6
 
 >Shadowing is different from marking a variable as `mut` because we’ll get a compile-time error if we accidentally try to reassign to this variable without using the `let` keyword. By using `let`, we can perform a few transformations on a value but have the variable be immutable after those transformations have completed.
 
->The other difference between `mut` and shadowing is that because we’re effectively creating a new variable when we use the `let` keyword again, we can change the type of the value but reuse the same name. 
+>The other difference between `mut` and shadowing is that because we’re effectively <u>creating a new variable</u> when we use the `let` keyword again, we can change the type of the value but reuse the same name. 
 
 This process was applied in Ch. 2 for the `guess` variable (converting it from `String` to `u32`).

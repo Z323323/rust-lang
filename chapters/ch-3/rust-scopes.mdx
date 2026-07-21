@@ -8,9 +8,9 @@ Before moving on to Rust’s scalar types, let's revisit the inner scope from th
 
 ## Down the Rabbit Hole
 
-You can already spot a key characteristic of scopes just by looking at Code 3.1.2: **the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends** (which is why we printed it while still inside).
+You can already spot a key characteristic of scopes just by looking at Code 3.1.2: <u>the shadowed variable `x` created inside the `{ ... }` block literally ceases to exist once that scope ends</u> (which is why we printed it while still inside).
 
-One subtle detail that might be easy to overlook in the previous section example is this: **we can print the value of `x` in the outer scope after exiting the inner scope simply because shadowing a variable inside an inner block is exactly like defining a completely new variable**. Consider Code 3.2.1. Executing it with `cargo run` produces E-Output 3.2.1, demonstrating that both code examples behave exactly the same way.
+One subtle detail that might be easy to overlook in the previous section example is this: <u>we can print the value of `x` in the outer scope after exiting the inner scope simply because shadowing a variable inside an inner block is exactly like defining a completely new variable</u>. Consider Code 3.2.1. Executing it with `cargo run` produces E-Output 3.2.1, demonstrating that both code examples behave exactly the same way.
 
 <CodeGroup>
 ```rust Code 3.2.1
@@ -64,7 +64,7 @@ help: the binding `not_x` is available in a different scope in the same function
 ```
 </CodeGroup>
 
-It is easy to deduce a straightforward solution to this last error: we could simply define `not_x` in the outer scope and remove the inner block entirely (Code 3.2.3). Another valid approach would be to follow the shadowing example from Code 3.1.2, where we declare `not_x` in the outer scope and reassign it **temporarily** within the inner scope.
+It is easy to deduce a straightforward solution to this last error: we could simply define `not_x` in the outer scope and remove the inner block entirely (Code 3.2.3). Another valid approach would be to follow the shadowing example from Code 3.1.2, where we declare `not_x` in the outer scope and reassign it <u>temporarily</u> within the inner scope.
 
 For example, Code 3.2.3 compiles flawlessly:
 
@@ -85,7 +85,7 @@ Consequently, some questions should naturally arise:
 - <span style={{ color: "#964B00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
 - <span style={{ color: "#964B00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
 
-We will answer each question in the following paragraphs. Before doing so, however, we need to cover a couple of fundamental concepts and distinguish the **generic block scopes** we just explored from the **scopes introduced by functions**.
+We will answer each question in the following paragraphs. Before doing so, however, we need to cover a couple of fundamental concepts and distinguish the <u>generic block scopes</u> we just explored from the <u>scopes introduced by functions</u>.
 
 ## The Anatomy and Rules of Scopes
 
@@ -95,25 +95,25 @@ You can picture nested scopes like the layers of an onion:
 \dots\text{ }\rightarrow\text{ }\textcolor{green}{\{}\text{ 3rd }\textcolor{green}{\{}\text{ 2nd }\textcolor{green}{\{}\text{ 1st }\textcolor{red}{\}}\text{ 2nd }\textcolor{red}{\}}\text{ 3rd }\textcolor{red}{\}} \rightarrow\text{ }\dots
 ```
 
-The innermost scope (marked as $\text{1st}$) is the first to disappear when its block ends. Then the $\text{2nd}$ one disappears, followed by the $\text{3rd}$, and so on. **This means that the variables within each of the scopes shown will cease to exist in the exact same order.**
+The innermost scope (marked as $\text{1st}$) is the first to disappear when its block ends. Then the $\text{2nd}$ one disappears, followed by the $\text{3rd}$, and so on. This means that <u>the variables within each of the scopes shown will cease to exist in the exact same order</u>.
 
-As we saw earlier, **a simple inner scope can see variables from its outer scopes (we had access to the variable `x` defined in the outer scope)**. This is partly because they are still 'alive'. However, **the reverse is not true: outer scopes cannot see inside inner scopes**.
+As we saw earlier, <u>a simple inner scope can see variables from its outer scopes</u> (we had access to the variable `x` defined in the outer scope). This is partly because they are still 'alive'. However, the reverse is not true: <u>outer scopes cannot see inside inner scopes</u>.
 
-If you think about it, this makes perfect sense. First, an outer scope cannot 'capture' values from an inner scope because **when the outer scope starts running, the inner variables haven't even been initialized yet**. Furthermore, **once the inner scope finishes executing, its variables are dropped and cease to exist**. **Allowing the outer scope to access them afterward would mean referencing data that is no longer there—a scenario that Rust's safety rules strictly forbid!**
+If you think about it, this makes perfect sense. First, an outer scope cannot 'capture' values from an inner scope because <u>when the outer scope starts running, the inner variables haven't even been initialized yet</u>. Furthermore, <u>once the inner scope finishes executing, its variables are dropped and cease to exist</u>. Allowing the outer scope to access them afterward would mean <u>referencing data that is no longer there</u>—a scenario that Rust's safety rules strictly forbid!
 
-Finally, note that our previous example showed the simplest form of an inner scope—one created explicitly with bare `{ ... }` brackets. In general, a new scope is created almost every time you see curly brackets. For instance, **defining a function or calling a method introduces a new scope**. However, there is a crucial difference: **unlike bare blocks, functions and methods do not automatically see the variables of the scope that called them**. **The parameters you explicitly pass to the function are the only outer variables allowed into that new scope.**
+Finally, note that our previous example showed the simplest form of an inner scope—one created explicitly with bare `{ ... }` brackets. In general, a new scope is created almost every time you see curly brackets. For instance, <u>defining a function or calling a method introduces a new scope</u>. However, there is a crucial difference: unlike bare blocks, <u>functions and methods do not automatically see the variables of the scope that called them</u>. <u>The arguments you explicitly pass to the function are the only outer variables allowed into that new scope</u>.
 
 We are now prepared to address <span style={{ color: "#964B00" }}><b>Q-1</b></span> and <span style={{ color: "#964B00" }}><b>Q-2</b></span>. Prior to doing so, however, it is necessary to introduce two final, critical concepts directly related to <span style={{ color: "#964B00" }}><b>Q-3</b></span> to conclude this section effectively.
 
-- **It is possible to return values—whether explicitly or implicitly—from any scope, ensuring that local temporary variables are dropped while a resulting value is successfully captured by the enclosing scope.**
-- **We can explicitly pass variables from an outer scope into an inner scope, mutate them, and 'protect' them. This mechanism ensures that the cleanup and 'destruction' of the inner scope's variables does not trigger the destruction of the borrowed variables we require in the outer scope!**
+- <u>It is possible to return values—whether explicitly or implicitly—from any scope</u>, ensuring that local temporary variables are dropped while a resulting value is successfully captured by the enclosing scope.
+- <u>We can explicitly pass variables from an outer scope into an inner scope, mutate them, and 'protect' them</u>. This mechanism ensures that the cleanup and 'destruction' of the inner scope's variables does not trigger the destruction of the borrowed variables we require in the outer scope!
 
 ## Q&A Pt. 1
 
 - <span style={{ color: "#964B00" }}><b>Q-2</b>: Why should we even use bare scopes?</span>
-- <span style={{ color: "#008080" }}><b>A-2</b>: While it is entirely possible to use bare scopes in a completely pointless way, there are specific scenarios where they become highly beneficial. <b>Utilizing bare scopes is primarily useful when you want to discard specific modifications or temporary variables at the end of a set of operations.</b> This ensures that any variable defined within that scope—including those modified via shadowing—is automatically dropped once the scope ends, <b>eliminating the need to track these variables later and ensuring their memory is released immediately</b>.</span>
+- <span style={{ color: "#008080" }}><b>A-2</b>: While it is entirely possible to use bare scopes in a completely pointless way, there are specific scenarios where they become highly beneficial. <u>Utilizing bare scopes is primarily useful when you want to discard specific modifications or temporary variables at the end of a set of operations.</u> This ensures that any variable defined within that scope—including those modified via shadowing—is automatically dropped once the scope ends, <u>eliminating the need to track these variables later and ensuring their memory is released immediately</u>.</span>
 - <span style={{ color: "#964B00" }}><b>Q-1</b>: Why shadow a variable by reusing the same name if it is actually a totally separate variable?</span>
-- <span style={{ color: "#008080" }}><b>A-1</b>: When defining an entirely new variable in a nested scope, <b>its only logical purpose is to serve as a temporary variable</b>. In the context of shadowing, the reason for reusing a name for this temporary variable is now clear: <b>the temporary variable is logically related to the original variable in the outer scope</b>. This is why I mostly referred to <b>temporary modifications</b> when discussing shadowing: the values of the shadowed variables are seamlessly restored as soon as the inner scope ends. Nevertheless, this behavior is merely an illusion. Under the hood, <b>shadowed variables within inner scopes are entirely new variables</b>, as demonstrated earlier.</span>
+- <span style={{ color: "#008080" }}><b>A-1</b>: When defining an entirely new variable in a nested scope, its only logical purpose is to serve as a <u>temporary variable</u>. In the context of shadowing, the reason for reusing a name for this temporary variable is now clear: <u>the temporary variable is logically related to the original variable in the outer scope</u>. This is why I mostly referred to <u>temporary modifications</u> when discussing shadowing: the values of the shadowed variables are seamlessly restored as soon as the inner scope ends. Nevertheless, this behavior is merely an illusion. Under the hood, <u>shadowed variables within inner scopes are entirely new variables</u>, as demonstrated earlier.</span>
 
 Let's now dive into a simple function to see how variables are passed into its scope. Afterward, we will highlight the key similarities and differences between function scopes and the bare blocks we explored earlier.
 
@@ -123,7 +123,7 @@ Once that's done, we will finally answer question <span style={{ color: "#964B00
 
 While functions will be analyzed in depth later on, we can already look at a couple of basic examples.
 
-Let's start with an example of a simple function that takes a `String` typed variable as a parameter and returns nothing. The function merely prints the passed variable `s_x` to the terminal. When compiling and running Code 3.2.4 we obtain E-Output 3.2.4.
+Let's start with an example of a simple function that takes a `String` typed variable as a **parameter** and returns nothing. The function merely prints the passed variable `s_x` to the terminal. When compiling and running Code 3.2.4 we obtain E-Output 3.2.4.
 
 <CodeGroup>
 ```rust Code 3.2.4
@@ -144,9 +144,13 @@ fn main() {
 ```
 </CodeGroup>
 
-What might not be immediately obvious when first looking at functions is that **they introduce a (completely independent) scope**. **For every parameter defined in the function's signature, Rust creates a brand-new local variable bound strictly within that scope.** _(Note: Methods are simply functions attached to a specific type and follow these exact same scoping rules, so we will not cover them separately.)_
+What might not be immediately obvious when first looking at functions is that <u>they introduce a (completely independent) scope</u>. <u>For every parameter defined in the function's **signature**, Rust creates a brand-new local variable bound strictly within that scope.</u>
 
-**The preceding Code 3.2.4 is closely related to the following Code 3.2.5. However, they are not strictly equivalent because function scopes are entirely isolated.**
+<Note>
+Methods are simply functions attached to a specific type and follow these exact same scoping rules, so we will not cover them separately.
+</Note>
+
+<u>The preceding Code 3.2.4 is closely related to the following Code 3.2.5.</u> However, they are not strictly equivalent because <u>function scopes are entirely isolated</u>.
 
 ```rust Code 3.2.5
 fn main() {
@@ -207,7 +211,7 @@ Take a moment to compare Code 3.2.6 to Code 3.2.7; they are practically—though
   </Column>
 </Columns>
 
-**We could also change the function parameter names to avoid shadowing `s_x`, but the program's behavior would remain exactly the same. As we established earlier, `s_x` within an inner scope behaves exactly like a variable defined with a completely different name—it is a distinctly separate variable in every scope, regardless of its identifier!**
+<u>We could also change the function parameter names to avoid shadowing `s_x`, but the program's behavior would remain exactly the same.</u> As we established earlier, `s_x` within an inner scope behaves exactly like a variable defined with a completely different name—<u>it is a distinctly separate variable in every scope, regardless of its identifier!</u>
 
 ## Q&A Pt. 2
 
@@ -216,7 +220,7 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
 - <span style={{ color: "#964B00" }}><b>Q-4</b>: If the preceding paragraph code snippets are related, why should we use bare scopes instead of functions, and viceversa? What are the actual differences between using functions and using bare scopes?</span>
 - <span style={{ color: "#008080" }}><b>A-4</b>: There are primarily two differences between these two approaches.</span><br /><br />
 
-  <span style={{ color: "#008080" }}>The first is that <b>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</b>. Take Code 3.2.8 as an example:</span>
+  <span style={{ color: "#008080" }}>The first is that <u>bare scopes allow you to 'capture' all variables from the surrounding environment, unlike functions, which only allow you to 'capture' the parameters explicitly specified in their definition</u>. Take Code 3.2.8 as an example:</span>
   
   ```rust Code 3.2.8
   fn main() {
@@ -231,7 +235,7 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   }
   ```
   
-  <span style={{ color: "#008080" }}>In this case, <b>had we used the functions shown previously in Code 3.2.6, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function!</b> Attempting to do so would result in a compilation error, as shown below.</span>
+  <span style={{ color: "#008080" }}>In this case, had we used the functions shown previously in Code 3.2.6, we would not have been able to print the variable `y` because it was not defined as a parameter in the `print_var` function! Attempting to do so would result in a compilation error, as shown below.</span>
   
   ```rust Code 3.2.9
   fn main() {
@@ -255,23 +259,23 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   }
   ```
   
-  <span style={{ color: "#008080" }}>The second difference between the two approaches is the more important one. Although <b>functions</b> are less 'open' in terms of variable capture, they <b>allow you to define much more precise and controllable workflows, enable code reuse, and lead to a significantly more readable and organized code structure</b>. For example, if we wanted to call `print_value` multiple times, we could do so simply by writing `print_value(value)`. <b>This behaviour would not be possible using bare scopes, as we would have to rewrite the code responsible for printing the values every single time.</b> While in this simple example using `println!` takes up roughly the same amount of space as calling `print_value`, functions typically contain complex logic and several lines of code. <b>To avoid duplicating that code over and over, we use named identifiers like `print_value`!</b> Ultimately, because of these factors, <b>the practical use case for bare scopes narrows down exclusively to the one explained earlier</b>. <b>In that specific scenario—namely, freeing memory from temporary variables—using a function instead would not be viable. This is because a function's parameters must be explicitly defined and have a fixed count.</b></span><br /><br />
+  <span style={{ color: "#008080" }}>The second difference between the two approaches is the more important one. Although <u>functions</u> are less 'open' in terms of variable capture, they <u>allow you to define much more precise and controllable workflows, enable code reuse, and lead to a significantly more readable and organized code structure</u>. For example, if we wanted to call `print_value` multiple times, we could do so simply by writing `print_value(value)`. <u>This behavior would not be possible using bare scopes</u>, as we would have to rewrite the code responsible for printing the values every single time. While in this simple example using `println!` takes up roughly the same amount of space as calling `print_value`, <u>functions typically contain complex logic and several lines of code</u>. To avoid duplicating that code over and over, we use named <u>identifiers</u> like `print_value`! Ultimately, <u>because of these factors, the practical use case for bare scopes narrows down exclusively to</u> the one explained earlier. In that specific scenario—namely, <u>freeing memory from temporary variables</u>—<u>using a function instead would not be viable</u>. This is because a <u>function's parameters</u> must be explicitly defined and <u>have a fixed count</u>.</span><br /><br />
   
-  <span style={{ color: "#008080" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <b>`println!` accepts an arbitrary number of them</b>. For instance, Code 3.2.10 will compile without any problems:</span>
+  <span style={{ color: "#008080" }}>At this juncture, a further specification must be made. One might erroneously conclude that our previous assertion regarding fixed parameters is incorrect, given that <u>`println!` accepts an arbitrary number of them</u>. For instance, Code 3.2.10 will compile without any problems:</span>
   
   ```rust Code 3.2.10
   println!("{}, {}, {}, {}, ...", 1, 2, 3, 4); // Outputs '1, 2, 3, 4, ...'.
   ```
   
-  <span style={{ color: "#008080" }}>The reality is that `println!` is not a function at all, but rather a <b>macro</b>. One of the major limitations of standard functions in Rust is that they require a fixed, explicit number of parameters. Macros bypass this limitation entirely, allowing them to accept an arbitrary number of arguments (though the fundamental purpose of macros is <b>metaprogramming</b>, and implementing them is significantly more complex than defining a standard function).</span>
+  <span style={{ color: "#008080" }}>The reality is that `println!` is not a function at all, but rather a <u>macro</u>. One of the major limitations of standard functions in Rust is that they require a fixed, explicit number of parameters. Macros bypass this limitation entirely, allowing them to accept an arbitrary number of arguments (though the fundamental purpose of macros is <u>metaprogramming</u>, and implementing them is significantly more complex than defining a standard function).</span>
   
 ## Returning Expression Results from Scopes
 
-There is a primary way (**one of two possible approaches**) to preserve the results computed within a scope: **returning them implicitly or explicitly**.
+There is a primary way (<u>one of two possible approaches</u>) to preserve the results computed within a scope: <u>returning them implicitly or explicitly</u>.
 
 ### Expressions
 
-As you will see later on, distinguishing between an **expression** and a variable is crucial in practically any programming language. Given Code 3.2.11, `x`, `y`, and `z` serve as variables of type `u32`, whereas **`17`, `1337`, and `x + y` are evaluated as expressions**.
+<u>Distinguishing between an expression and a variable is crucial</u> in practically any programming language. Given Code 3.2.11, `x`, `y`, and `z` serve as variables of type `u32`, whereas <u>`17`, `1337`, and `x + y` are evaluated as expressions</u>.
 
 ```rust Code 3.2.11
 fn main() {

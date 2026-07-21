@@ -4,11 +4,11 @@ mode: "wide"
 sidebarTitle: "1.7 - Package ID Specifications"
 ---
 
-This section is included here because it directly builds upon the previous topic, but it also serves a broader purpose. It showcases the full extent of Cargo's power in locating <u>packages specific versions, whether online or offline</u>, and is intended to act primarily as a reference guide for custom configurations. It is entirely acceptable—and even recommended—to simply skim this section for now and move on.
+This section is included here because it directly builds upon the previous topic, but it also serves a broader purpose. It showcases the full extent of Cargo's power in locating <u>packages specific versions, whether online or offline</u>, and is intended to act primarily as a reference guide for custom configurations. It is entirely acceptable—and even recommended—to simply <u>skim this section</u> for now and move on.
 
 This section, in particular, is almost word-for-word identical to the official documentation, which can be viewed at [[doc.rust-lang.org/cargo/reference/pkgid-spec.html](https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)].
 
->Subcommands of Cargo frequently need to refer to a particular package within a dependency graph for various operations like updating, cleaning, building, etc. To solve this problem, Cargo supports **Package ID Specifications**. A specification is a string which is used to uniquely refer to one package within a graph of packages.
+>Subcommands of Cargo frequently need to refer to a particular package within a dependency graph for various operations like updating, cleaning, building, etc. To solve this problem, Cargo supports Package ID Specifications. A specification is a string which is used to uniquely refer to one package within a graph of packages.
 
 >The specification may be fully qualified, such as `registry+https://github.com/rust-lang/crates.io-index#regex@1.4.3` or it may be abbreviated, such as `regex`. The abbreviated form may be used as long as it uniquely identifies a single package in the dependency graph. If there is ambiguity, additional qualifiers can be added to make it unique. For example, if there are two versions of the `regex` package in the graph, then it can be qualified with a version to make it unique, such as `regex@1.4.3`.
 
