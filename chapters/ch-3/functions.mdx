@@ -4,7 +4,7 @@ mode: "wide"
 sidebarTitle: "3.4 - Functions"
 ---
 
-Although we briefly introduced functions in section 3.2, this section provides an overview from a different perspective. It has been retained here, though summarized wherever appropriate.
+Although we briefly introduced functions and expressions in section 3.2, this section provides an overview from a different perspective. It has been retained here, though summarized wherever appropriate.
 
 >Functions are prevalent in Rust code. You’ve already seen one of the most important functions in the language: the `main` function, which is the entry point of many programs.
 
@@ -14,9 +14,9 @@ Although we briefly introduced functions in section 3.2, this section provides a
 
 ## Parameters
 
->We can define functions to have _parameters_, which are special variables that are part of a function’s **signature**. When a function has parameters, you can provide it with concrete values for those parameters. Technically, the concrete values are called _arguments_, but in casual conversation, people tend to use the words _parameter_ and _argument_ interchangeably for either the variables in a function’s definition or the concrete values passed in when you call a function.
+>We can define functions to have parameters, which are special variables that are part of a function’s signature. When a function has parameters, you can provide it with concrete values for those parameters. Technically, the concrete values are called arguments, but in casual conversation, people tend to use the words parameter and argument interchangeably for either the variables in a function’s definition or the concrete values passed in when you call a function.
 
->In function signatures, you _must_ declare the type of each parameter. This is a deliberate decision in Rust’s design: Requiring type annotations in function definitions means the compiler almost never needs you to use them elsewhere in the code to figure out what type you mean. The compiler is also able to give more-helpful error messages if it knows what types the function expects.
+>In function signatures, you must declare the type of each parameter. This is a deliberate decision in Rust’s design: Requiring type annotations in function definitions means the compiler almost never needs you to use them elsewhere in the code to figure out what type you mean. The compiler is also able to give more-helpful error messages if it knows what types the function expects.
 
 >When defining multiple parameters, separate the parameter declarations with commas, as shown in Code 3.4.1. Executing this code produces E-Output 3.4.1.
 
@@ -42,10 +42,10 @@ The measurement is: 5h
 
 >Function bodies are made up of a series of statements optionally ending in an expression.
 
->Let’s look at what statements and expressions are and how their differences affect the bodies of functions. Because Rust is an expression-based language, this is an important distinction to understand.
+>Let’s look at what statements and expressions are and how their differences affect the bodies of functions. Because <u>Rust is an expression-based language</u>, this is an important distinction to understand.
 
->- _Statements_ are instructions that perform some action and do not return a value.
->- _Expressions_ evaluate to a resultant value.
+>- <p><u>Statements are instructions that perform some action and do not return a value.</u></p>
+>- <p><u>Expressions evaluate to a resultant value.</u></p>
 
 >Creating a variable and assigning a value to it with the `let` keyword is a statement. In Code 3.4.2, `let y = 6;` is a statement.
 
@@ -55,9 +55,9 @@ fn main() {
 }
 ```
 
->**Function definitions are also statements. As we’ll see shortly, calling a function is not a statement, though.**
+><u>Function definitions are also statements.</u> As we’ll see shortly, <u>calling a function is not a statement</u>, though.
 
->Statements do not return values. Therefore, you can’t assign a `let` statement to another variable, as Code 3.4.3 tries to do; you’ll get an error (C-Output 3.4.3):
+><u>Statements do not return values</u>. Therefore, you can’t assign a `let` statement to another variable, as Code 3.4.3 tries to do; you’ll get an error (C-Output 3.4.3):
 
 <CodeGroup>
 ```rust Code 3.4.3
@@ -79,9 +79,9 @@ error: expected expression, found `let` statement
 
 >The `let y = 6` statement does not return a value, so there isn’t anything for `x` to bind to. This is different from what happens in other languages, such as C and Ruby, where the assignment returns the value of the assignment. In those languages, you can write `x = y = 6` and have both `x` and `y` have the value `6`; that is not the case in Rust.
 
->Expressions evaluate to a value and make up most of the rest of the code that you’ll write in Rust. Consider a math operation, such as `5 + 6`, which is an expression that evaluates to the value `11`. 
+><u>Expressions evaluate to a value</u> and make up most of the rest of the code that you’ll write in Rust. Consider a math operation, such as `5 + 6`, which is an <u>expression</u> that evaluates to the <u>value</u> `11`. 
 
->Expressions can be part of statements: In Code 3.4.3, the `6` in the statement `let y = 6;` is an expression that evaluates to the value `6`. **Calling a function is an expression. Calling a macro is an expression. A new scope block created with curly brackets is an expression.** Consider Code 3.4.4.
+>Expressions can be part of statements: In Code 3.4.3, the `6` in the statement `let y = 6;` is an expression that evaluates to the value `6`. <u>Calling a function is an expression. Calling a macro is an expression. A new scope block created with curly brackets is an expression.</u> Consider Code 3.4.4.
 
 ```rust Code 3.4.4
 fn main() {
@@ -94,13 +94,13 @@ fn main() {
 }
 ```
 
->This **expression**: `{ let x = 3; x + 1 }` is a block that, in this case, evaluates to `4`. That value gets bound to `y` as part of the `let` statement. Note the `x + 1` line without a semicolon at the end, which is unlike most of the lines you’ve seen so far. Expressions do not include ending semicolons. If you add a semicolon to the end of an expression, you turn it into a statement, and it will then not return a value.
+>This <u>expression</u>: `{ let x = 3; x + 1 }` is a block that, in this case, evaluates to `4`. That <u>value</u> gets bound to `y` as part of the `let` <u>statement</u>. Note the `x + 1` line without a semicolon at the end, which is unlike most of the lines you’ve seen so far. Expressions do not include ending semicolons. If you add a semicolon to the end of an expression, you turn it into a statement, and it will then not return a value.
 
 ## Functions with Return Values
 
->Functions can return values to the code that calls them. We don’t name return values, but we must declare their type after an arrow (`->`). **In Rust, the return value of the function is synonymous with the value of the final expression in the block of the body of a function. You can return early from a function by using the `return` keyword and specifying a value, but most functions return the last expression implicitly.**
+>Functions can return values to the code that calls them. We don’t name return values, but we must declare their type after an arrow (`->`). In Rust, <u>the return value of the function is synonymous with the value of the final expression in the block of the body of a function</u>. You can return early from a function by using the `return` keyword and specifying a value, but <u>most functions return the last expression implicitly</u>.
 
-Code 3.4.5 below is an example of a function that returns a value (the **expression** `5`). If you compile and run Code 3.4.5, Rust will execute it without any issues and produce E-Output 3.4.5. However, if you try adding a semicolon (`;`) after the `5`, the compiler will throw the error shown in C-Output 3.4.5.
+Code 3.4.5 below is an example of a function that returns a value. If you compile and run Code 3.4.5, Rust will execute it without any issues and produce E-Output 3.4.5. However, if you try adding a semicolon (`;`) after the `5`, the compiler will throw the error shown in C-Output 3.4.5.
 
 <CodeGroup>
 ```rust Code 3.4.5
@@ -136,4 +136,4 @@ error[E0308]: mismatched types
 
 >The main error message, `mismatched types`, reveals the core issue with this code.
 
->The definition of the function `five` says that it will return an `i32`, **but statements don’t evaluate to a value, which is expressed by `()`, the unit type**. Therefore, nothing is returned, which contradicts the function definition and results in an error.
+>The definition of the function `five` says that it will return an `i32`, <u>but statements don’t evaluate to a value, which is expressed by `()`, the unit type</u>. Therefore, nothing is returned, which contradicts the function definition and results in an error.

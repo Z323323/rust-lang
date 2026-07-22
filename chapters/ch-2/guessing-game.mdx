@@ -78,7 +78,7 @@ I will get straight to the point here, commenting only the general behaviour of 
  `use std::io` brings the `io` (input/output) **module** from the `std` (standard) library into scope. This is strictly necessary to handle data from the standard input, such as capturing user keystrokes from the terminal across any operating system.
  </li>
  <li>
- `let mut guess = String::new()` declares a mutable variable named `guess` and initializes it by calling the `new` **associated function** of the `String` **type**, which creates a new, empty string. In Rust, <u>variables are immutable by default</u>; therefore, to allow their values to change, we must explicitly declare them with the `mut` (mutable) keyword. Note that immutable is not the same as **constant**.
+ `let mut guess = String::new()` declares a mutable variable named `guess` and initializes it by calling the `new` **associated function** of the `String` **type**, which creates a new, empty string. In Rust, <u>variables are immutable by default</u>; therefore, to allow their **values** to change, we must explicitly declare them with the `mut` (mutable) keyword. Note that immutable is not the same as **constant**.
  </li>
  <li>
  `io::stdin()` calls the `stdin` function from the `io` module, which returns an instance of `std::io::Stdin`—a handle to the standard input of your terminal.

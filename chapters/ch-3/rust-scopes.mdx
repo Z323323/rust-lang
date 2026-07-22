@@ -106,7 +106,7 @@ Finally, note that our previous example showed the simplest form of an inner sco
 We are now prepared to address <span style={{ color: "#964B00" }}><b>Q-1</b></span> and <span style={{ color: "#964B00" }}><b>Q-2</b></span>. Prior to doing so, however, it is necessary to introduce two final, critical concepts directly related to <span style={{ color: "#964B00" }}><b>Q-3</b></span> to conclude this section effectively.
 
 - <u>It is possible to return values—whether explicitly or implicitly—from any scope</u>, ensuring that local temporary variables are dropped while a resulting value is successfully captured by the enclosing scope.
-- <u>We can explicitly pass variables from an outer scope into an inner scope, mutate them, and 'protect' them</u>. This mechanism ensures that the cleanup and 'destruction' of the inner scope's variables does not trigger the destruction of the borrowed variables we require in the outer scope!
+- <u>We can explicitly pass variables from an outer scope into an inner scope, mutate them, and 'protect' them</u>. This mechanism ensures that the cleanup and 'destruction' of the inner scope's variables does not trigger the destruction of the **borrowed** variables we require in the outer scope!
 
 ## Q&A Pt. 1
 
@@ -117,7 +117,7 @@ We are now prepared to address <span style={{ color: "#964B00" }}><b>Q-1</b></sp
 
 Let's now dive into a simple function to see how variables are passed into its scope. Afterward, we will highlight the key similarities and differences between function scopes and the bare blocks we explored earlier.
 
-Once that's done, we will finally answer question <span style={{ color: "#964B00" }}><b>Q-3</b></span> raised earlier, definitively clearing up the topic of scopes—a fundamental concept in Rust. This is exactly why I dedicated an entire section to it. Grasping how scopes work right from the start will massively accelerate and improve your understanding of Rust's more complex core mechanisms, such as its famous **ownership model**.
+Once that's done, we will finally answer question <span style={{ color: "#964B00" }}><b>Q-3</b></span> raised earlier, definitively clearing up the topic of scopes—a fundamental concept in Rust. This is exactly why I dedicated an entire section to it. Grasping how scopes work right from the start will massively accelerate and improve your understanding of Rust's more complex core mechanisms, such as its famous **ownership** model.
 
 ## Connecting Block Scopes with Function Scopes
 
@@ -271,29 +271,40 @@ Building on the previous paragraph, we can now define and answer <span style={{ 
   
 ## Returning Expression Results from Scopes
 
-There is a primary way (<u>one of two possible approaches</u>) to preserve the results computed within a scope: <u>returning them implicitly or explicitly</u>.
+There is a primary way (<u>one of two possible approaches</u>) to preserve the results computed within a scope: returning them implicitly or explicitly.
 
 ### Expressions
 
-<u>Distinguishing between an expression and a variable is crucial</u> in practically any programming language. Given Code 3.2.11, `x`, `y`, and `z` serve as variables of type `u32`, whereas <u>`17`, `1337`, and `x + y` are evaluated as expressions</u>.
+<u>Distinguishing between an expression and a **statement** is crucial</u> in Rust. Given Code 3.2.11, `let x: u32 = 17;`, `let y: u32 = 1337;`, `let z = x + y;`, `let a = println!("{z}");`, and `println!("{:?}", a);` are statements, whereas <u>`17`, `1337`, `x + y`, `println!("{z}")`, and `println!("{:?}", a)` are expressions that evaluate to values</u>.
+
+Expressions and functions will be analyzed in detail in section 3.4. For now, it is only important to distinguish <u>expressions</u> from <u>statements</u> and <u>values</u> (the latter distinction being significantly more subtle).
 
 ```rust Code 3.2.11
 fn main() {
-    let x: u32 = 17; /* This statement is entirely equivalent to the following:
+    let x: u32 = 17; /* The literal expression '17', evaluates to the value '17'
+                        of type 'u32', and is assigned to the variable 'x'.
+                        This statement is entirely equivalent to the following:
                         let x = 17_u32; */
-    let y: u32 = 1337;
+                        
+    let y: u32 = 1337; /* The literal expression '1337', evaluates to the value '1337'
+                          of type 'u32', and is assigned to the variable 'y'. */
 
-    let z = x + y;
+    let z = x + y; /* The expression 'x + y', evaluates to the value '1354'
+                      of type 'u32', and is assigned to the variable 'z'. */
 
-    println!("{z}"); // Outputs '1354'.
+    let a = println!("{z}"); /* The expression 'println!("{z}")', evaluates
+                                to the value '()' of type '()', and is assigned
+                                to the variable 'a'. */
+    
+    println!("{:?}", a); // Outputs '()'.
 }
 ```
 
-#### Inspecting the Type of Any Expression
+#### Inspecting the Resulting Type of Any Expression
 
-Determining the resulting type of any expression can be easily achieved by binding the expression to a variable using the `let` keyword, and subsequently inspecting the variable's type. Explicitly inspecting a variable's type at runtime is, however, somewhat complex in Rust. Code 3.2.12 below is included only to let readers verify that `z` is indeed a `u32`. The underlying syntax and language mechanics will be thoroughly explored in later chapters.
+Determining the resulting type of any expression can be easily achieved by binding <u>the resulting value from the evaluation of an expression</u> to a variable using the `let` keyword, and subsequently inspecting the variable's type. Explicitly inspecting a variable's type at runtime is, however, somewhat complex in Rust. Code 3.2.12 below is included only to let readers verify that `z` is indeed of type `u32`, and `a` is of type `()`. The underlying syntax and language mechanics will be thoroughly explored in later chapters.
 
-```rust Code 3.2.12 focus={5-8}
+```rust Code 3.2.12 focus={5-9}
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
 }
@@ -301,6 +312,7 @@ fn print_type_of<T>(_: &T) {
 fn main() {
     // --snip--
     print_type_of(&z); // Outputs 'u32'.
+    print_type_of(&a); // Outputs '()'.
 }
 ```
 
@@ -308,7 +320,7 @@ Beyond demonstrating how to print the type of any variable (which may prove usef
 
 ### Returning Results from Scopes
 
-In Rust, you can explicitly return a result **from a function** using the `return` keyword. Alternatively, you can return a result **from any block scope** implicitly by simply omitting the semicolon `;` from the final expression inside that scope.
+In Rust, you can <u>explicitly</u> return a result <u>from a function</u> using the `return` keyword. Alternatively, you can return a result <u>from any block scope implicitly</u> by simply omitting the semicolon `;` from the final expression inside that scope.
 
 This means there is no explicit keyword to return values from a bare block scope, although there is an advanced technique that allows you to return values semi-explicitly from bare blocks. We will not analyze it in this section, but we will explore it shortly.
 
@@ -316,14 +328,14 @@ The following Code 3.2.13 provides a basic example of evaluating expressions and
 
 ```rust Code 3.2.13
 fn main() {
-    let x: u32 = { 17 }; /* We return the literal expression '17'
-                            back to the main function's scope! */
+    let x: u32 = { 17 }; /* We return the value '17', from the literal
+                            expression '17', back to the main function's scope! */
                             
-    let y: u32 = { 1337 }; /* We return the literal expression '1337'
-                              back to the main function's scope! */
+    let y: u32 = { 1337 }; /* We return the value '1337', from the literal
+                              expression '1337', back to the main function's scope! */
 
-    let z = { x + y }; /* We return the expression '1354' back to
-                          the main function's scope! */
+    let z = { x + y }; /* We return the value '1354', from the expression 'x + y',
+                          back to the main function's scope! */
 
     println!("{z}"); // Outputs '1354'.
 }
@@ -333,46 +345,53 @@ By contrast, Code 3.2.14 demonstrates how to explicitly return a value from the 
 
 ```rust Code 3.2.14
 fn ret_explicitly(x: u32) -> u32 {
-    return x; // We return the expression '17' back to the main function's scope!
+    return x; /* We return the value '17', from the expression 'x',
+                 back to the main function's scope! */
 }
 
 fn ret_implicitly(x: u32) -> u32 {
-    x // We return the expression '1337' back to the main function's scope!
+    x /* We return the value '1354', from the expression 'x',
+         back to the main function's scope! */
 }
 
 fn main() {
-    let x: u32 = ret_explicitly(17); /* We pass the literal expression '17' to
-                                        the ret_explicitly function's scope. */
+    let x: u32 = ret_explicitly(17); /* We pass the value '17', resulting from the evaluation
+                                        of the literal expression '17', to the ret_explicitly
+                                        function's scope. */
+                                        
     // Here we can use x, which was returned by the ret_explicitly function's scope!
-    let y: u32 = ret_implicitly(1337); /* We pass the literal expression '1337' to
-                                          the ret_implicitly function's scope. */
+    
+    let y: u32 = ret_implicitly(x + 1337); /* We pass the value '1354', resulting from the
+                                              evaluation of the expression 'x + 1337', to
+                                              the ret_explicitly function's scope. */
+                                              
     // Here we can use y, which was returned by the ret_explicitly function's scope!
 
-    let z = x + y;
+    let z = x + y; // 17 + 1354
 
-    println!("{z}"); // Outputs '1354'.
+    println!("{z}"); // Outputs '1371'.
 }
 ```
 
-At first glance, this approach might seem sufficient for returning any value calculated within an inner scope (whether that is a function scope or a block scope). The truth, however, is that **it introduces a major structural issue**.
+At first glance, this approach might seem sufficient for returning any value calculated within an inner scope (whether that is a function scope or a block scope). The truth, however, is that <u>it introduces a major structural issue</u>.
 
-First, you must 'capture' the function's return value using `let`, which means you either have to define a brand-new variable or overwrite an existing one (which must be explicitly declared as `mut`).
+First, you must 'capture' the function's return value using `let`, which means you either have to define a brand-new variable, or overwrite an existing one (which must be explicitly declared as `mut`).
 
-The second issue—which is significantly more cumbersome—is that **if you want to keep using the variables you passed as arguments once you are back in the outer scope, you would have to return all of them** (it is possible to return multiple variables at once, as we will explore later).
+The second issue—which is significantly more cumbersome—is that <u>if you want to keep using the variables you passed as arguments once you are back in the outer scope, you would have to return all of them</u> (it is possible to return multiple variables at once, as we will explore later).
 
-**From a data flow perspective, this pattern is terrible. As we observed earlier, when a variable is passed as an argument to a function, it is bound as a new local variable within the function's scope. This means the data is moved from the outer scope to the inner scope. Furthermore, once the function finishes its modifications, you would have to transfer that data back to the original variables in the outer scope (requiring them to be marked `mut`), or assign them to newly declared variables.**
+<u>From a data flow perspective, this pattern is terrible.</u> As we observed earlier, <u>when a variable is passed as an argument to a function, it is bound as a new local variable within the function's scope</u>. <u>This means the data is copied from the outer scope to the inner scope.</u> Furthermore, once the function finishes its modifications, you would have to <u>copy that data back to the outer scope</u>.
 
-**Continuously shifting data back and forth—especially for complex types that manage memory dynamically, like `String`—is highly unidiomatic. It introduces unnecessary boilerplate, wastes computational resources, and creates poor memory ergonomics. To avoid this incredibly inefficient back-and-forth, we need a way to operate directly on the data structures passed as arguments, ensuring that the termination of the inner scope does not destroy the underlying data.**
+<p><u>Continuously shifting data back and forth—especially for complex types that manage memory dynamically, like `String`—is highly unidiomatic. It introduces unnecessary boilerplate, wastes computational resources, and creates poor memory ergonomics. To avoid this incredibly inefficient back-and-forth, we need a way to operate directly on the data structures passed as arguments, ensuring that the termination of the inner scope does not destroy the underlying data.</u></p>
 
 ## The Core Challenge: Preserving Non-`Copy` Types from Inner Scopes
 
 Up to this point, we have deliberately avoided a detail that tends to cause a significant amount of confusion, one that directly relates to the final point of 'The Anatomy and Rules of Scopes' paragraph. Now, it is time to analyze and clarify this mechanic once and for all.
 
-In Code 3.2.1 (and in Code 3.1.2), you may have noticed that **the variable `x`—despite being assigned/shadowed in the inner scope—is successfully read again in the outer scope**. **This behavior is absolutely not guaranteed for types that do not implement the `Copy` trait.**
+In Code 3.2.1 (and in Code 3.1.2), you may have noticed that <u>the variable `x`—despite being assigned/shadowed in the inner scope—is successfully read again in the outer scope</u>. <u>This behavior is absolutely not guaranteed for types that do not implement the `Copy` trait.</u>
 
 ### Introducing the Problem Through Block Scopes
 
-Let's look at why. First, observe Code 3.2.15. If you try to execute `cargo run`, the compiler will throw C-Output 3.2.15, in stark contrast to the example we saw earlier. A simple comparison reveals that Code 3.2.15 and Code 3.2.1/3.1.2 are practically identical; aside from the variable's name, the only thing that changes is its **type**.
+Let's look at why. First, observe Code 3.2.15. If you try to execute `cargo run`, the compiler will throw C-Output 3.2.15, in stark contrast to the example we saw earlier. A simple comparison reveals that Code 3.2.15 and Code 3.2.1/3.1.2 are practically identical; aside from the variable's name, the only thing that changes is its <u>type</u>.
 
 <CodeGroup>
 ```rust Code 3.2.15
@@ -410,13 +429,13 @@ help: consider cloning the value if the performance cost is acceptable
 ```
 </CodeGroup>
 
-This issue occurs because, **whenever a value is assigned to a new variable, some data must be transferred**. **Because duplicating dynamic and potentially massive data structures (like `String`) is incredibly expensive in terms of memory allocation and execution time, the compiler outright refuses to implicitly copy the actual data the way it does for simple scalar types (like `u32`).**
+This issue occurs because, <u>whenever a value is assigned to a new variable, some data must be transferred</u>. <u>Because duplicating dynamic and potentially massive data structures (like `String`) is incredibly expensive in terms of memory allocation and execution time, the compiler outright refuses to implicitly copy the actual data the way it does for simple scalar types (like `u32`).</u>
 
-**Instead, the compiler simply transfers the memory address pointing to the data from one variable to the other. If the variable does not implement `Copy`, it does not duplicate the underlying data. Thanks to this process, the compiler avoids a heavy performance hit, transferring only a tiny, fixed-size pointer that references the data in memory.**
+Instead, <u>the compiler simply transfers the memory address pointing to the data from one variable to the other</u>. <u>If the variable does not implement `Copy`, it does not duplicate the underlying data. Thanks to this process, the compiler avoids a heavy performance hit, transferring only a tiny, fixed-size pointer that references the data in memory.</u>
 
-**The direct consequence of this process is that the original variable is invalidated and no longer holds the reference (address) to that data (we will explore exactly why in the next chapter).**
+The direct consequence of this process is that <u>the original variable is invalidated and no longer holds the reference (address) to that data</u> (we will explore exactly why in the next chapter).
 
-For this reason, when we try to access `s_x` in the outer scope after it has been moved into the inner scope, the compiler throws an error—**that address was moved into the `s_x` variable within the inner scope; consequently, when that scope terminated, the address was dropped forever!**
+For this reason, when we try to access `s_x` in the outer scope after it has been **moved** into the inner scope, the compiler throws an error—<u>that address was moved into the `s_x` variable within the inner scope; consequently, when that scope terminated, the address was dropped forever</u>!
 
 ### Solving the Problem for Block Scopes
 
@@ -446,15 +465,15 @@ fn main() {
 ```
 </CodeGroup>
 
-The core concept you must understand is this: **copying a value (in this case, a memory address) effectively generates TWO completely separate instances of that value**.
+The core concept you must understand is this: <u>copying a value (in this case, a memory address) effectively generates TWO completely separate instances of that value</u>.
 
-In fact, **memory addresses themselves have specific types in Rust, and these types implement the `Copy` trait! For this reason, assignment via the `=` operator generates TWO copies of the address**.
+In fact, <u>memory addresses themselves have specific types in Rust, and these types implement the `Copy` trait! For this reason, assignment via the `=` operator generates TWO copies of the address</u>.
 
-**Moving a memory address**, on the other hand—which is what we attempted earlier—**does not create a second instance**. **It maintains a SINGLE instance and strictly transfers its ownership from one variable to another!**
+<u>Moving a memory address</u>, on the other hand—which is what we attempted earlier—<u>does not create a second instance</u>. <u>It maintains a SINGLE instance and strictly transfers its ownership from one variable to another!</u>
 
-Because of this distinction, **when the inner scope terminates, the outer `s_x` variable still holds its own copy of the address, completely unaffected by the fact that the inner copy was dropped at the end of the inner scope**!
+Because of this distinction, <u>when the inner scope terminates, the outer `s_x` variable still holds its own copy of the address, completely unaffected by the fact that the inner copy was dropped at the end of the inner scope</u>!
 
-With this in mind, we can even repurpose Code 3.2.12 to see exactly **what type a memory address is under the hood**!
+With this in mind, we can even repurpose Code 3.2.12 to see exactly <u>what type a memory address is under the hood</u>!
 
 ```rust Code 3.2.17 focus={5-8}
 fn print_type<T>(_: &T) {
@@ -525,11 +544,11 @@ help: consider cloning the value if the performance cost is acceptable
    |                                                ++++++++
 ```
 
-In this instance, the compiler flags an error indicating that the value `s_x` has been **moved**, and that we subsequently attempted to **borrow** `s_x` after this **move** took place. The compiler also explicitly notes that `s_x` is of type `String`, which does not implement the `Copy` trait, just as we established previously.
+In this instance, the compiler flags an error indicating that the value `s_x` has been <u>moved</u>, and that we subsequently attempted to <u>borrow</u> `s_x` after this <u>move</u> took place. The compiler also explicitly notes that `s_x` is of type `String`, which does not implement the `Copy` trait, just as we established previously.
 
-To summarize, **the issue arises because we are passing `s_x` into the `drops_s_x_and_s_y` function**. By doing this, **the value (address) is moved (transferring ownership) and is effectively destroyed**—or **dropped**—**when the function's scope ends**. **As a result, it is completely invalid to reference or use it in any way back in the `main` function's scope.**
+To summarize, <u>the issue arises because we are passing `s_x` into the `drops_s_x_and_s_y` function</u>. By doing this, <u>the value (address) is moved (transferring ownership) and is effectively destroyed</u>—or <u>dropped</u>—<u>when the function's scope ends</u>. <u>As a result, it is completely invalid to reference or use it in any way back in the `main` function's scope.</u>
 
-To maintain the approach outlined throughout this section, **Code 3.2.20 recreates Code 3.2.18/3.2.19 using block scopes**. This illustration is crucial. When you pass arguments to a function, it is not always immediately obvious exactly when and how the transfer of ownership takes place. Code 3.2.20 below clearly exposes exactly where this shift occurs.
+To maintain the approach outlined throughout this section, <u>Code 3.2.20 recreates Code 3.2.18/3.2.19 using block scopes</u>. This illustration is crucial. When you pass arguments to a function, it is not always immediately obvious exactly when and how the transfer of ownership takes place. Code 3.2.20 below clearly exposes exactly where this shift occurs.
 
 <Columns cols={2}>
   <Column>
@@ -659,7 +678,7 @@ Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.
 To bring this matter to a close, let us address <span style={{ color: "#964B00" }}><b>Q-3</b></span>. The answer will mostly just serve as a refresher on what we have seen in the last few paragraphs.
 
 - <span style={{ color: "#964B00" }}><b>Q-3</b>: How can we extract reusable results from a scope if every variable declared within it gets dropped once the scope ends?</span>
-- <span style={{ color: "#008080" }}><b>A-3</b>: As we have just observed, there are two fundamental methods to <b>'extract' results</b> or <b>preserve modified variables</b> from any scope—whether it is a block scope or a function scope:</span>
+- <span style={{ color: "#008080" }}><b>A-3</b>: As we have just observed, there are two fundamental methods to <u>'extract' results</u> or <u>preserve modified variables</u> from any scope—whether it is a block scope or a function scope:</span>
 
   - <span style={{ color: "#008080" }}><b>Returning expressions</b>: You can return expressions as results directly from the function or block scope, either explicitly or implicitly.</span>
-  - <span style={{ color: "#008080" }}><b>Using references (`&`)</b>: You can preserve the underlying variables by working with their <b>memory addresses</b>. Instead of moving the data, you capture the address using the `&` symbol—either by passing it as a function argument, or by explicitly assigning it inside a block scope using the `=` operator (which, as we have seen, are functionally identical, since passing an argument acts as an `=` assignment under the hood).</span>
+  - <span style={{ color: "#008080" }}><b>Using references</b> (`&`): You can preserve the underlying variables by working with their <u>memory addresses</u>. Instead of moving the data, you capture the address using the `&` symbol—either by passing it as a function argument, or by explicitly assigning it inside a block scope using the `=` operator (which, as we have seen, are functionally identical, since passing an argument acts as an `=` assignment under the hood).</span>

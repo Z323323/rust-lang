@@ -4,13 +4,13 @@ mode: "wide"
 sidebarTitle: "3.5 - Control Flow"
 ---
 
->The ability to run some code depending on **whether** a condition is `true` and the ability to run some code repeatedly **while** a condition is `true` are basic building blocks in most programming languages. The most common constructs that let you control the flow of execution of Rust code are `if` **expressions** and loops.
+>The ability to run some code depending on <u>whether</u> a condition is `true` and the ability to run some code repeatedly <u>while</u> a condition is `true` are basic building blocks in most programming languages. The most common constructs that let you control the flow of execution of Rust code are `if` expressions and loops.
 
 ## `if` Expressions
 
 >An `if` expression allows you to branch your code depending on conditions.
 
->All `if` expressions start with the keyword `if`, followed by a condition. In Code 3.5.1, the condition checks whether or not the variable `number` has a value less than `5`. We place the block of code to execute if the condition is `true` immediately after the condition inside curly brackets. Optionally, we can also include an `else` expression, to give the program an alternative block of code to execute should the condition evaluate to `false`. **If you don’t provide an `else` expression and the condition is `false`, the program will just skip the `if` block and move on to the next bit of code.** Try running Code 3.5.1; you should see E-Output 3.5.1.
+>All `if` expressions start with the keyword `if`, followed by a condition. In Code 3.5.1, the condition checks whether or not the variable `number` has a value less than `5`. We place the block of code to execute if the condition is `true` immediately after the condition inside curly brackets. Optionally, we can also include an `else` expression, to give the program an alternative block of code to execute should the condition evaluate to `false`. <u>If you don’t provide an `else` expression and the condition is `false`, the program will just skip the `if` block and move on to the next bit of code.</u> Try running Code 3.5.1; you should see E-Output 3.5.1.
 
 <CodeGroup>
 ```rust Code 3.5.1
@@ -36,7 +36,7 @@ hehe
 
 ### Handling Multiple Conditions with `else if`
 
-You can use multiple conditions by combining `if` and `else` in an `else if` expression. For example, when Code 3.5.2 executes, it checks each `if` expression in turn and executes the first body for which the condition evaluates to `true`. Note that even though `6` is divisible by `2`, we don’t see the output `number is divisible by 2` in E-Output 3.5.2, nor do we see `number is not divisible by 4, 3, or 2` text from the `else` block. That’s because **Rust only executes the block for the first `true` condition, and once it finds one, it doesn’t even check the rest**.
+>You can use multiple conditions by combining `if` and `else` in an `else if` expression. For example, when Code 3.5.2 executes, it checks each `if` expression in turn and executes the first body for which the condition evaluates to `true`. Note that even though `6` is divisible by `2`, we don’t see the output `number is divisible by 2` in E-Output 3.5.2, nor do we see `number is not divisible by 4, 3, or 2` text from the `else` block. That’s because <u>Rust only executes the block for the first `true` condition, and once it finds one, it doesn’t even check the rest</u>.
 
 <CodeGroup>
 ```rust Code 3.5.2
@@ -64,7 +64,7 @@ number is divisible by 3
 
 ### Using `if` in a `let` Statement
 
->Because `if` is an **expression**, we can use it on the right side of a `let` statement to assign the outcome to a variable, as in Code 3.5.3.
+>Because `if` is an <u>expression</u>, we can use it on the right side of a `let` statement to assign the outcome to a variable, as in Code 3.5.3.
 
 <CodeGroup>
 ```rust Code 3.5.3
@@ -89,7 +89,7 @@ The value of number is: 1701340520
 
 I apologize for that last incomprehensible example, but I simply couldn't bear to write another obvious one! These arcane hieroglyphs will be analyzed in Ch. 4. For now, they merely serve to demonstrate that the `else` branch was actually executed.
 
->**Remember that blocks of code evaluate to the last expression in them**, and numbers by themselves are also expressions. In this case, the value of the whole `if` expression depends on which block of code executes. This means the values that have the potential to be results from each arm of the `if` **must be the same type**. If the types are mismatched, as in Code 3.5.4, we’ll get an error (C-Output 3.5.4).
+>Remember that blocks of code evaluate to the last expression in them, and numbers by themselves are also expressions. In this case, the value of the whole `if` expression depends on which block of code executes. This means the values that have the potential to be results from each arm of the `if` <u>must be the same type</u>. If the types are mismatched, as in Code 3.5.4, we’ll get an error (C-Output 3.5.4).
 
 <CodeGroup>
 ```rust Code 3.5.4
@@ -115,11 +115,11 @@ error: could not compile `branches` (bin "branches") due to 1 previous error
 ```
 </CodeGroup>
 
->**The expression in the `if` block evaluates to an integer, and the expression in the `else` block evaluates to a string.** This won’t work, because variables must have a single type, and Rust needs to know definitively at compile time what type the `number` variable is. Knowing the type of `number` lets the compiler verify the type is valid everywhere we use `number`. **Rust wouldn’t be able to do that if the type of number was only determined at runtime**; the compiler would be more complex and would make fewer guarantees about the code if it had to keep track of multiple hypothetical types for any variable.
+><u>The expression in the `if` block evaluates to an integer, and the expression in the `else` block evaluates to a string.</u> This won’t work, because variables must have a single type, and Rust needs to know definitively at compile time what type the `number` variable is. Knowing the type of `number` lets the compiler verify the type is valid everywhere we use `number`. <u>Rust wouldn’t be able to do that if the type of `number` was only determined at runtime</u>; the compiler would be more complex and would make fewer guarantees about the code if it had to keep track of multiple hypothetical types for any variable.
 
 ## Repetition with Loops
 
->It’s often useful to execute a block of code more than once. For this task, Rust provides several _loops_, which will run through the code inside the loop body to the end and then start immediately back at the beginning.
+>It’s often useful to execute a block of code more than once. For this task, Rust provides several loops, which will run through the code inside the loop body to the end and then start immediately back at the beginning.
 
 >Rust has three kinds of loops: `loop`, `while`, and `for`. Let’s try each one.
 
@@ -236,11 +236,11 @@ fn main() {
 }
 ```
 
->You can also `return` from inside a `loop`. While `break` only exits the current loop, **`return` always exits the current function**.
+>You can also `return` from inside a `loop`. While `break` only exits the current loop, <u>`return` always exits the current function</u>.
 
 ### Disambiguating with Loop Labels
 
->**If you have loops within loops, `break` and `continue` apply to the innermost loop at that point. You can optionally specify a _loop label_ on a loop that you can then use with `break` or `continue` to specify that those keywords apply to the labeled loop instead of the innermost loop. Loop labels must begin with a single quote.** Here’s an example with two nested loops:
+>If you have loops within loops, <u>`break` and `continue` apply to the innermost loop at that point</u>. You can optionally specify a **loop label** on a loop that you can then use with `break` or `continue` to specify that those keywords apply to the <u>labeled loop instead of the innermost loop</u>. Loop labels must begin with a single quote. Here’s an example with two nested loops:
 
 <CodeGroup>
 ```rust Code 3.5.7
@@ -292,13 +292,12 @@ The actual execution performs the following steps:
 
 ### Returning Explicitly from Bare Blocks
 
-Recall from section 3.2 where I hinted that values could be returned from a bare `{}` block explicitly. The approach is strictly related to the constructs we have just examined, with the sole exception that the block is not defined as a `loop`. This is demonstrated in Code 3.5.8, with its effectiveness proven by E-Output 3.5.8.
+Recall from section 3.2 where I hinted that values could be returned from a bare `{ ... }` block explicitly. The approach is strictly related to the constructs we have just examined, with the sole exception that the block is not defined as a `loop`. This is demonstrated in Code 3.5.8, with its effectiveness proven by E-Output 3.5.8.
 
 <CodeGroup>
 ```rust Code 3.5.8
 fn main() {
     let result = 'my_block: {
-        println!("We are inside the block, doing some calculations...");
         
         let a = 10;
         let b = 32;
@@ -306,9 +305,6 @@ fn main() {
         // Explicitly returning the value from the block unconditionally.
         break 'my_block a + b; 
 
-        // Any code placed after the break will be completely ignored.
-        // In fact, the Rust compiler will give you an "unreachable statement" warning!
-        // println!("This will never be printed.");
     };
 
     println!("The result is: {}", result);
@@ -318,12 +314,11 @@ fn main() {
    Compiling loops v0.1.0 (/var/home/z561/rust_projects/loops)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
      Running `target/debug/loops`
-We are inside the block, doing some calculations...
 The result is: 42
 ```
 </CodeGroup>
 
-You might be wondering if you can simply use a `break` expression without a label. The short answer is: **no**. **If you are inside a bare `{}` block (and not inside a `loop`, `while`, or `for` loop), an unlabeled `break` is not allowed.** In Rust, an unlabeled `break` (such as `break 42;`) will always try to target the innermost loop. If you attempt to use it to exit a bare block, the compiler will instantly throw `Error E0268` (`break` outside of a loop). Therefore, to explicitly break out of a bare block, the label is strictly mandatory.
+You might be wondering if you can simply use a `break` expression without a label. The short answer is: <u>no</u>. <u>If you are inside a bare `{ ... }` block (and not inside a `loop`, `while`, or `for` loop), an unlabeled `break` is not allowed.</u> In Rust, an unlabeled `break` (such as `break 42;`) will always try to target the innermost loop. If you attempt to use it to exit a bare block, the compiler will instantly throw `Error E0268` (`break` outside of a loop). Therefore, to explicitly break out of a bare block, the label is strictly mandatory.
 
 ### Streamlining Conditional Loops with `while`
 
@@ -374,7 +369,7 @@ the value is: 50
 ```
 </CodeGroup>
 
->However, Code 3.5.10 approach is error-prone; we could cause the program to panic if the index value or test condition is incorrect. For example, if you changed the definition of the `a` array to have four elements but forgot to update the condition to `while index < 4`, the code would panic. **It’s also slow, because the compiler adds runtime code to perform the conditional check of whether the index is within the bounds of the array on every iteration through the loop.**
+>However, Code 3.5.10 approach is error-prone; we could cause the program to panic if the index value or test condition is incorrect. For example, if you changed the definition of the `a` array to have four elements but forgot to update the condition to `while index < 4`, the code would panic. <u>It’s also slow, because the compiler adds runtime code to perform the conditional check of whether the index is within the bounds of the array on every iteration through the loop.</u>
 
 >As a more concise alternative, you can use a `for` loop and execute some code for each item in a collection. A `for` loop looks like Code 3.5.11.
 
@@ -388,9 +383,9 @@ fn main() {
 }
 ```
 
->When we run Code 3.5.11, we’ll see the same output as in E-Output 3.5.10. More importantly, we’ve now increased the safety of the code and eliminated the chance of bugs that might result from going beyond the end of the array or not going far enough and missing some items. **Machine code generated from `for` loops can be more efficient as well because the index doesn’t need to be compared to the length of the array at every iteration.**
+>When we run Code 3.5.11, we’ll see the same output as in E-Output 3.5.10. More importantly, we’ve now increased the safety of the code and eliminated the chance of bugs that might result from going beyond the end of the array or not going far enough and missing some items. <u>Machine code generated from `for` loops can be more efficient as well because the index doesn’t need to be compared to the length of the array at every iteration.</u>
 
->The safety and conciseness of `for` loops make them the most commonly used loop construct in Rust. Even in situations in which you want to run some code a certain number of times, as in the countdown example that used a `while` loop in Code 3.5.9, **most Rustaceans would use a `for` loop**. **The way to do that would be to use a `Range`, provided by the standard library, which generates all numbers in sequence starting from one number and ending before another number.**
+><u>The safety and conciseness of `for` loops make them the most commonly used loop construct in Rust.</u> Even in situations in which you want to run some code a certain number of times, as in the countdown example that used a `while` loop in Code 3.5.9, <u>most Rustaceans would use a `for` loop</u>. The way to do that would be to use a `Range`, provided by the standard library, which generates all numbers in sequence starting from one number and ending before another number.
 
 >Here’s what the countdown would look like using a `for` loop and another method we’ve not yet talked about, `rev`, to reverse the range:
 

@@ -4,9 +4,9 @@ mode: "wide"
 sidebarTitle: "3.3 - Data Types"
 ---
 
->Every value in Rust is of a certain _data type_, which tells Rust what kind of data is being specified so that it knows how to work with that data. We’ll look at two data type subsets: scalar and compound.
+>Every value in Rust is of a certain <u>data type</u>, which tells Rust what kind of data is being specified so that it knows how to work with that data. We’ll look at two data type subsets: scalar and compound.
 
->Keep in mind that Rust is a _statically typed_ language, which means that it must know the types of all variables at compile time. The compiler can usually infer what type we want to use based on the value and how we use it. In cases where multiple types are possible, we must add a type annotation, as shown in Code 3.3.1 below. If we omit the `: u32` annotation, Rust will display the compilation error seen in C-Output 3.3.1.
+>Keep in mind that Rust is a statically typed language, which means that <u>it must know the types of all variables at compile time</u>. The compiler can usually infer what type we want to use based on the value and how we use it. In cases where multiple types are possible, we must add a type annotation, as shown in Code 3.3.1 below. If we omit the `: u32` annotation, Rust will display the compilation error seen in C-Output 3.3.1.
 
 <CodeGroup>
 ```rust Code 3.3.1
@@ -30,11 +30,11 @@ help: consider giving `guess` an explicit type
 
 ## Scalar Types
 
->A _scalar_ type represents a single value. Rust has four primary scalar types: integers, floating-point numbers, Booleans, and characters.
+>A scalar type represents a <u>single value</u>. Rust has four primary scalar types: integers, floating-point numbers, Booleans, and characters.
 
 ### Integer Types
 
->An _integer_ is a number without a fractional component.
+>An integer is a number without a fractional component.
 
 | Length | Signed  | Unsigned |
 | ---: | :---: |  :---  |
@@ -171,14 +171,16 @@ fn main() {
 ```
 </CodeGroup>
 
-If you notice anything 'strange' in Code 3.3.2, it is likely a workaround to avoid compiler errors related to integer overflow. **For example, we cannot directly compute `2_i8.pow(7) - 1` because the compiler evaluates the exponentiation $2^7$ before subtracting $1$; the intermediate step overflows the maximum capacity of an `i8` variable (which is $2^{7} - 1$).** The Rust compiler is incredibly strict and will reject the code if it detects a guaranteed overflow at compile time. **This strictness also explains why writing `-2_i8.pow(7)` fails to compile (notice that we instead wrote `(-2_i8).pow(7)`; there are parentheses around `-2_i8`!), even though the final mathematical result ($- 2^{7} = - 128$) is the exact minimum value that fits into an `i8`. The issue is operator precedence: the compiler attempts to evaluate `2_i8.pow(7)` first, triggering an overflow before the minus sign is ever applied! To fix this, we must wrap the negative number in parentheses, writing `(-2_i8).pow(7)`, ensuring the base is negative from the start (as I did in Code 3.3.2 above).**
+If you notice anything 'strange' in Code 3.3.2, it is likely a workaround to avoid <u>compiler errors related to integer overflow</u>. For example, <u>we cannot directly compute `2_i8.pow(7) - 1` because the compiler evaluates the exponentiation $2^7$ before subtracting $1$; the intermediate step overflows the maximum capacity of an `i8` variable (which is $2^{7} - 1$)</u>. The Rust compiler is incredibly strict and will reject the code if it detects a guaranteed overflow at compile time. <u>This strictness also explains why writing `-2_i8.pow(7)` fails to compile (notice that we instead wrote `(-2_i8).pow(7)`; there are parentheses around `-2_i8`!), even though the final mathematical result ($- 2^{7} = - 128$) is the exact minimum value that fits into an `i8`. The issue is operator precedence: the compiler attempts to evaluate `2_i8.pow(7)` first, triggering an overflow before the minus sign is ever applied! To fix this, we must wrap the negative number in parentheses, writing `(-2_i8).pow(7)`, ensuring the base is negative from the start</u> (as I did in Code 3.3.2 above).
 
 <Info>
 **Integer Overflow**
 
->Let’s say you have a variable of type `u8` that can hold values between 0 and 255. If you try to change the variable to a value outside that range, such as 256, _integer overflow_ will occur, which can result in **one of two** behaviors. **(1)** When you’re compiling in debug mode, Rust includes checks for integer overflow that cause your program to _panic_ at runtime if this behavior occurs. Rust uses the term _panicking_ when a program exits with an error.
+>Let’s say you have a variable of type `u8` that can hold values between 0 and 255. If you try to change the variable to a value outside that range, such as 256, <u>integer overflow</u> will occur, which can result in <u>one of two</u> behaviors.
 
->**(2)** When you’re compiling in release mode with the `--release` flag, Rust does not include checks for integer overflow that cause panics. Instead, if overflow occurs, Rust performs _two’s complement wrapping_. In short, values greater than the maximum value the type can hold “wrap around” to the minimum of the values the type can hold. In the case of a `u8`, the value 256 becomes 0, the value 257 becomes 1, and so on. The program won’t panic, but the variable will have a value that probably isn’t what you were expecting it to have. **Relying on integer overflow’s wrapping behavior is considered an error.**
+>1. When you’re compiling in <u>debug mode</u>, Rust includes checks for integer overflow that cause your program to **panic** at runtime if this behavior occurs. Rust uses the term <u>panicking</u> when a program exits with an error.
+
+>2. When you’re compiling in <u>release mode</u> with the `--release` flag, <u>Rust does not include checks for integer overflow that cause panics</u>. Instead, if overflow occurs, Rust performs <u>two’s complement wrapping</u>. In short, <u>values greater than the maximum value the type can hold “wrap around” to the minimum of the values the type can hold</u>. In the case of a `u8`, the value 256 becomes 0, the value 257 becomes 1, and so on. The program won’t panic, but the variable will have a value that probably isn’t what you were expecting it to have. <u>Relying on integer overflow’s wrapping behavior is considered an error.</u>
 
 >To explicitly handle the possibility of overflow, you can use these families of methods provided by the standard library for primitive numeric types:
 
@@ -227,8 +229,6 @@ fn main() {
 
 Of the example calculations in Code 3.3.3, the first is probably the strangest and most difficult to grasp. To understand it, simply note that the overflow produced by $2^7$ exceeds the maximum limit of an `i8` by exactly 1. As a result, `wrapping_pow` simply wraps around to the lowest possible value, which is exactly $-2^7$.
 
-At this point, you might be wondering if you can use the `wrapping_*` methods to implement some form of general modular arithmetic. The answer is a definitive **no**. With these methods, the arithmetic is strictly bound to the limits of the integer types—meaning it only wraps around a modulus equal to the maximum value of the type plus one. Therefore, this is absolutely not the right approach for true modular arithmetic (though there might be some ingenious implementations out there that manage to exploit them!).
-
 >Number literals that can be multiple numeric types allow a type suffix, such as `57u8`, to designate the type. Number literals can also use `_` as a visual separator to make the number easier to read, such as `1_000`, which will have the same value as if you had specified `1000`.
 
 | Number literals | Example |
@@ -241,7 +241,7 @@ At this point, you might be wondering if you can use the `wrapping_*` methods to
 
 ### Floating-Point Types
 
->Rust also has two primitive types for _floating-point numbers_, which are numbers with decimal points. Rust’s floating-point types are `f32` and `f64`, which are 32 bits and 64 bits in size, respectively. The default type is `f64` because on modern CPUs, it’s roughly the same speed as `f32` but is capable of more precision. All floating-point types are signed.
+>Rust also has two primitive types for floating-point numbers, which are numbers with decimal points. Rust’s floating-point types are `f32` and `f64`, which are 32 bits and 64 bits in size, respectively. The default type is `f64` because on modern CPUs, it’s roughly the same speed as `f32` but is capable of more precision. All floating-point types are signed.
 
 ```rust Code 3.3.4
 fn main() {
@@ -255,7 +255,7 @@ fn main() {
 
 >Rust supports the basic mathematical operations you’d expect for all the number types: addition, subtraction, multiplication, division, and remainder. Integer division truncates toward zero to the nearest integer.
 
-In simpler terms, this just means that **the decimal portion is discarded from the quotient for both positive and negative numbers**.
+In simpler terms, this just means that <u>the decimal portion is discarded from the quotient for both positive and negative numbers</u>.
 
 ```rust Code 3.3.5
 fn main() {
@@ -277,7 +277,7 @@ fn main() {
 }
 ```
 
-It is worth highlighting a subtle distinction regarding the mathematical **floor function**. While flooring produces the exact same result as truncation for positive numbers, it behaves quite differently with negative numbers. This difference is demonstrated in Code 3.3.6 below!
+It is worth highlighting a subtle distinction regarding the mathematical <u>floor function</u>. While flooring produces the exact same result as truncation for positive numbers, it behaves quite differently with negative numbers. This difference is demonstrated in Code 3.3.6 below!
 
 ```rust Code 3.3.6
 fn main() {
@@ -287,11 +287,11 @@ fn main() {
 }
 ```
 
-_**Floor** ($\lfloor x \rfloor$): The greatest integer less than or equal to $x$._
+**Floor** ($\lfloor x \rfloor$): The greatest integer less than or equal to $x$.
 
 ### The Boolean Type
 
->As in most other programming languages, a Boolean type in Rust has two possible values: `true` and `false`. Booleans are one byte in size. The Boolean type in Rust is specified using `bool`.
+>As in most other programming languages, a Boolean type in Rust has two possible values: `true` and `false`. Booleans are <u>one byte</u> in size. The Boolean type in Rust is specified using `bool`.
 
 ```rust Code 3.3.6
 fn main() {
@@ -315,21 +315,21 @@ fn main() {
 }
 ```
 
->**Note that we specify `char` literals with single quotation marks, as opposed to string literals, which use double quotation marks. Rust’s `char` type is 4 bytes in size and represents a Unicode scalar value, which means it can represent a lot more than just ASCII. Accented letters; Chinese, Japanese, and Korean characters; emojis; and zero-width spaces are all valid `char` values in Rust.** Unicode scalar values range from `U+0000` to `U+D7FF` and `U+E000` to `U+10FFFF` inclusive. However, a “character” isn’t really a concept in Unicode, so your human intuition for what a “character” is may not match up with what a `char` is in Rust.
+>Note that <u>we specify `char` literals with single quotation marks, as opposed to string literals, which use double quotation marks</u>. <u>Rust’s `char` type is 4 bytes in size and represents a Unicode scalar value, which means it can represent a lot more than just ASCII.</u> Accented letters; Chinese, Japanese, and Korean characters; emojis; and zero-width spaces are all valid `char` values in Rust. Unicode scalar values range from `U+0000` to `U+D7FF` and `U+E000` to `U+10FFFF` inclusive. However, a “character” isn’t really a concept in Unicode, so your human intuition for what a “character” is may not match up with what a `char` is in Rust.
 
-**As we'll discover later, assuming every character always takes up exactly 4 bytes in memory can lead to trouble. While Rust's built-in `char` type is exactly 4 bytes, when characters are stored inside a `String` or a `&str`, they are UTF-8 encoded. Inside a string, a character can take up anywhere from 1 to 4 bytes depending on what it is (e.g., standard ASCII is 1 byte, while an emoji might be 4 bytes). It can get complicated, but don't worry—later on, we will write some code that handles this UTF-8 complexity effortlessly!**
+As we'll discover later, assuming every character always takes up exactly 4 bytes in memory can lead to trouble. <u>While Rust's built-in `char` type is exactly 4 bytes, when characters are stored inside a `String` or a `&str`, they are UTF-8 encoded. Inside a string, a character can take up anywhere from 1 to 4 bytes depending on what it is (e.g., standard ASCII is 1 byte, while an emoji might be 4 bytes).</u> It can get complicated, but don't worry—later on, we will write some code that handles this UTF-8 complexity effortlessly!
 
 ## Compound Types
 
->_Compound types_ can group multiple values into one type. Rust has two primitive compound types: tuples and arrays.
+><u>Compound types can group multiple values into one type.</u> Rust has two primitive compound types: **tuples** and **arrays**.
 
 Do you remember back in section 3.2 when I mentioned that it is actually possible to return an arbitrary number of values from an inner scope? Compound types are a prime—though not the only—example of how this is achieved.
 
 ### The Tuple Type
 
->A _tuple_ is a general way of grouping together a number of values with a variety of types into one compound type. Tuples have a fixed length: Once declared, they cannot grow or shrink in size.
+>A tuple is a general way of grouping together a number of values with a variety of types into one compound type. <u>Tuples have a fixed length</u>: Once declared, they cannot grow or shrink in size.
 
->We create a tuple by writing a comma-separated list of values inside parentheses. Each position in the tuple has a type, and the types of the different values in the tuple don’t have to be the same. 
+>We create a tuple by writing a comma-separated list of values inside parentheses. Each position in the tuple has a type, and <u>the types</u> of the different values in the tuple <u>don’t have to be the same</u>. 
 
 ```rust Code 3.3.8
 fn main() {
@@ -337,7 +337,7 @@ fn main() {
 }
 ```
 
->The variable `tup` binds to the entire tuple because a tuple is considered a single compound element. To get the individual values out of a tuple, we can use pattern matching to destructure a tuple value, like this:
+>The variable `tup` binds to the entire tuple because a tuple is considered a single compound element. To get the individual values out of a tuple, we can use pattern matching to <u>destructure</u> a tuple value, like this:
 
 ```rust Code 3.3.9
 fn main() {
@@ -349,7 +349,7 @@ fn main() {
 }
 ```
 
->This program first creates a tuple and binds it to the variable `tup`. It then uses a pattern with `let` to take `tup` and turn it into three separate variables, `x`, `y`, and `z`. This is called _destructuring_ because it breaks the single tuple into three parts. Finally, the program prints the value of `y`, which is `6.4`.
+>This program first creates a tuple and binds it to the variable `tup`. It then uses a pattern with `let` to take `tup` and turn it into three separate variables, `x`, `y`, and `z`. This is called destructuring because it breaks the single tuple into three parts. Finally, the program prints the value of `y`, which is `6.4`.
 
 >We can also access a tuple element directly by using a period (`.`) followed by the index of the value we want to access. For example:
 
@@ -367,11 +367,11 @@ fn main() {
 
 >This program creates the tuple `x` and then accesses each element of the tuple using their respective indices. As with most programming languages, the first index in a tuple is 0.
 
->The tuple without any values has a special name, _unit_. **This value and its corresponding type are both written `()` and represent an empty value or an empty return type. Expressions implicitly return the unit value if they don’t return any other value.**
+>The tuple without any values has a special name, **unit**. <u>This value and its corresponding type are both written `()` and represent an empty value or an empty return type. Expressions implicitly return the unit value if they don’t return any other value.</u>
 
 ### The Array Type
 
->Another way to have a collection of multiple values is with an _array_. **Unlike a tuple, every element of an array must have the same type. Arrays in Rust have a fixed length.**
+>Another way to have a collection of multiple values is with an array. Unlike a tuple, <u>every element of an array must have the same type</u>. <u>Arrays in Rust have a fixed length.</u>
 
 >We write the values in an array as a comma-separated list inside square brackets.
 
@@ -381,7 +381,7 @@ fn main() {
 }
 ```
 
->**Arrays are useful when you want your data allocated on the stack rather than the heap or when you want to ensure that you always have a fixed number of elements.** An array isn’t as flexible as the vector type, though. **A vector is a similar collection type provided by the standard library that is allowed to grow or shrink in size because its contents live on the heap. If you’re unsure whether to use an array or a vector, chances are you should use a vector.** However, arrays are more useful when you know the number of elements will not need to change. 
+><u>Arrays are useful when you want your data allocated on the **stack** rather than the **heap** or when you want to ensure that you always have a fixed number of elements.</u> An array isn’t as flexible as the **vector** type, though. <u>A vector is a similar collection type provided by the standard library that is allowed to grow or shrink in size because its contents live on the heap. If you’re unsure whether to use an array or a vector, chances are you should use a vector.</u> However, arrays are more useful when you know the number of elements will not need to change. 
 
 >For example, if you were using the names of the month in a program, you would probably use an array rather than a vector because you know it will always contain 12 elements:
 
@@ -424,7 +424,7 @@ fn main() {
 
 ### Invalid Array Element Access
 
->Let’s see what happens if you try to access an element of an array that is past the end of the array. **Code 3.3.16 compiles successfully.** If you run Code 3.3.16 using `cargo run` and enter `0`, `1`, `2`, `3`, or `4`, the program will print out the corresponding value at that index in the array. If you instead enter a number past the end of the array, such as `10`, you’ll see E-Output 3.3.16.
+>Let’s see what happens if you try to access an element of an array that is <u>past the end of the array</u>. <u>Code 3.3.16 compiles successfully.</u> If you run Code 3.3.16 using `cargo run` and enter `0`, `1`, `2`, `3`, or `4`, the program will print out the corresponding value at that index in the array. If you instead enter a number past the end of the array, such as `10`, you’ll see E-Output 3.3.16.
 
 <CodeGroup>
 ```rust Code 3.3.16
