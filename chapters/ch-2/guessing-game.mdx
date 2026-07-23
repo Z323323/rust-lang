@@ -90,7 +90,7 @@ I will get straight to the point here, commenting only the general behaviour of 
 
  >The `&` indicates that this argument is a **reference**, which gives you a way to let multiple parts of your code access one piece of data without needing to copy that data into memory multiple times. <u>You need to write `&mut guess` rather than `&guess` to make it mutable.</u>
 
- To expand on this briefly: the `&` symbol is closely related to <u>memory addresses</u> in languages like C. By passing a mutable reference (`&mut`)—which acts as a <u>pointer to a specific memory address with permission to alter its contents</u>—we avoid making inefficient copies of our data. Instead, `read_line` is granted direct access to modify the exact memory block where the `guess` string is already stored, safely injecting the user's input.
+ To expand on this briefly: the `&` symbol is closely related to <u>memory addresses</u> in languages like C. By passing a mutable reference (`&mut`)—which acts as a <u>**pointer** to a specific memory location with permission to alter its contents</u>—we avoid making inefficient copies of our data. Instead, `read_line` is granted direct access to modify the exact memory block where the `guess` string is already stored, safely injecting the user's input.
  </li>
  <li>
  `expect` is a method called on the `Result` **enum** returned by `read_line`. To understand how this works, you must understand what `read_line` actually returns. It does not return the user's string (that is already stored safely in the `guess` buffer). Instead, it returns an enum of type `Result<usize, io::Error>`.

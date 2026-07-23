@@ -4,62 +4,234 @@ mode: "wide"
 sidebarTitle: "4.1 - What Is Ownership"
 ---
 
+This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text. The identical approach will be pursued in several subsequent sections of Ch. 4.
+
 >Ownership is a set of rules that govern how a Rust program manages memory. If any of the rules are violated, the program won’t compile. None of the features of ownership will slow down your program while it’s running.
 
->In this chapter, you’ll learn ownership by working through some examples that focus on a very common data structure: strings.
-
-The choice, of course, is not arbitrary. The underlying rationale is identical to what was addressed in section 3.2. In this chapter, however, the issue will be analyzed in much greater depth.
+>In this chapter, you’ll learn ownership by working through some examples that focus on a very common data structure: strings.<br />
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>       The choice, of course, is not arbitrary. The underlying rationale is identical to what was addressed in section 3.2. In this chapter, however, the issue will be analyzed in much greater depth.
+>     </div>
+>   </div>
 
 <Callout icon="key" color="#12A0D7" iconType="regular">
 **The Stack and the Heap**
 
 >In a systems programming language like Rust, whether a value is on the stack or the heap affects how the language behaves and why you have to make certain decisions.
 
->Both the stack and the heap are parts of memory available to your code to use at runtime, but they are structured in different ways. The stack stores values in the order it gets them and removes the values in the opposite order. This is referred to as <u>last in, first out (LIFO)</u>. Adding data is called <u>pushing onto the stack</u>, and removing data is called <u>popping off the stack</u>. <u>All data stored on the stack must have a known, fixed size. Data with an unknown size at compile time or a size that might change must be stored on the heap instead.</u>
+><p>Both the stack and the heap are parts of memory available to your code to use at runtime, but they are structured in different ways. The stack stores values in the order it gets them and removes the values in the opposite order. This is referred to as <u>l</u>ast <u>i</u>n, <u>f</u>irst <u>o</u>ut (LIFO). Adding data is called <u>pushing onto the stack</u>, and removing data is called <u>popping off the stack</u>. <u>All data stored on the stack must have a known, fixed size.</u></p>
+>   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↘</span>
+>     <div>
+>      <p>All of the types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, <u>they are stored directly on the stack</u> and inherently implement the `Copy` trait!</p>
+>     </div>
+>   </div>
 
-<p><u>All of the types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, they are stored directly on the stack and inherently implement the `Copy` trait!</u></p>
-
-><u>When you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a **pointer**, which is the address of that location.</u> This process is called <u>allocating on the heap</u> (pushing values onto the stack is not considered allocating). <u>Because the pointer to the heap is a known, fixed size, you can store the pointer on the stack, but when you want the actual data, you must follow the pointer.</u>
-
-<p><u>Data types that have a dynamic size (such as `String`) must allocate their underlying data on the heap. Because they are responsible for managing this heap memory, they absolutely cannot implement the `Copy` trait!</u></p>
+><p><u>Data with an unknown size at compile time or a size that might change must be stored on the heap instead. When you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a pointer, which is the address of that location.</u> This process is called <u>allocating on the heap</u> (pushing values onto the stack is not considered allocating). <u>Because the pointer to the heap is a known, fixed size, you can store the pointer on the stack, but when you want the actual data, you must follow the pointer.</u></p>
+>   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↘</span>
+>     <div>
+>      <p>Types that manage dynamically sized data (such as `String`) must allocate their underlying memory on the heap. Consequently, they cannot implement the `Copy` trait.</p>
+>     </div>
+>   </div>
 
 ><p><u>Pushing to the stack is faster than allocating on the heap because the allocator never has to search for a place to store new data; that location is always at the top of the stack. Comparatively, allocating space on the heap requires more work because the allocator must first find a big enough space to hold the data and then perform bookkeeping to prepare for the next allocation.</u></p>
-
+>   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↘</span>
+>     <div>
+>      <p>Remember, main memory access (I/O) operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores. To achieve these microscopic latency times, the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². In stark contrast, RAM is located centimeters away on the motherboard. Because data transfer is bound by the physical speed of electrical signals, the processor cannot leverage its blazing speed if it is forced to jump around main memory in a semi-random fashion to gather scattered data—which is exactly what happens with data allocated on the heap.</p>
+>     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.25rem', marginLeft: '-0.75rem' }}>
+>       <span>↗</span>
+>     </div>
+>     </div>
+>   </div>
 ><p><u>Accessing data in the heap is generally slower than accessing data on the stack because you have to follow a pointer to get there. Contemporary processors are faster if they jump around less in memory. A processor can usually do its job better if it works on data that’s close to other data (as it is on the stack) rather than farther away (as it can be on the heap).</u></p>
 
 ><p><u>When your code calls a function, the values passed into the function (including, potentially, pointers to data on the heap) and the function’s local variables get pushed onto the stack. When the function is over, those values get popped off the stack.</u></p>
-
-The exact same thing, actually, applies to all the scopes we looked at in section 3.2 as well. In fact, whenever an inner scope ends, all the variables defined within it are dropped as they are popped off the stack. It's all starting to make more sense now, isn't it?
+>   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↘</span>
+>     <div>
+>      <p>The exact same thing, actually, applies to all the scopes we looked at in section 3.2 as well. In fact, whenever an inner scope ends, all the variables defined within it are dropped as they are popped off the stack. It's all starting to make more sense now, isn't it?</p>
+>     </div>
+>   </div>
 
 >Keeping track of what parts of code are using what data on the heap, minimizing the amount of duplicate data on the heap, and cleaning up unused data on the heap so that you don’t run out of space are all problems that ownership addresses. Once you understand ownership, you won’t need to think about the stack and the heap very often. But knowing that the main purpose of ownership is to manage heap data can help explain why it works the way it does.
 </Callout>
 
 ## Ownership Rules
 
-This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text. The identical approach will be pursued in several subsequent sections of Ch. 4.
-
 >First, let’s take a look at the ownership rules. Keep these rules in mind as we work through the examples that illustrate them:
 
->- Each value in Rust has an _owner_.<br />
+>- Each value in Rust has an **owner**.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, at the end of the day, the only mechanism you truly need to worry about is the `=` assignment for variables whose types do not implement `Copy`. This is because, in these specific cases, <b>the variable on the right side of the equals sign is moved</b>. <b>When this happens, it permanently loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself.</b>
+>       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, at the end of the day, the only mechanism you truly need to worry about is the `=` assignment for variables whose types <u>do not</u> implement `Copy`. This is because the variable <u>on the RIGHT side of the equals sign</u> (specifically, the memory address it points to) is <u>moved</u> if we do not apply the `&` symbol to explicitly <u>copy</u> its address. When this happens, it permanently <u>loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself</u>. In these specific cases, <u>the LEFT variable gains ownership of the heap memory address and the data it points to</u>. If the RIGHT variable were to be destroyed at the end of the scope in which it is defined, then the ownership would be permanently lost and the data destroyed (both the heap address on the stack, and the data on the heap). <u>In any case, the EXISTING data will always have an owner.</u>
 >     </div>
 >   </div>
->- There can only be one _owner_ at a time.<br />
+>- There can only be <u>one</u> owner at a time.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <b>two distinct copies of that value in memory, bound to two distinct variables (the owners)</b>. This principle remains valid even when the values being copied are identical memory addresses referencing the same data on the heap. It applies equally to the stack: copying memory addresses that point to stack data is entirely possible using references. <b>Ultimately, the `Copy` trait simply performs a direct copy of the value's bits—whether those bits represent the actual data itself or just an address pointing to it.</b> Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated from memory, as demonstrated in section 3.2.
+>       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <u>TWO distinct copies of that value in memory, bound to TWO distinct variables (the owners)</u>. This principle remains valid even when the values being copied are identical memory addresses referencing the same data on the heap. It applies equally to the stack: <u>copying memory addresses that point to stack data is entirely possible using references</u>. <u>Ultimately, the `Copy` trait simply performs a direct copy of the value's bits—whether those bits represent the actual data itself or just an address pointing to it.</u> Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated from memory, as demonstrated in section 3.2.
 >     </div>
 >   </div>
->- When the _owner_ goes out of scope, the value will be dropped.<br />
+>- When the owner goes out of scope, the value will be dropped.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
 >       This absolute rule directly reflects our observations from section 3.2 and needs no further breakdown.
 >     </div>
 >   </div>
+
+From this point forward, several topics have been omitted either because they were already analyzed in detail in section 3.2 or because they were deemed superfluous. Nevertheless, it is worth mentioning one concept that is perhaps less marginal:
+
+>When a variable goes out of scope, Rust calls a special function for us. This function is called `drop`. Rust calls `drop` automatically at the closing curly bracket.
+
+The upcoming section, on the other hand, has been retained. Even though it revisits the same reasoning found in section 3.2, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
+
+Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
+
+## Variables and Data Interacting with Move
+
+<u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '55%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.4.1
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/string.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
+
+Figure 4.4.1 is directly related to Code 4.4.1 below.
+
+<CodeGroup>
+```rust Code 4.4.1
+fn main() {
+    let s1 = String::from("hello");
+    let ptr = &s1 as *const String as *const usize;
+
+    unsafe {
+        let len = *(ptr.add(0));
+        let ptr_to_heap = *(ptr.add(1));
+        let capacity = *(ptr.add(2));
+
+        println!(
+            "[s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]: {:p}",
+            ptr_to_heap as *const usize
+        );
+        println!("[Length (on the STACK)]: {len}");
+        println!("[Capacity (on the STACK)]: {capacity}");
+
+        println!("Tracing the pointer from the STACK to the HEAP...");
+
+        println!(
+            "[Address of 'h' (on the HEAP)]: {:p}",
+            ptr_to_heap as *const u8
+        );
+        println!(
+            "['h' raw byte] = {}, parsed as char: {}",
+            *(ptr_to_heap as *const u8),
+            *(ptr_to_heap as *const u8) as char
+        );
+
+        println!(
+            "[Address of 'e' (on the HEAP)]: {:p}",
+            (ptr_to_heap as *const u8).add(1)
+        );
+        println!(
+            "['e' raw byte] = {}, parsed as char: {}",
+            *(ptr_to_heap as *const u8).add(1),
+            *(ptr_to_heap as *const u8).add(1) as char
+        );
+
+        println!(
+            "[Address of 'l' (on the HEAP)]: {:p}",
+            (ptr_to_heap as *const u8).add(2)
+        );
+        println!(
+            "['l' raw byte] = {}, parsed as char: {}",
+            *(ptr_to_heap as *const u8).add(2),
+            *(ptr_to_heap as *const u8).add(2) as char
+        );
+
+        println!(
+            "[Address of 'l' (on the HEAP)]: {:p}",
+            (ptr_to_heap as *const u8).add(3)
+        );
+        println!(
+            "['l' raw byte] = {}, parsed as char: {}",
+            *(ptr_to_heap as *const u8).add(3),
+            *(ptr_to_heap as *const u8).add(3) as char
+        );
+
+        println!(
+            "[Address of 'o' (on the HEAP)]: {:p}",
+            (ptr_to_heap as *const u8).add(4)
+        );
+        println!(
+            "['o' raw byte] = {}, parsed as char: {}",
+            *(ptr_to_heap as *const u8).add(4),
+            *(ptr_to_heap as *const u8).add(4) as char
+        );
+    }
+}
+```
+```text E-Output 4.4.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ch_4_lab`
+[s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]: 0x55baf3347d60
+[Length (on the STACK)]: 5
+[Capacity (on the STACK)]: 5
+Tracing the pointer from the STACK to the HEAP...
+[Address of 'h' (on the HEAP)]: 0x55baf3347d60
+['h' raw byte] = 104, parsed as char: h
+[Address of 'e' (on the HEAP)]: 0x55baf3347d61
+['e' raw byte] = 101, parsed as char: e
+[Address of 'l' (on the HEAP)]: 0x55baf3347d62
+['l' raw byte] = 108, parsed as char: l
+[Address of 'l' (on the HEAP)]: 0x55baf3347d63
+['l' raw byte] = 108, parsed as char: l
+[Address of 'o' (on the HEAP)]: 0x55baf3347d64
+['o' raw byte] = 111, parsed as char: o
+```
+</CodeGroup>
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
