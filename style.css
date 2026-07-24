@@ -15,11 +15,11 @@
   padding-left: 0; /* Optional: removes the default indentation */
 }
 
-.list-comments li {
+.list-comments > li {
   margin-bottom: 1rem;
 }
 
-.list-comments li::before {
+.list-comments > li::before {
   display: block;
   counter-increment: step-counter;
   content: "#" counter(step-counter);

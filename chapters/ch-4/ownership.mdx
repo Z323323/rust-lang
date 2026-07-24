@@ -25,7 +25,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>All of the types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, <u>they are stored directly on the stack</u> and inherently implement the `Copy` trait!</p>
+>      <p>All of the scalar types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, <u>they are stored directly on the stack</u> and inherently implement the `Copy` trait! Regarding the types discussed in section 3.3: 'Tuples implements `Copy` if they only contain types that also implement `Copy`. For example, `(i32, i32)` implements `Copy`, but `(i32, String)` does not'. Arrays can also contain elements that do not implement the `Copy` trait. In such cases, arrays exhibit the exact same behavior as tuples.</p>
 >     </div>
 >   </div>
 
@@ -42,7 +42,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >     <span>↘</span>
 >     <div>
 >      <p>Remember, main memory access (I/O) operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores. To achieve these microscopic latency times, the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². In stark contrast, RAM is located centimeters away on the motherboard. Because data transfer is bound by the physical speed of electrical signals, the processor cannot leverage its blazing speed if it is forced to jump around main memory in a semi-random fashion to gather scattered data—which is exactly what happens with data allocated on the heap.</p>
->     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.25rem', marginLeft: '-0.75rem' }}>
+>     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.2rem', marginLeft: '-0.8rem' }}>
 >       <span>↗</span>
 >     </div>
 >     </div>
@@ -96,14 +96,14 @@ Regarding the concept of 'abstract', it is important to emphasize that abstracti
 
 ## Variables and Data Interacting with Move
 
-<u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
+><u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
 
 <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
   {/* The Unified Outer Box */}
   <div 
     className="rounded-xl flex flex-col" 
     style={{ 
-      width: '55%', 
+      width: '65%', 
       border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
       padding: '1rem'
     }}>
@@ -126,37 +126,62 @@ Regarding the concept of 'abstract', it is important to emphasize that abstracti
   </div>
 </div>
 
-Figure 4.4.1 is directly related to Code 4.4.1 below.
+><u>The length is how much memory, in bytes, the contents of the `String` are currently using. The capacity is the total amount of memory, in bytes, that the `String` has received from the allocator.</u> The difference between length and capacity matters, but not in this context, so for now, it’s fine to ignore the capacity.
+
+Figure 4.4.1 closely corresponds to Code 4.4.1 and E-Output 4.4.1. The only difference—explained below—is that we changed the capacity value to 10 to eliminate any ambiguity about the data we are accessing. Code 4.4.1 might look like an alien language at first glance. Don't worry, though; everything is fully explained below.
 
 <CodeGroup>
-```rust Code 4.4.1
+```rust Code 4.4.1 focus={5-92}
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
 fn main() {
-    let s1 = String::from("hello");
-    let ptr = &s1 as *const String as *const usize;
+    // let s1 = String::from("hello");
 
-    unsafe {
-        let len = *(ptr.add(0));
-        let ptr_to_heap = *(ptr.add(1));
-        let capacity = *(ptr.add(2));
+    let mut s1 = String::with_capacity(10); // #1
+    s1.push_str("hello"); // #2
 
+    let ptr = &s1 as *const String as *const usize; // #3
+
+    unsafe { // #4
+        let capacity = *ptr; // #5
+        let ptr_to_heap = *(ptr.add(1)); // #6
+        let len = *(ptr.add(2));
+
+        println!("[Address of capacity (on the STACK)]: {:p}", &capacity); // #7
+        print!("[Type of capacity]: "); // #8
+        print_type(&capacity); // #9
+        
         println!(
-            "[s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]: {:p}",
-            ptr_to_heap as *const usize
+            "[Address of ptr_to_heap (on the STACK)]: {:p}",
+            &ptr_to_heap
         );
-        println!("[Length (on the STACK)]: {len}");
-        println!("[Capacity (on the STACK)]: {capacity}");
+        print!("[Type of ptr_to_heap]: ");
+        print_type(&ptr_to_heap);
+        
+        println!("[Address of len (on the STACK)]: {:p}", &len);
+        print!("[Type of len]: ");
+        print_type(&len);
+        
+        println!(
+            "[Content of s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]:\n{:p}",
+            ptr_to_heap as *const usize
+        ); // #10
+        println!("[Content of len (on the STACK)]: {len}"); // ---------- #11
+        println!("[Content of capacity (on the STACK)]: {capacity}"); // /
 
         println!("Tracing the pointer from the STACK to the HEAP...");
 
         println!(
             "[Address of 'h' (on the HEAP)]: {:p}",
             ptr_to_heap as *const u8
-        );
+        ); // #12
         println!(
             "['h' raw byte] = {}, parsed as char: {}",
             *(ptr_to_heap as *const u8),
             *(ptr_to_heap as *const u8) as char
-        );
+        ); // #13
 
         println!(
             "[Address of 'e' (on the HEAP)]: {:p}",
@@ -202,26 +227,198 @@ fn main() {
 ```
 ```text E-Output 4.4.1
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
      Running `target/debug/ch_4_lab`
-[s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]: 0x55baf3347d60
-[Length (on the STACK)]: 5
-[Capacity (on the STACK)]: 5
+[Address of capacity (on the STACK)]: 0x7ffe70bccbb0
+[Type of capacity]: usize
+[Address of ptr_to_heap (on the STACK)]: 0x7ffe70bccbb8
+[Type of ptr_to_heap]: usize
+[Address of len (on the STACK)]: 0x7ffe70bccbc0
+[Type of len]: usize
+[Content of s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]:
+0x564f58e4cd60
+[Content of len (on the STACK)]: 5
+[Content of capacity (on the STACK)]: 10
 Tracing the pointer from the STACK to the HEAP...
-[Address of 'h' (on the HEAP)]: 0x55baf3347d60
+[Address of 'h' (on the HEAP)]: 0x564f58e4cd60
 ['h' raw byte] = 104, parsed as char: h
-[Address of 'e' (on the HEAP)]: 0x55baf3347d61
+[Address of 'e' (on the HEAP)]: 0x564f58e4cd61
 ['e' raw byte] = 101, parsed as char: e
-[Address of 'l' (on the HEAP)]: 0x55baf3347d62
+[Address of 'l' (on the HEAP)]: 0x564f58e4cd62
 ['l' raw byte] = 108, parsed as char: l
-[Address of 'l' (on the HEAP)]: 0x55baf3347d63
+[Address of 'l' (on the HEAP)]: 0x564f58e4cd63
 ['l' raw byte] = 108, parsed as char: l
-[Address of 'o' (on the HEAP)]: 0x55baf3347d64
+[Address of 'o' (on the HEAP)]: 0x564f58e4cd64
 ['o' raw byte] = 111, parsed as char: o
 ```
 </CodeGroup>
 
+<ol className="list-comments">
+ <li>
+ The statement `let mut s1 = String::with_capacity(10)` declares `s1` as a mutable `String` with an explicitly defined `capacity` of `10`. We do this to ensure absolute certainty about the memory fields we are going to access. If the `capacity` and the `len` (length) were identical, distinguishing between the two values in raw memory would require overly complex techniques.
+ </li>
+ <li>
+ `s1.push_str("hello")` appends the string `hello` to `s1`. At this point, `s1`'s internal data perfectly matches what is shown in Figure 4.4.1, with the sole exception of the `capacity`. Note that if we hadn't declared `s1` as mutable, modifying it after creation would have been impossible!
+ </li>
+ <li>
+ The complexity of the statement `let ptr = &s1 as *const String as *const usize` lies entirely on the right side of the `=` sign, as the left side simply declares an immutable variable named `ptr`.
 
+The expression `&s1 as *const String as *const usize` starts by retrieving `s1`'s memory address on the STACK. It is important to remember that <u>`s1` is not merely the string data residing on the HEAP</u>, as shown in Figure 4.4.1. In fact, the address obtained by `&s1` points to the very first piece of data in memory belonging to the LEFT-hand structure depicted in Figure 4.4.1. In reality, under the Rust compiler's actual memory management, the data layout is not ordered exactly as shown in Figure 4.4.1. In fact, as Code 4.4.1 demonstrates, the first value residing in memory at `s1`'s address is the `capacity`'s one, not the pointer to the string data on the HEAP! Uncovering this specific structural quirk actually took quite a bit of effort.
+
+Returning to the line of code in question: once we obtain the address of `s1`'s STACK data structure, `as *const String` acts as an explicit **type cast**. It allows us to treat `&s1` as a raw pointer to a `String` data structure (which is exactly what it represents). <u>This initial step is required before we can perform the second</u> cast, `as *const usize`. This final cast is necessary so we can operate on it as a <u>generic raw pointer</u>.
+ </li>
+ <li>
+ The `unsafe { ... }` block encompassing almost all of Code 4.4.1 is strictly necessary to operate directly at the raw memory level, preventing the Rust compiler from stepping in and stopping us <u>for safety reasons</u>! Generally, <u>using `unsafe` is discouraged unless absolutely required</u>. However, this is one of those exceptions: to explore what truly happens under the hood and manipulate memory addresses, we have to tell the compiler that we know what we're doing, by reassuring it with an `unsafe` block. Don't worry, though! Later on, we will see exactly how to analyze low-level memory using a completely safe approach.
+
+There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as narrowly as possible; writing massive `unsafe` blocks like the one in Code 4.4.1 is generally considered bad practice (we will explain exactly why in Ch. 20). In this specific instance, it is structured this way simply because literally almost every single line of code inside that block performs an unsafe operation 😂.
+ </li>
+ <li>
+ The line `let capacity = *ptr` defines the `capacity` variable by **dereferencing** the generic raw pointer `ptr` that we defined in `#3`!
+ 
+ <u>The dereference operator (`*`) allows you to access the value stored in memory at a specific address.</u> In this case, the pointer `ptr` holds the memory address that—as noted earlier—points to the string's `capacity` field. This means that <u>the expression `*ptr` evaluates to `10`</u>, and this value is bound to `capacity` via `let`.
+
+ <u>Dereferencing is the exact inverse of referencing (`&`).</u> In fact, writing `*&ptr` is functionally identical to simply writing `ptr`; a rule that holds true for any data type.
+
+ Dereferencing a <u>raw pointer</u> is an unsafe operation! Attempting to write `*ptr` outside of an `unsafe` block will trigger a compiler error.
+
+ That being said, dereferencing a standard reference (`&`)—rather than a raw pointer—is a perfectly safe operation in Rust! For example, Code 4.4.2 compiles and runs smoothly.
+
+ ```rust Code 4.4.2
+ fn main() {
+     let x = 17;
+     let y = &x; // 'y' is a standard, safe reference to 'x'.
+
+     // We can safely dereference 'y' using '*' without an 'unsafe' block!
+     let z = *y; 
+
+     println!("{z}"); // Prints: '17'.
+ }
+ ```
+ 
+ At this point, a natural question arises:
+ 
+ <span style={{ color: "#964B00" }}><b>Q</b>: Why is dereferencing a standard reference considered safe, while dereferencing a raw pointer is considered dangerous?</span><br />
+ <span style={{ color: "#008080" }}><b>A</b>: The answer primarily lies in the different <u>operations</u> permitted on a raw pointer versus a standard reference. As we are going to see in `#6`, and as clearly demonstrated in Code 4.4.1, <u>you can perform pointer arithmetic on a raw pointer</u>. <u>When you subsequently dereference that shifted pointer, you can access memory areas that might be completely unallocated or belong to entirely different variables. If not handled with extreme care, this capability can trigger severe vulnerabilities and undefined behavior—things Rust traditionally works very hard to prevent.</u></span><br />
+
+ <span style={{ color: "#008080" }}>Despite these risks, Rust provides the `unsafe` keyword to guarantee maximum flexibility for low-level scenarios that require it, trusting the programmer only when they are absolutely certain of what they are doing.</span><br />
+
+ <span style={{ color: "#008080" }}>The story is completely different for standard references created with the `&` operator. First and foremost, <u>you cannot perform pointer arithmetic on a standard reference</u>! <u>This single restriction prevents you from accessing memory outside the strict control of the compiler.</u> Because you cannot mathematically alter the address, it logically follows that:</span><br /><br />
+
+ <span style={{ color: "#008080" }}>1. A reference can only point to existing, valid variables (meaning data that has not been dropped at the end of an inner scope).</span><br />
+<span style={{ color: "#008080" }}>2. <u>You simply cannot use one variable's reference to magically peek into memory belonging to another!</u></span><br /><br />
+
+ <span style={{ color: "#008080" }}>The ownership mechanisms we observed in section 3.2 naturally <u>prevent access to freed or unowned memory</u>, eliminating vulnerabilities and unexpected behavior. This is exactly why Rust correctly identifies standard references (`&`) as risk-free and inherently safe.</span><br />
+
+ <span style={{ color: "#008080" }}>However, as we will explore later, <u>allowing multiple variables to hold references pointing to the exact same memory location can create complex scenarios that require detailed analysis.</u></span>
+ </li>
+ <li>
+ The statement `let ptr_to_heap = *(ptr.add(1))` works much like the previous line. The key difference is that before accessing the value via `*`, we use `.add(1)` to shift the memory address held in `ptr`. This allows us to access the specific STACK address that points directly to the HEAP data containing our `hello` string. This process serves as a perfect example of the unsafe operation (pointer arithmetic) we discussed earlier. Thinking back to step `#4`, a quick glance at Code 4.4.1 reveals that it is packed with pointer arithmetic. This is exactly why the entire snippet had to be wrapped in a single, massive `unsafe` block.
+
+ At this point, we must highlight a few fundamental details:
+
+ - It is important to remember that while <u>a single memory address technically points to one byte (8 bits) of data</u>, <u>the `.add(1)` operation uses pointer arithmetic</u>. <u>Since we are operating on a `*const usize` pointer, adding 1 moves the pointer forward by the size of one complete `usize` (usually 8 bytes)</u>, properly aligning us with the next chunk of data in the `s1` structure on the STACK. If you look closely at E-Output 4.4.1, you will notice that `0x7ffe70bccbb8` (the address of the `ptr_to_heap` field) is located exactly 8 bytes after `0x7ffe70bccbb0` (the address of the `capacity` field).
+
+   ```math
+   \mathtt{7ffe70bccbb0 + 8 = 7ffe70bccbb8}
+   ```
+
+   These 8 bytes—or 64 bits—perfectly match the size of a `usize`, which corresponds to a single CPU register on a 64-bit architecture. Seeing these specific values printed shortly after in E-Output 4.4.1 practically proves the pointer arithmetic concepts we just discussed.
+
+ - The previous point also explains the quirks we observed in step `#3`: when applying the `.add(x)` method to a `*const String` pointer, the address actually shifts by `24 * x` bytes. This is because <u>the compiler automatically multiplies the addition by the size of the referenced type</u>. In this case, <u>a `String` structure (Figure 4.4.1) occupies 24 bytes (comprising three 8-byte fields: a heap pointer, length, and capacity)</u>. This is exactly why we performed an additional cast to `*const usize` instead of keeping `*const String` as the raw pointer type in `#3`!
+
+ - You can visually verify each address is indeed 8-byte size by looking at a memory address format, such as `0x7ffe70bccbb0`. <u>While it looks like 12 characters (excluding the `0x` hexadecimal prefix), the true underlying 64-bit value is `00007ffe70bccbb0`. When you count those digits, you get exactly 16 hexadecimal characters. Because each hex digit is 4 bits, 16 digits yield 64 bits, which is exactly 8 bytes per field.</u>
+
+   ```math
+   \mathtt{\underbrace{\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{7}_{4}\underbrace{f}_{4}\underbrace{f}_{4}\underbrace{e}_{4}\underbrace{7}_{4}\underbrace{0}_{4}\underbrace{b}_{4}\underbrace{c}_{4}\underbrace{c}_{4}\underbrace{b}_{4}\underbrace{b}_{4}\underbrace{0}_{4}}_{64 \text{ bits} = 8 \text{ bytes}}}
+    ```
+ </li>
+ <li>
+ The line `println!("[Address of capacity (on the STACK)]: {:p}", &capacity)` simply prints the stack memory address of the `capacity` variable. To achieve this, we must use the `:p` **format specifier**, which instructs the `println!` macro to format the output as a memory address (a pointer). This step is crucial for two main reasons:
+ 
+ - First, it allows us to directly observe the address, which—alongside the addresses of `ptr_to_heap` and `len`—made our pointer arithmetic analysis in `#6` possible.
+
+ - The second reason is tied to the numerical structure of stack addresses themselves. If you compare them, you will notice that <u>stack addresses are numerically much higher than heap addresses</u>. This is no coincidence; it is a direct consequence of how memory is structured at a low level by the operating system.
+ 
+   Figure 4.4.2 illustrates how <u>stack and heap memory grow in opposite directions</u>. <u>The stack begins near the highest memory addresses and grows downward (towards lower addresses). In contrast, the heap starts near lower memory addresses and grows upward (towards higher addresses, except when dynamically filling memory gaps).</u>
+ 
+   <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+     {/* The Unified Outer Box */}
+     <div 
+       className="rounded-xl flex flex-col" 
+       style={{ 
+         width: '75%', 
+         border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+         padding: '1rem'
+       }}>
+    
+     {/* Transparent Title Area */}
+     <div 
+       className="text-sm font-medium" 
+       style={{ 
+         paddingBottom: '0.8rem',
+         color: 'color-mix(in srgb, currentColor 60%, transparent)'
+       }}>
+       Figure 4.4.2
+     </div>
+    
+     {/* The Image */}
+     <img 
+       src="/assets/images/memory.png" 
+       style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+     />
+     </div>
+   </div>
+
+   For this reason, our earlier statement in `#3`—'the first value residing in memory at `s1`’s address is the `capacity`’s one'—might seem debatable. Because `capacity` sits at the lowest memory address compared to `ptr_to_heap` and `len`, it was physically the last field pushed onto the stack.
+
+   While this is true regarding allocation order, <u>memory blocks are traditionally read from the lowest address upward</u>. Therefore, <u>the last item pushed onto the downward-growing stack logically becomes the 'first' item encountered when reading that memory block</u>. It is no coincidence that the base pointer `ptr` points exactly to `capacity`!
+ </li>
+ <li>
+ This marker was added simply to highlight the use of the `print!` macro instead of `println!`. The only difference between the two is that `print!` does not append a newline character after printing the text.
+ </li>
+ <li>
+ The `print_type(&capacity)` function was used primarily for clarity, simply to verify that the type of `capacity` is indeed `usize`. This is a direct result of how `capacity` (along with `ptr_to_heap` and `len`) was initialized: it was assigned the value of `*ptr`. Because `ptr` is defined as a `*const usize` pointer, dereferencing it natively yields a `usize` value.
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+ <li>
+ 
+ </li>
+</ol>
 
 
 
