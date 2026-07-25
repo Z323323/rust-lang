@@ -42,7 +42,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >     <span>↘</span>
 >     <div>
 >      <p>Remember, main memory access (I/O) operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores. To achieve these microscopic latency times, the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². In stark contrast, RAM is located centimeters away on the motherboard. Because data transfer is bound by the physical speed of electrical signals, the processor cannot leverage its blazing speed if it is forced to jump around main memory in a semi-random fashion to gather scattered data—which is exactly what happens with data allocated on the heap.</p>
->     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.2rem', marginLeft: '-0.8rem' }}>
+>     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.26rem', marginLeft: '-0.69rem' }}>
 >       <span>↗</span>
 >     </div>
 >     </div>
@@ -86,15 +86,17 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >     </div>
 >   </div>
 
+## Memory and Allocation
+
 From this point forward, several topics have been omitted either because they were already analyzed in detail in section 3.2 or because they were deemed superfluous. Nevertheless, it is worth mentioning one concept that is perhaps less marginal:
 
 >When a variable goes out of scope, Rust calls a special function for us. This function is called `drop`. Rust calls `drop` automatically at the closing curly bracket.
 
-The upcoming section, on the other hand, has been retained. Even though it revisits the same reasoning found in section 3.2, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
+The following section, however, has been preserved and directly integrated with raw memory analysis. Even though it revisits the same reasoning found in section 3.2, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
 
 Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
 
-## Variables and Data Interacting with Move
+### Variables and Data Interacting with Move
 
 ><u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
 
@@ -304,8 +306,8 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
 
  <span style={{ color: "#008080" }}>The story is completely different for standard references created with the `&` operator. First and foremost, <u>you cannot perform pointer arithmetic on a standard reference</u>! <u>This single restriction prevents you from accessing memory outside the strict control of the compiler.</u> Because you cannot mathematically alter the address, it logically follows that:</span><br /><br />
 
- <span style={{ color: "#008080" }}>1. A reference can only point to existing, valid variables (meaning data that has not been dropped at the end of an inner scope).</span><br />
-<span style={{ color: "#008080" }}>2. <u>You simply cannot use one variable's reference to magically peek into memory belonging to another!</u></span><br /><br />
+   <span style={{ color: "#008080" }}>1. A reference can only point to existing, valid variables (meaning data that has not been dropped at the end of an inner scope).</span><br />
+   <span style={{ color: "#008080" }}>2. <u>You simply cannot use one variable's reference to magically peek into memory belonging to another!</u></span><br /><br />
 
  <span style={{ color: "#008080" }}>The ownership mechanisms we observed in section 3.2 naturally <u>prevent access to freed or unowned memory</u>, eliminating vulnerabilities and unexpected behavior. This is exactly why Rust correctly identifies standard references (`&`) as risk-free and inherently safe.</span><br />
 
@@ -329,7 +331,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  - You can visually verify each address is indeed 8-byte size by looking at a memory address format, such as `0x7ffe70bccbb0`. <u>While it looks like 12 characters (excluding the `0x` hexadecimal prefix), the true underlying 64-bit value is `00007ffe70bccbb0`. When you count those digits, you get exactly 16 hexadecimal characters. Because each hex digit is 4 bits, 16 digits yield 64 bits, which is exactly 8 bytes per field.</u>
 
    ```math
-   \mathtt{\underbrace{\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{7}_{4}\underbrace{f}_{4}\underbrace{f}_{4}\underbrace{e}_{4}\underbrace{7}_{4}\underbrace{0}_{4}\underbrace{b}_{4}\underbrace{c}_{4}\underbrace{c}_{4}\underbrace{b}_{4}\underbrace{b}_{4}\underbrace{0}_{4}}_{64 \text{ bits} = 8 \text{ bytes}}}
+   \mathtt{\underbrace{\underbrace{\underbrace{\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}}_{16}\underbrace{\underbrace{7}_{4}\underbrace{f}_{4}\underbrace{f}_{4}\underbrace{e}_{4}}_{16}}_{32}\underbrace{\underbrace{\underbrace{7}_{4}\underbrace{0}_{4}\underbrace{b}_{4}\underbrace{c}_{4}}_{16}\underbrace{\underbrace{c}_{4}\underbrace{b}_{4}\underbrace{b}_{4}\underbrace{0}_{4}}_{16}}_{32}}_{64 \text{ bits} = 8 \text{ bytes}}}
     ```
  </li>
  <li>
@@ -338,6 +340,16 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  - First, it allows us to directly observe the address, which—alongside the addresses of `ptr_to_heap` and `len`—made our pointer arithmetic analysis in `#6` possible.
 
  - The second reason is tied to the numerical structure of stack addresses themselves. If you compare them, you will notice that <u>stack addresses are numerically much higher than heap addresses</u>. This is no coincidence; it is a direct consequence of how memory is structured at a low level by the operating system.
+   
+   ```math
+   \mathtt{140730789841840 = 7ffe70bccbb0 \gg 564f58e4cd60 = 94898793794912}
+   ```
+   ```math
+   \downarrow
+   ```
+   ```math
+   140730789841840 - 94898793794912 = 4,583199605 \cdot 10^{13}
+   ```
  
    Figure 4.4.2 illustrates how <u>stack and heap memory grow in opposite directions</u>. <u>The stack begins near the highest memory addresses and grows downward (towards lower addresses). In contrast, the heap starts near lower memory addresses and grows upward (towards higher addresses, except when dynamically filling memory gaps).</u>
  
@@ -377,48 +389,70 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  This marker was added simply to highlight the use of the `print!` macro instead of `println!`. The only difference between the two is that `print!` does not append a newline character after printing the text.
  </li>
  <li>
- The `print_type(&capacity)` function was used primarily for clarity, simply to verify that the type of `capacity` is indeed `usize`. This is a direct result of how `capacity` (along with `ptr_to_heap` and `len`) was initialized: it was assigned the value of `*ptr`. Because `ptr` is defined as a `*const usize` pointer, dereferencing it natively yields a `usize` value.
+ The `print_type(&capacity)` function was used primarily for clarity, simply to verify that the type of `capacity` is indeed `usize`. This is a direct result of how `capacity` (along with `ptr_to_heap` and `len`) was initialized: it was assigned the value of `*ptr`. <u>Because `ptr` is defined as a `*const usize` pointer, dereferencing it natively yields a `usize` value.</u>
  </li>
  <li>
- 
+ The `println!("[...]:\n{:p}", ptr_to_heap as *const usize)` macro prints the value of `ptr_to_heap` to the terminal. Because `ptr_to_heap` represents a memory address on the heap (specifically, the one pointing to the first character of `hello`, which is `h`), we must use the `:p` format specifier. To achieve this, it is necessary to explicitly cast the value from its current `usize` type into a `*const usize` pointer.
  </li>
  <li>
- 
+ At this point, we finally trigger the printing of the values stored on the stack for `len` (`5`) and `capacity` (`10`).
  </li>
  <li>
- 
+ The line `println!("[Address of 'h' (on the HEAP)]: {:p}", ptr_to_heap as *const u8)` works exactly like the one we analyzed in `#10`. In fact, they are entirely equivalent and print the exact same value (see Figure 4.4.1).
+
+ The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding `x` via the `.add(x)` method will shift the pointer in memory by exactly one byte at a time</u> (as you can verify in E-Output 4.4.1).
+
+ This brings us back to section 3.3 and our discussion about the `char` type. As explained there, a standalone `char` in Rust always occupies 4 bytes. Because of this, you might mistakenly assume that each character in our string sits 4 memory addresses apart.
+
+ What actually happens is that characters inside Rust strings are stored using UTF-8 encoding. UTF-8 preserves backward compatibility with standard ASCII for traditional keyboard characters. Since ASCII encoding allocates just a single byte for each alphanumeric character, <u>every letter in `hello` takes up exactly 1 byte on the heap</u>. Later on, we will explore the more complex scenarios of UTF-8, where characters can occupy anywhere from 1 to 4 bytes in ways that might seem unpredictable at first glance.
  </li>
  <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
- </li>
- <li>
- 
+ `println!("['h' raw byte] = {}, parsed as char: {}", *(ptr_to_heap as *const u8), *(ptr_to_heap as *const u8) as char)` simply performs two actions:
+
+ - It accesses the value pointed to by `ptr_to_heap` using the dereference operator (`*`). Because the pointer type is explicitly cast to `*const u8`, dereferencing it yields a `u8` value. This explains why E-Output 4.4.1 displays decimal numbers that might initially seem meaningless—they are actually the numeric ASCII codes for those characters (e.g., `104` for `h`).
+
+ - It performs the exact same dereferencing operation, but before printing, it casts the resulting `u8` value into a `char`. This behavior is perfectly valid—and allowed by the compiler without throwing an error—because every possible `u8` value maps directly to a valid Unicode character. However, you still need to know what you are doing to avoid printing meaningless characters!
  </li>
 </ol>
+
+Let us now consider Code 4.4.3, where the address of `s1` is explicitly copied into `s2`.
+
+```rust Code 4.4.3
+fn main() {
+    let s1 = String::from("hello");
+    let s2 = &s1;
+}
+```
+
+This code block corresponds directly to Figure 4.4.3.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '65%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.4.3
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/reference_copy.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
 
 
 
