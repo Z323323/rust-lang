@@ -96,7 +96,7 @@ The following section, however, has been preserved and directly integrated with 
 
 Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
 
-### Variables and Data Interacting with Move
+### The `String` Type
 
 ><u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
 
@@ -400,7 +400,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  <li>
  The line `println!("[Address of 'h' (on the HEAP)]: {:p}", ptr_to_heap as *const u8)` works exactly like the one we analyzed in `#10`. In fact, they are entirely equivalent and print the exact same value (see Figure 4.4.1).
 
- The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding `x` via the `.add(x)` method will shift the pointer in memory by exactly one byte at a time</u> (as you can verify in E-Output 4.4.1).
+ The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding `x` via the `.add(x)` method will shift the pointer in memory by exactly `x` byte at a time</u> (as you can verify in E-Output 4.4.1).
 
  This brings us back to section 3.3 and our discussion about the `char` type. As explained there, a standalone `char` in Rust always occupies 4 bytes. Because of this, you might mistakenly assume that each character in our string sits 4 memory addresses apart.
 
@@ -415,16 +415,134 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  </li>
 </ol>
 
-Let us now consider Code 4.4.3, where the address of `s1` is explicitly copied into `s2`.
+### Variables and Data Interacting with Move
 
+Let us now (re-)consider (we've already analyzed this behavior in depth in section 3.2) Code 4.4.3, where the address of `s1` is implicitly moved into `s2`.
+
+<CodeGroup>
 ```rust Code 4.4.3
 fn main() {
     let s1 = String::from("hello");
-    let s2 = &s1;
+
+    let ptr1 = &s1 as *const String as *const usize;
+
+    unsafe {
+        println!("Capacity = {}, address: {:p}", *ptr1, ptr1);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
+        /* The 0x{:x} syntax allows a usize to be represented as a memory address
+           by formatting it in hexadecimal ({:x}). */
+        println!("Len = {}, address: {:p}       |", *(ptr1.add(2)), ptr1.add(2));
+    }
+
+    let s2 = s1; // Move occurs.
+
+    let ptr2 = &s2 as *const String as *const usize;
+    
+    println!("                                       |");
+
+    unsafe {
+        println!("Capacity = {}, address: {:p}  |", *ptr2, ptr2);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
+        println!("Len = {}, address: {:p}", *(ptr2.add(2)), ptr2.add(2));
+    }
+    
+    // println!("{s1}"); // error[E0382]: borrow of moved value: `s1`
 }
 ```
+```text E-Output 4.4.3
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running `target/debug/ch_4_lab`
+Capacity = 5, address: 0x7ffc649159d0
+'hello' address (HEAP): 0x563df607cd60=|
+Len = 5, address: 0x7ffc649159e0       |
+                                       |
+Capacity = 5, address: 0x7ffc64915aa0  |
+'hello' address (HEAP): 0x563df607cd60=|
+Len = 5, address: 0x7ffc64915ab0
+```
+</CodeGroup>
 
-This code block corresponds directly to Figure 4.4.3.
+Code 4.4.3 corresponds directly to Figure 4.4.3, as demonstrated by the execution results in E-Output 4.4.3. The color gray in Figure 4.4.3 illustrates how <u>`s1` is no longer usable once the move has happened</u>. Note that the only difference from the examples in section 3.2 is that we did not place `s2` inside an inner scope. As a result, while `s1` is invalidated, the data remains intact in the outer scope because `s2` now holds the heap pointer and assumes full ownership. Note also that `drop` is not called on `s1`. If it were, the heap data (`hello`) would be deallocated, which clearly does not happen since `s2` has taken over as the valid owner. Instead, <u>`s1` simply becomes invalidated</u>. However, if we had placed the move inside an inner scope—as we did back in section 3.2—the `hello` string would have been wiped from the heap when that inner scope ended. Even in that scenario, <u>`s1` is never actually dropped</u>; because it resides in the outer scope in an invalidated state, <u>the compiler knows it no longer owns any data</u> and safely skips its destructor.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '65%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.4.3
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/reference_move.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
+
+Let us now consider Code 4.4.4. This scenario was also analyzed previously in section 3.2. Here, the memory address of `s1` (in the STACK) is explicitly assigned to `s2` so that both references remain valid. A compiler behavior that might escape notice at first glance is that, by assigning `s2` as shown in Code 4.4.4, <u>`s2` appears to assume the exact same stack and heap data as `s1`</u>, even though <u>only `s1`'s stack address was copied</u> (E-Output 4.4.4). Note that `s1`'s address points to the `capacity` field.
+
+<CodeGroup>
+```rust Code 4.4.4
+fn main() {
+    let s1 = String::from("hello");
+
+    let ptr1 = &s1 as *const String as *const usize;
+
+    unsafe {
+        println!("Capacity = {}, address: {:p}=-|", *ptr1, ptr1);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
+        /* The 0x{:x} syntax allows a usize to be represented as a memory address
+           by formatting it in hexadecimal ({:x}). */
+        println!("Len = {}, address: {:p}=------|", *(ptr1.add(2)), ptr1.add(2));
+    }
+
+    let s2 = &s1; // Copy occurs.
+
+    let ptr2 = s2 as *const String as *const usize;
+    
+    println!("                                       |");
+
+    unsafe {
+        println!("Capacity = {}, address: {:p}=-|", *ptr2, ptr2);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
+        println!("Len = {}, address: {:p}=------|", *(ptr2.add(2)), ptr2.add(2));
+    }
+    
+    println!("{s1}");
+}
+```
+```text E-Output 4.4.4
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ch_4_lab`
+Capacity = 5, address: 0x7ffd8e20aa90=-|
+'hello' address (HEAP): 0x55ef10c08d60=|
+Len = 5, address: 0x7ffd8e20aaa0=------|
+                                       |
+Capacity = 5, address: 0x7ffd8e20aa90=-|
+'hello' address (HEAP): 0x55ef10c08d60=|
+Len = 5, address: 0x7ffd8e20aaa0=------|
+hello
+```
+</CodeGroup>
+
+<u>This seamless interaction happens due to Rust's type inference and auto-dereferencing</u>. Because the compiler implicitly assigns `s2` the type of a string reference (`&String`), it treats `s2` as a direct pathway to the original string. <u>When `s2` is used, the compiler automatically follows the reference in memory and handles data as a `String` type</u>. As a result, `s2` doesn't need to physically 'inherit' the fields; it simply accesses `s1`'s `len` field and heap data (`hello`) directly, functioning exactly as if it were the original string.
+
+Figure 4.4.4 provides a direct visual representation of Code 4.4.4.
 
 <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
   {/* The Unified Outer Box */}
@@ -455,6 +573,7 @@ This code block corresponds directly to Figure 4.4.3.
 </div>
 
 
+Code 4.4.5 analyzes the memory layout of Code 4.4.4 to provide a more detailed understanding of the low-level operations performed by the Rust compiler.
 
 
 
