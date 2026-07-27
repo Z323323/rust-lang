@@ -4,7 +4,7 @@ mode: "wide"
 sidebarTitle: "4.1 - What Is Ownership"
 ---
 
-This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text. The identical approach will be pursued in several subsequent sections of Ch. 4.
+This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text.
 
 >Ownership is a set of rules that govern how a Rust program manages memory. If any of the rules are violated, the program won’t compile. None of the features of ownership will slow down your program while it’s running.
 
@@ -41,7 +41,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>Remember, main memory access (I/O) operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores. To achieve these microscopic latency times, the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². In stark contrast, RAM is located centimeters away on the motherboard. Because data transfer is bound by the physical speed of electrical signals, the processor cannot leverage its blazing speed if it is forced to jump around main memory in a semi-random fashion to gather scattered data—which is exactly what happens with data allocated on the heap.</p>
+>      <p>Remember, main memory access (I/O) operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores and that the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². By contrast, RAM is located centimeters away on the motherboard, measuring roughly 13 by 3 centimeters. Because memory access speed is bound by (1) the overhead of loading values into CPU registers and (2) the physical speed of electrical signals, processors lose their performance advantage if they must constantly jump around RAM. Gathering scattered data in a semi-random fashion creates a severe bottleneck—and this is exactly what happens with data allocated on the heap.</p>
 >     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.26rem', marginLeft: '-0.69rem' }}>
 >       <span>↗</span>
 >     </div>
@@ -53,7 +53,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>The exact same thing, actually, applies to all the scopes we looked at in section 3.2 as well. In fact, whenever an inner scope ends, all the variables defined within it are dropped as they are popped off the stack. It's all starting to make more sense now, isn't it?</p>
+>      <p>The exact same principle actually applies to the all scopes examined in section 3.2. As an inner scope terminates, its local variables are popped from the stack and destroyed. It's all starting to make more sense now, isn't it? Note, however, that <u>the underlying heap data is not blindly deallocated</u>. Rust's memory model dictates that heap memory is tied exclusively to ownership; therefore, <u>the data is only dropped if the variable going out of scope was the owner, rather than just a borrowed reference</u>.</p>
 >     </div>
 >   </div>
 
@@ -62,20 +62,20 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 
 ## Ownership Rules
 
->First, let’s take a look at the ownership rules. Keep these rules in mind as we work through the examples that illustrate them:
+>First, let’s take a look at the ownership rules.
 
 >- Each value in Rust has an **owner**.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, at the end of the day, the only mechanism you truly need to worry about is the `=` assignment for variables whose types <u>do not</u> implement `Copy`. This is because the variable <u>on the RIGHT side of the equals sign</u> (specifically, the memory address it points to) is <u>moved</u> if we do not apply the `&` symbol to explicitly <u>copy</u> its address. When this happens, it permanently <u>loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself</u>. In these specific cases, <u>the LEFT variable gains ownership of the heap memory address and the data it points to</u>. If the RIGHT variable were to be destroyed at the end of the scope in which it is defined, then the ownership would be permanently lost and the data destroyed (both the heap address on the stack, and the data on the heap). <u>In any case, the EXISTING data will always have an owner.</u>
+>       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, one major mechanism you truly need to worry about is <u>the `=` assignment for variables whose types do not implement `Copy`</u>. For example, the variable <u>on the RIGHT side of the equals sign</u> (specifically, the memory address it points to) is <u>moved</u> if we do not apply the `&` symbol to explicitly <u>copy</u> its address. When this happens, it permanently <u>loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself</u>. In these specific cases, <u>the LEFT variable gains ownership of the heap memory address and the data it points to</u>. If the LEFT variable were to be destroyed at the end of the scope in which it is defined, then the ownership would be permanently lost and the data destroyed (both the heap address on the stack, and the data on the heap). In any case, the <u>EXISTING data will always have an owner</u>. With this fundamental point clarified, it is important to note that <u>the ownership mechanism becomes more nuanced when the `=` assignment is combined with the reference operator (`&`)</u>. The following rule analyzes exactly what happens in this scenario in greater detail.
 >     </div>
 >   </div>
 >- There can only be <u>one</u> owner at a time.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <u>TWO distinct copies of that value in memory, bound to TWO distinct variables (the owners)</u>. This principle remains valid even when the values being copied are identical memory addresses referencing the same data on the heap. It applies equally to the stack: <u>copying memory addresses that point to stack data is entirely possible using references</u>. <u>Ultimately, the `Copy` trait simply performs a direct copy of the value's bits—whether those bits represent the actual data itself or just an address pointing to it.</u> Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated from memory, as demonstrated in section 3.2.
+>       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <u>TWO distinct copies of that value in memory, bound to TWO distinct variables (the owners)</u>. However, <u>this principle becomes more complex when the assigned value is a memory address (a reference)</u>. As we saw in section 3.2, the variable on the LEFT side of the assignment receives a copy of the address, taking ownership of the pointer (address) itself. The subtle but critical detail here is that <u>the underlying data the address points to is still owned by the original variable, which maintains full ownership over that data</u>. This means <u>you can use your copied reference to access the data, but when the original owner is dropped from memory, the underlying data is deallocated</u>. <u>At that point, the secondary reference becomes invalid, and the compiler will stop you from accessing it!</u> This is a crucial concept not previously observed in section 3.2, perfectly illustrated by Code 4.1.1 and Code 4.1.2 below. Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated.
 >     </div>
 >   </div>
 >- When the owner goes out of scope, the value will be dropped.<br />
@@ -86,502 +86,114 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >     </div>
 >   </div>
 
-## Memory and Allocation
+## Ownership Mechanics for References
 
-From this point forward, several topics have been omitted either because they were already analyzed in detail in section 3.2 or because they were deemed superfluous. Nevertheless, it is worth mentioning one concept that is perhaps less marginal:
+As mentioned above, ownership mechanics for the scalar types discussed in section 3.3 are rather trivial. However, they can be intentionally made more complex if one chooses to <u>copy the stack address where these types are stored</u> (i.e., by taking a reference). In such scenarios, the exact same logic applies as when copying the address of a `String` variable. The reasoning is entirely analogous because, as initially mentioned and as we will analyze in detail in the next section, <u>the pointer to a `String` is also stored on the stack</u>. Ultimately, in both cases—whether dealing with types that implement the `Copy` trait or those that do not—<u>copying an address creates a situation where the left-side variable takes ownership of the address itself, but not the underlying value it points to, regardless of whether that data resides on the stack or the heap</u> (Code 4.1.1 and Code 4.1.2 clear up this mystery once and for all).
 
->When a variable goes out of scope, Rust calls a special function for us. This function is called `drop`. Rust calls `drop` automatically at the closing curly bracket.
+One might therefore wonder why the compiler's behavior differs between types that do not implement the `Copy` trait and those that do, in cases where the variable itself is assigned rather than its address. The answer is that the compiler is smart enough to know that, for scalar types, it is simply not worth the effort to copy a memory address and introduce ownership complexities. This is because copying the actual data is so cheap that it generates no meaningful computational or spatial overhead.
 
-The following section, however, has been preserved and directly integrated with raw memory analysis. Even though it revisits the same reasoning found in section 3.2, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
-
-Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
-
-### The `String` Type
-
-><u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
-
-<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
-  {/* The Unified Outer Box */}
-  <div 
-    className="rounded-xl flex flex-col" 
-    style={{ 
-      width: '65%', 
-      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
-      padding: '1rem'
-    }}>
-    
-    {/* Transparent Title Area */}
-    <div 
-      className="text-sm font-medium" 
-      style={{ 
-        paddingBottom: '0.8rem',
-        color: 'color-mix(in srgb, currentColor 60%, transparent)'
-      }}>
-      Figure 4.4.1
-    </div>
-    
-    {/* The Image */}
-    <img 
-      src="/assets/images/string.png" 
-      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
-    />
-  </div>
-</div>
-
-><u>The length is how much memory, in bytes, the contents of the `String` are currently using. The capacity is the total amount of memory, in bytes, that the `String` has received from the allocator.</u> The difference between length and capacity matters, but not in this context, so for now, it’s fine to ignore the capacity.
-
-Figure 4.4.1 closely corresponds to Code 4.4.1 and E-Output 4.4.1. The only difference—explained below—is that we changed the capacity value to 10 to eliminate any ambiguity about the data we are accessing. Code 4.4.1 might look like an alien language at first glance. Don't worry, though; everything is fully explained below.
-
-<CodeGroup>
-```rust Code 4.4.1 focus={5-92}
-fn print_type<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>());
-}
-
-fn main() {
-    // let s1 = String::from("hello");
-
-    let mut s1 = String::with_capacity(10); // #1
-    s1.push_str("hello"); // #2
-
-    let ptr = &s1 as *const String as *const usize; // #3
-
-    unsafe { // #4
-        let capacity = *ptr; // #5
-        let ptr_to_heap = *(ptr.add(1)); // #6
-        let len = *(ptr.add(2));
-
-        println!("[Address of capacity (on the STACK)]: {:p}", &capacity); // #7
-        print!("[Type of capacity]: "); // #8
-        print_type(&capacity); // #9
-        
-        println!(
-            "[Address of ptr_to_heap (on the STACK)]: {:p}",
-            &ptr_to_heap
-        );
-        print!("[Type of ptr_to_heap]: ");
-        print_type(&ptr_to_heap);
-        
-        println!("[Address of len (on the STACK)]: {:p}", &len);
-        print!("[Type of len]: ");
-        print_type(&len);
-        
-        println!(
-            "[Content of s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]:\n{:p}",
-            ptr_to_heap as *const usize
-        ); // #10
-        println!("[Content of len (on the STACK)]: {len}"); // ---------- #11
-        println!("[Content of capacity (on the STACK)]: {capacity}"); // /
-
-        println!("Tracing the pointer from the STACK to the HEAP...");
-
-        println!(
-            "[Address of 'h' (on the HEAP)]: {:p}",
-            ptr_to_heap as *const u8
-        ); // #12
-        println!(
-            "['h' raw byte] = {}, parsed as char: {}",
-            *(ptr_to_heap as *const u8),
-            *(ptr_to_heap as *const u8) as char
-        ); // #13
-
-        println!(
-            "[Address of 'e' (on the HEAP)]: {:p}",
-            (ptr_to_heap as *const u8).add(1)
-        );
-        println!(
-            "['e' raw byte] = {}, parsed as char: {}",
-            *(ptr_to_heap as *const u8).add(1),
-            *(ptr_to_heap as *const u8).add(1) as char
-        );
-
-        println!(
-            "[Address of 'l' (on the HEAP)]: {:p}",
-            (ptr_to_heap as *const u8).add(2)
-        );
-        println!(
-            "['l' raw byte] = {}, parsed as char: {}",
-            *(ptr_to_heap as *const u8).add(2),
-            *(ptr_to_heap as *const u8).add(2) as char
-        );
-
-        println!(
-            "[Address of 'l' (on the HEAP)]: {:p}",
-            (ptr_to_heap as *const u8).add(3)
-        );
-        println!(
-            "['l' raw byte] = {}, parsed as char: {}",
-            *(ptr_to_heap as *const u8).add(3),
-            *(ptr_to_heap as *const u8).add(3) as char
-        );
-
-        println!(
-            "[Address of 'o' (on the HEAP)]: {:p}",
-            (ptr_to_heap as *const u8).add(4)
-        );
-        println!(
-            "['o' raw byte] = {}, parsed as char: {}",
-            *(ptr_to_heap as *const u8).add(4),
-            *(ptr_to_heap as *const u8).add(4) as char
-        );
-    }
-}
-```
-```text E-Output 4.4.1
-   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
-     Running `target/debug/ch_4_lab`
-[Address of capacity (on the STACK)]: 0x7ffe70bccbb0
-[Type of capacity]: usize
-[Address of ptr_to_heap (on the STACK)]: 0x7ffe70bccbb8
-[Type of ptr_to_heap]: usize
-[Address of len (on the STACK)]: 0x7ffe70bccbc0
-[Type of len]: usize
-[Content of s1 pointer (on the STACK: points to the HEAP address where 'hello' is stored)]:
-0x564f58e4cd60
-[Content of len (on the STACK)]: 5
-[Content of capacity (on the STACK)]: 10
-Tracing the pointer from the STACK to the HEAP...
-[Address of 'h' (on the HEAP)]: 0x564f58e4cd60
-['h' raw byte] = 104, parsed as char: h
-[Address of 'e' (on the HEAP)]: 0x564f58e4cd61
-['e' raw byte] = 101, parsed as char: e
-[Address of 'l' (on the HEAP)]: 0x564f58e4cd62
-['l' raw byte] = 108, parsed as char: l
-[Address of 'l' (on the HEAP)]: 0x564f58e4cd63
-['l' raw byte] = 108, parsed as char: l
-[Address of 'o' (on the HEAP)]: 0x564f58e4cd64
-['o' raw byte] = 111, parsed as char: o
-```
-</CodeGroup>
-
-<ol className="list-comments">
- <li>
- The statement `let mut s1 = String::with_capacity(10)` declares `s1` as a mutable `String` with an explicitly defined `capacity` of `10`. We do this to ensure absolute certainty about the memory fields we are going to access. If the `capacity` and the `len` (length) were identical, distinguishing between the two values in raw memory would require overly complex techniques.
- </li>
- <li>
- `s1.push_str("hello")` appends the string `hello` to `s1`. At this point, `s1`'s internal data perfectly matches what is shown in Figure 4.4.1, with the sole exception of the `capacity`. Note that if we hadn't declared `s1` as mutable, modifying it after creation would have been impossible!
- </li>
- <li>
- The complexity of the statement `let ptr = &s1 as *const String as *const usize` lies entirely on the right side of the `=` sign, as the left side simply declares an immutable variable named `ptr`.
-
-The expression `&s1 as *const String as *const usize` starts by retrieving `s1`'s memory address on the STACK. It is important to remember that <u>`s1` is not merely the string data residing on the HEAP</u>, as shown in Figure 4.4.1. In fact, the address obtained by `&s1` points to the very first piece of data in memory belonging to the LEFT-hand structure depicted in Figure 4.4.1. In reality, under the Rust compiler's actual memory management, the data layout is not ordered exactly as shown in Figure 4.4.1. In fact, as Code 4.4.1 demonstrates, the first value residing in memory at `s1`'s address is the `capacity`'s one, not the pointer to the string data on the HEAP! Uncovering this specific structural quirk actually took quite a bit of effort.
-
-Returning to the line of code in question: once we obtain the address of `s1`'s STACK data structure, `as *const String` acts as an explicit **type cast**. It allows us to treat `&s1` as a raw pointer to a `String` data structure (which is exactly what it represents). <u>This initial step is required before we can perform the second</u> cast, `as *const usize`. This final cast is necessary so we can operate on it as a <u>generic raw pointer</u>.
- </li>
- <li>
- The `unsafe { ... }` block encompassing almost all of Code 4.4.1 is strictly necessary to operate directly at the raw memory level, preventing the Rust compiler from stepping in and stopping us <u>for safety reasons</u>! Generally, <u>using `unsafe` is discouraged unless absolutely required</u>. However, this is one of those exceptions: to explore what truly happens under the hood and manipulate memory addresses, we have to tell the compiler that we know what we're doing, by reassuring it with an `unsafe` block. Don't worry, though! Later on, we will see exactly how to analyze low-level memory using a completely safe approach.
-
-There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as narrowly as possible; writing massive `unsafe` blocks like the one in Code 4.4.1 is generally considered bad practice (we will explain exactly why in Ch. 20). In this specific instance, it is structured this way simply because literally almost every single line of code inside that block performs an unsafe operation 😂.
- </li>
- <li>
- The line `let capacity = *ptr` defines the `capacity` variable by **dereferencing** the generic raw pointer `ptr` that we defined in `#3`!
- 
- <u>The dereference operator (`*`) allows you to access the value stored in memory at a specific address.</u> In this case, the pointer `ptr` holds the memory address that—as noted earlier—points to the string's `capacity` field. This means that <u>the expression `*ptr` evaluates to `10`</u>, and this value is bound to `capacity` via `let`.
-
- <u>Dereferencing is the exact inverse of referencing (`&`).</u> In fact, writing `*&ptr` is functionally identical to simply writing `ptr`; a rule that holds true for any data type.
-
- Dereferencing a <u>raw pointer</u> is an unsafe operation! Attempting to write `*ptr` outside of an `unsafe` block will trigger a compiler error.
-
- That being said, dereferencing a standard reference (`&`)—rather than a raw pointer—is a perfectly safe operation in Rust! For example, Code 4.4.2 compiles and runs smoothly.
-
- ```rust Code 4.4.2
+<Columns>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.1.1
  fn main() {
-     let x = 17;
-     let y = &x; // 'y' is a standard, safe reference to 'x'.
-
-     // We can safely dereference 'y' using '*' without an 'unsafe' block!
-     let z = *y; 
-
-     println!("{z}"); // Prints: '17'.
+     
+     let y = {
+     
+         let x: u8 = 17; /* The 'x' value is
+         a scalar type stored on the stack,
+         not the heap. */
+     
+         &x /* The address of 'x' is COPIED
+               into 'y'. However, 'x'
+               maintains full ownership of
+               the value '17' on the stack. */              
+     }; /* The inner scope ends here, and 'x'
+           is dropped, deallocating '17' from
+           the stack. Consequently, 'y' holds
+           the original 'x' address, but it
+           now points to freed memory,
+           becoming a dangling pointer! */
  }
  ```
- 
- At this point, a natural question arises:
- 
- <span style={{ color: "#964B00" }}><b>Q</b>: Why is dereferencing a standard reference considered safe, while dereferencing a raw pointer is considered dangerous?</span><br />
- <span style={{ color: "#008080" }}><b>A</b>: The answer primarily lies in the different <u>operations</u> permitted on a raw pointer versus a standard reference. As we are going to see in `#6`, and as clearly demonstrated in Code 4.4.1, <u>you can perform pointer arithmetic on a raw pointer</u>. <u>When you subsequently dereference that shifted pointer, you can access memory areas that might be completely unallocated or belong to entirely different variables. If not handled with extreme care, this capability can trigger severe vulnerabilities and undefined behavior—things Rust traditionally works very hard to prevent.</u></span><br />
-
- <span style={{ color: "#008080" }}>Despite these risks, Rust provides the `unsafe` keyword to guarantee maximum flexibility for low-level scenarios that require it, trusting the programmer only when they are absolutely certain of what they are doing.</span><br />
-
- <span style={{ color: "#008080" }}>The story is completely different for standard references created with the `&` operator. First and foremost, <u>you cannot perform pointer arithmetic on a standard reference</u>! <u>This single restriction prevents you from accessing memory outside the strict control of the compiler.</u> Because you cannot mathematically alter the address, it logically follows that:</span><br /><br />
-
-   <span style={{ color: "#008080" }}>1. A reference can only point to existing, valid variables (meaning data that has not been dropped at the end of an inner scope).</span><br />
-   <span style={{ color: "#008080" }}>2. <u>You simply cannot use one variable's reference to magically peek into memory belonging to another!</u></span><br /><br />
-
- <span style={{ color: "#008080" }}>The ownership mechanisms we observed in section 3.2 naturally <u>prevent access to freed or unowned memory</u>, eliminating vulnerabilities and unexpected behavior. This is exactly why Rust correctly identifies standard references (`&`) as risk-free and inherently safe.</span><br />
-
- <span style={{ color: "#008080" }}>However, as we will explore later, <u>allowing multiple variables to hold references pointing to the exact same memory location can create complex scenarios that require detailed analysis.</u></span>
- </li>
- <li>
- The statement `let ptr_to_heap = *(ptr.add(1))` works much like the previous line. The key difference is that before accessing the value via `*`, we use `.add(1)` to shift the memory address held in `ptr`. This allows us to access the specific STACK address that points directly to the HEAP data containing our `hello` string. This process serves as a perfect example of the unsafe operation (pointer arithmetic) we discussed earlier. Thinking back to step `#4`, a quick glance at Code 4.4.1 reveals that it is packed with pointer arithmetic. This is exactly why the entire snippet had to be wrapped in a single, massive `unsafe` block.
-
- At this point, we must highlight a few fundamental details:
-
- - It is important to remember that while <u>a single memory address technically points to one byte (8 bits) of data</u>, <u>the `.add(1)` operation uses pointer arithmetic</u>. <u>Since we are operating on a `*const usize` pointer, adding 1 moves the pointer forward by the size of one complete `usize` (usually 8 bytes)</u>, properly aligning us with the next chunk of data in the `s1` structure on the STACK. If you look closely at E-Output 4.4.1, you will notice that `0x7ffe70bccbb8` (the address of the `ptr_to_heap` field) is located exactly 8 bytes after `0x7ffe70bccbb0` (the address of the `capacity` field).
-
-   ```math
-   \mathtt{7ffe70bccbb0 + 8 = 7ffe70bccbb8}
-   ```
-
-   These 8 bytes—or 64 bits—perfectly match the size of a `usize`, which corresponds to a single CPU register on a 64-bit architecture. Seeing these specific values printed shortly after in E-Output 4.4.1 practically proves the pointer arithmetic concepts we just discussed.
-
- - The previous point also explains the quirks we observed in step `#3`: when applying the `.add(x)` method to a `*const String` pointer, the address actually shifts by `24 * x` bytes. This is because <u>the compiler automatically multiplies the addition by the size of the referenced type</u>. In this case, <u>a `String` structure (Figure 4.4.1) occupies 24 bytes (comprising three 8-byte fields: a heap pointer, length, and capacity)</u>. This is exactly why we performed an additional cast to `*const usize` instead of keeping `*const String` as the raw pointer type in `#3`!
-
- - You can visually verify each address is indeed 8-byte size by looking at a memory address format, such as `0x7ffe70bccbb0`. <u>While it looks like 12 characters (excluding the `0x` hexadecimal prefix), the true underlying 64-bit value is `00007ffe70bccbb0`. When you count those digits, you get exactly 16 hexadecimal characters. Because each hex digit is 4 bits, 16 digits yield 64 bits, which is exactly 8 bytes per field.</u>
-
-   ```math
-   \mathtt{\underbrace{\underbrace{\underbrace{\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}\underbrace{0}_{4}}_{16}\underbrace{\underbrace{7}_{4}\underbrace{f}_{4}\underbrace{f}_{4}\underbrace{e}_{4}}_{16}}_{32}\underbrace{\underbrace{\underbrace{7}_{4}\underbrace{0}_{4}\underbrace{b}_{4}\underbrace{c}_{4}}_{16}\underbrace{\underbrace{c}_{4}\underbrace{b}_{4}\underbrace{b}_{4}\underbrace{0}_{4}}_{16}}_{32}}_{64 \text{ bits} = 8 \text{ bytes}}}
-    ```
- </li>
- <li>
- The line `println!("[Address of capacity (on the STACK)]: {:p}", &capacity)` simply prints the stack memory address of the `capacity` variable. To achieve this, we must use the `:p` **format specifier**, which instructs the `println!` macro to format the output as a memory address (a pointer). This step is crucial for two main reasons:
- 
- - First, it allows us to directly observe the address, which—alongside the addresses of `ptr_to_heap` and `len`—made our pointer arithmetic analysis in `#6` possible.
-
- - The second reason is tied to the numerical structure of stack addresses themselves. If you compare them, you will notice that <u>stack addresses are numerically much higher than heap addresses</u>. This is no coincidence; it is a direct consequence of how memory is structured at a low level by the operating system.
-   
-   ```math
-   \mathtt{140730789841840 = 7ffe70bccbb0 \gg 564f58e4cd60 = 94898793794912}
-   ```
-   ```math
-   \downarrow
-   ```
-   ```math
-   140730789841840 - 94898793794912 = 4,583199605 \cdot 10^{13}
-   ```
- 
-   Figure 4.4.2 illustrates how <u>stack and heap memory grow in opposite directions</u>. <u>The stack begins near the highest memory addresses and grows downward (towards lower addresses). In contrast, the heap starts near lower memory addresses and grows upward (towards higher addresses, except when dynamically filling memory gaps).</u>
- 
-   <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
-     {/* The Unified Outer Box */}
-     <div 
-       className="rounded-xl flex flex-col" 
-       style={{ 
-         width: '75%', 
-         border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
-         padding: '1rem'
-       }}>
+ ```text C-Output 4.1.1
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+ error[E0597]: `x` does not live long enough
+   --> src/main.rs:9:9
+    |
+  3 |     let y = {
+    |         - borrow later stored here
+  4 |     
+  5 |         let x: u8 = 17; /* The 'x' value is
+    |             - binding `x` declared here
+ ...
+  9 |         &x /* The address of 'x' is COPIED
+    |         ^^ borrowed value does not live long enough
+ ...
+ 13 |     }; /* The inner scope ends here, and 'x'
+    |     - `x` dropped here while still borrowed
+ ```
+ </CodeGroup>
+ </Column>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.1.2
+ fn main() {
+     let s1 = String::from("hello");
+     
+     let s2 = &s1; /* The address of 's1' is
+     COPIED into 's2'. However, 's1' 
+     maintains full ownership of the 'hello'
+     string on the heap, as well as its own
+     metadata on the stack. */
     
-     {/* Transparent Title Area */}
-     <div 
-       className="text-sm font-medium" 
-       style={{ 
-         paddingBottom: '0.8rem',
-         color: 'color-mix(in srgb, currentColor 60%, transparent)'
-       }}>
-       Figure 4.4.2
-     </div>
-    
-     {/* The Image */}
-     <img 
-       src="/assets/images/memory.png" 
-       style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
-     />
-     </div>
-   </div>
+     {
+         let s = s1; /* Ownership of the data
+         is MOVED from 's1' to 's'. 's' is
+         now the sole owner of the heap data,
+         and stack metadata. */
+                        
+     } /* The inner scope ends here, and 's'
+       is dropped, deallocating the heap data
+       and stack metadata. Consequently, 's2'
+       still holds the original address, but
+       it now points to freed memory,
+       becoming a dangling pointer! */
+          
+     println!("{s2}"); /* The compiler
+     will throw an error here to prevent
+     the use of the dangling pointer. */
+        
+ }
+ ```
+ ```text C-Output 4.1.2
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+ error[E0505]: cannot move out of `s1` because it is borrowed
+   --> src/main.rs:33:17
+    |
+ 24 |     let s1 = String::from("hello");
+    |         -- binding `s1` declared here
+ 25 |     
+ 26 |     let s2 = &s1; /* The address of 's1' is
+    |              --- borrow of `s1` occurs here
+ ...
+ 33 |         let s = s1; /* Ownership of the data
+    |                 ^^ move out of `s1` occurs here
+ ...
+ 45 |     println!("{s2}"); /* The compiler
+    |                -- borrow later used here
+    |
+ help: consider cloning the value if the performance cost is acceptable
+    |
+ 26 |     let s2 = &s1.clone(); /* The address of 's1' is
+    |                 ++++++++
+ ```
+ </CodeGroup>
+ </Column>
+</Columns>
 
-   For this reason, our earlier statement in `#3`—'the first value residing in memory at `s1`’s address is the `capacity`’s one'—might seem debatable. Because `capacity` sits at the lowest memory address compared to `ptr_to_heap` and `len`, it was physically the last field pushed onto the stack.
+These recent examples might cause some confusion. If so, it is highly recommended to review the concepts from section 3.2 and carefully compare them with this section to clear up any doubts. Although these scenarios would cause complex runtime errors in other languages, the Rust compiler is specifically designed to catch and flag them before deployment—right at compile time. In fact, <u>compiler errors should never be viewed as flaws in the language, but rather as its greatest strength</u>. They force you to resolve complex issues at the right moment, preventing catastrophic bugs in production!
 
-   While this is true regarding allocation order, <u>memory blocks are traditionally read from the lowest address upward</u>. Therefore, <u>the last item pushed onto the downward-growing stack logically becomes the 'first' item encountered when reading that memory block</u>. It is no coincidence that the base pointer `ptr` points exactly to `capacity`!
- </li>
- <li>
- This marker was added simply to highlight the use of the `print!` macro instead of `println!`. The only difference between the two is that `print!` does not append a newline character after printing the text.
- </li>
- <li>
- The `print_type(&capacity)` function was used primarily for clarity, simply to verify that the type of `capacity` is indeed `usize`. This is a direct result of how `capacity` (along with `ptr_to_heap` and `len`) was initialized: it was assigned the value of `*ptr`. <u>Because `ptr` is defined as a `*const usize` pointer, dereferencing it natively yields a `usize` value.</u>
- </li>
- <li>
- The `println!("[...]:\n{:p}", ptr_to_heap as *const usize)` macro prints the value of `ptr_to_heap` to the terminal. Because `ptr_to_heap` represents a memory address on the heap (specifically, the one pointing to the first character of `hello`, which is `h`), we must use the `:p` format specifier. To achieve this, it is necessary to explicitly cast the value from its current `usize` type into a `*const usize` pointer.
- </li>
- <li>
- At this point, we finally trigger the printing of the values stored on the stack for `len` (`5`) and `capacity` (`10`).
- </li>
- <li>
- The line `println!("[Address of 'h' (on the HEAP)]: {:p}", ptr_to_heap as *const u8)` works exactly like the one we analyzed in `#10`. In fact, they are entirely equivalent and print the exact same value (see Figure 4.4.1).
+The language itself makes it difficult for these issues to occur in the first place. For instance, once you understand Code 4.4.1, preventing the issue is simple: <u>just remember not to return a reference to a variable created in an inner scope back to the outer scope (functions follow this exact same logic, as seen in section 3.2)</u>. Similarly, preventing the error in Code 4.4.2 is simply a matter of remembering <u>not to move types that do not implement the `Copy` trait into an inner scope</u>. The resolution strategies observed in section 3.2 should never be forgotten; they are excellent programming patterns for avoiding complex errors like these.
 
- The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding `x` via the `.add(x)` method will shift the pointer in memory by exactly `x` byte at a time</u> (as you can verify in E-Output 4.4.1).
-
- This brings us back to section 3.3 and our discussion about the `char` type. As explained there, a standalone `char` in Rust always occupies 4 bytes. Because of this, you might mistakenly assume that each character in our string sits 4 memory addresses apart.
-
- What actually happens is that characters inside Rust strings are stored using UTF-8 encoding. UTF-8 preserves backward compatibility with standard ASCII for traditional keyboard characters. Since ASCII encoding allocates just a single byte for each alphanumeric character, <u>every letter in `hello` takes up exactly 1 byte on the heap</u>. Later on, we will explore the more complex scenarios of UTF-8, where characters can occupy anywhere from 1 to 4 bytes in ways that might seem unpredictable at first glance.
- </li>
- <li>
- `println!("['h' raw byte] = {}, parsed as char: {}", *(ptr_to_heap as *const u8), *(ptr_to_heap as *const u8) as char)` simply performs two actions:
-
- - It accesses the value pointed to by `ptr_to_heap` using the dereference operator (`*`). Because the pointer type is explicitly cast to `*const u8`, dereferencing it yields a `u8` value. This explains why E-Output 4.4.1 displays decimal numbers that might initially seem meaningless—they are actually the numeric ASCII codes for those characters (e.g., `104` for `h`).
-
- - It performs the exact same dereferencing operation, but before printing, it casts the resulting `u8` value into a `char`. This behavior is perfectly valid—and allowed by the compiler without throwing an error—because every possible `u8` value maps directly to a valid Unicode character. However, you still need to know what you are doing to avoid printing meaningless characters!
- </li>
-</ol>
-
-### Variables and Data Interacting with Move
-
-Let us now (re-)consider (we've already analyzed this behavior in depth in section 3.2) Code 4.4.3, where the address of `s1` is implicitly moved into `s2`.
-
-<CodeGroup>
-```rust Code 4.4.3
-fn main() {
-    let s1 = String::from("hello");
-
-    let ptr1 = &s1 as *const String as *const usize;
-
-    unsafe {
-        println!("Capacity = {}, address: {:p}", *ptr1, ptr1);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
-        /* The 0x{:x} syntax allows a usize to be represented as a memory address
-           by formatting it in hexadecimal ({:x}). */
-        println!("Len = {}, address: {:p}       |", *(ptr1.add(2)), ptr1.add(2));
-    }
-
-    let s2 = s1; // Move occurs.
-
-    let ptr2 = &s2 as *const String as *const usize;
-    
-    println!("                                       |");
-
-    unsafe {
-        println!("Capacity = {}, address: {:p}  |", *ptr2, ptr2);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
-        println!("Len = {}, address: {:p}", *(ptr2.add(2)), ptr2.add(2));
-    }
-    
-    // println!("{s1}"); // error[E0382]: borrow of moved value: `s1`
-}
-```
-```text E-Output 4.4.3
-   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
-     Running `target/debug/ch_4_lab`
-Capacity = 5, address: 0x7ffc649159d0
-'hello' address (HEAP): 0x563df607cd60=|
-Len = 5, address: 0x7ffc649159e0       |
-                                       |
-Capacity = 5, address: 0x7ffc64915aa0  |
-'hello' address (HEAP): 0x563df607cd60=|
-Len = 5, address: 0x7ffc64915ab0
-```
-</CodeGroup>
-
-Code 4.4.3 corresponds directly to Figure 4.4.3, as demonstrated by the execution results in E-Output 4.4.3. The color gray in Figure 4.4.3 illustrates how <u>`s1` is no longer usable once the move has happened</u>. Note that the only difference from the examples in section 3.2 is that we did not place `s2` inside an inner scope. As a result, while `s1` is invalidated, the data remains intact in the outer scope because `s2` now holds the heap pointer and assumes full ownership. Note also that `drop` is not called on `s1`. If it were, the heap data (`hello`) would be deallocated, which clearly does not happen since `s2` has taken over as the valid owner. Instead, <u>`s1` simply becomes invalidated</u>. However, if we had placed the move inside an inner scope—as we did back in section 3.2—the `hello` string would have been wiped from the heap when that inner scope ended. Even in that scenario, <u>`s1` is never actually dropped</u>; because it resides in the outer scope in an invalidated state, <u>the compiler knows it no longer owns any data</u> and safely skips its destructor.
-
-<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
-  {/* The Unified Outer Box */}
-  <div 
-    className="rounded-xl flex flex-col" 
-    style={{ 
-      width: '65%', 
-      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
-      padding: '1rem'
-    }}>
-    
-    {/* Transparent Title Area */}
-    <div 
-      className="text-sm font-medium" 
-      style={{ 
-        paddingBottom: '0.8rem',
-        color: 'color-mix(in srgb, currentColor 60%, transparent)'
-      }}>
-      Figure 4.4.3
-    </div>
-    
-    {/* The Image */}
-    <img 
-      src="/assets/images/reference_move.png" 
-      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
-    />
-  </div>
-</div>
-
-Let us now consider Code 4.4.4. This scenario was also analyzed previously in section 3.2. Here, the memory address of `s1` (in the STACK) is explicitly assigned to `s2` so that both references remain valid. A compiler behavior that might escape notice at first glance is that, by assigning `s2` as shown in Code 4.4.4, <u>`s2` appears to assume the exact same stack and heap data as `s1`</u>, even though <u>only `s1`'s stack address was copied</u> (E-Output 4.4.4). Note that `s1`'s address points to the `capacity` field.
-
-<CodeGroup>
-```rust Code 4.4.4
-fn main() {
-    let s1 = String::from("hello");
-
-    let ptr1 = &s1 as *const String as *const usize;
-
-    unsafe {
-        println!("Capacity = {}, address: {:p}=-|", *ptr1, ptr1);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
-        /* The 0x{:x} syntax allows a usize to be represented as a memory address
-           by formatting it in hexadecimal ({:x}). */
-        println!("Len = {}, address: {:p}=------|", *(ptr1.add(2)), ptr1.add(2));
-    }
-
-    let s2 = &s1; // Copy occurs.
-
-    let ptr2 = s2 as *const String as *const usize;
-    
-    println!("                                       |");
-
-    unsafe {
-        println!("Capacity = {}, address: {:p}=-|", *ptr2, ptr2);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
-        println!("Len = {}, address: {:p}=------|", *(ptr2.add(2)), ptr2.add(2));
-    }
-    
-    println!("{s1}");
-}
-```
-```text E-Output 4.4.4
-   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
-     Running `target/debug/ch_4_lab`
-Capacity = 5, address: 0x7ffd8e20aa90=-|
-'hello' address (HEAP): 0x55ef10c08d60=|
-Len = 5, address: 0x7ffd8e20aaa0=------|
-                                       |
-Capacity = 5, address: 0x7ffd8e20aa90=-|
-'hello' address (HEAP): 0x55ef10c08d60=|
-Len = 5, address: 0x7ffd8e20aaa0=------|
-hello
-```
-</CodeGroup>
-
-<u>This seamless interaction happens due to Rust's type inference and auto-dereferencing</u>. Because the compiler implicitly assigns `s2` the type of a string reference (`&String`), it treats `s2` as a direct pathway to the original string. <u>When `s2` is used, the compiler automatically follows the reference in memory and handles data as a `String` type</u>. As a result, `s2` doesn't need to physically 'inherit' the fields; it simply accesses `s1`'s `len` field and heap data (`hello`) directly, functioning exactly as if it were the original string.
-
-Figure 4.4.4 provides a direct visual representation of Code 4.4.4.
-
-<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
-  {/* The Unified Outer Box */}
-  <div 
-    className="rounded-xl flex flex-col" 
-    style={{ 
-      width: '65%', 
-      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
-      padding: '1rem'
-    }}>
-    
-    {/* Transparent Title Area */}
-    <div 
-      className="text-sm font-medium" 
-      style={{ 
-        paddingBottom: '0.8rem',
-        color: 'color-mix(in srgb, currentColor 60%, transparent)'
-      }}>
-      Figure 4.4.3
-    </div>
-    
-    {/* The Image */}
-    <img 
-      src="/assets/images/reference_copy.png" 
-      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
-    />
-  </div>
-</div>
-
-
-Code 4.4.5 analyzes the memory layout of Code 4.4.4 to provide a more detailed understanding of the low-level operations performed by the Rust compiler.
-
-
-
-
-
-
-
-
-
-
-
+Regarding Code 4.4.1, a beginner might mistakenly assume that avoiding returning references from an inner scope is the ultimate solution. As we will see later, however, <u>returning references from inner scopes is entirely possible</u>! To do this, Rust simply requires additional information to ensure the programmer knows these references will not point to data that gets dropped at the end of the inner scope. Specifically, this information (which introduces the concept of **lifetimes**) is tied directly to function constructs rather than raw scopes. This makes sense because, as noted in section 3.2, <u>you will never use raw scopes instead of functions, except for the rapid deallocation of temporary variables</u>.
