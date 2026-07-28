@@ -8,7 +8,7 @@ From this point forward, several topics have been omitted either because they we
 
 >When a variable goes out of scope, Rust calls a special function for us. This function is called `drop`. Rust calls `drop` automatically at the closing curly bracket.
 
-The following section, however, has been preserved and directly integrated with raw memory analysis. Even though it revisits the same reasoning found in section 3.2, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
+The following section, however, has been preserved—though heavily modified—and directly integrated with our raw memory analysis. Even though it revisits the same reasoning found in section 3.2 and 4.1, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
 
 Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
 
@@ -225,7 +225,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
   - <span style={{ color: "#008080" }}>A reference can only point to existing, valid variables (meaning data that has not been dropped at the end of an inner scope).</span><br />
   - <span style={{ color: "#008080" }}><u>You simply cannot use one variable's reference to magically peek into memory belonging to another!</u></span><br />
 
-  <span style={{ color: "#008080" }}>The ownership mechanisms we observed in section 3.2 naturally <u>prevent access to freed or unowned memory</u>, eliminating vulnerabilities and unexpected behavior. This is exactly why Rust correctly identifies standard references (`&`) as risk-free and inherently safe.</span><br />
+  <span style={{ color: "#008080" }}>The ownership mechanisms we observed in the previous section naturally <u>prevent access to freed or unowned memory</u>, eliminating vulnerabilities and unexpected behavior. This is exactly why Rust correctly identifies standard references (`&`) as risk-free and inherently safe.</span><br />
 
   <span style={{ color: "#008080" }}>However, as we will explore later, <u>allowing multiple variables to hold references pointing to the exact same memory location can create complex scenarios that require detailed analysis.</u></span>
  </li>
@@ -274,7 +274,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
      <div 
        className="rounded-xl flex flex-col" 
        style={{ 
-         width: '75%', 
+         width: '85%', 
          border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
          padding: '1rem'
        }}>
@@ -308,7 +308,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  The `print_type(&capacity)` function was used primarily for clarity, simply to verify that the type of `capacity` is indeed `usize`. This is a direct result of how `capacity` (along with `ptr_to_heap` and `len`) was initialized: it was assigned the value of `*ptr`. <u>Because `ptr` is defined as a `*const usize` pointer, dereferencing it natively yields a `usize` value.</u>
  </li>
  <li>
- The `println!("[...]:\n{:p}", ptr_to_heap as *const usize)` macro prints the value of `ptr_to_heap` to the terminal. Because `ptr_to_heap` represents a memory address on the heap (specifically, the one pointing to the first character of `hello`, which is `h`), we must use the `:p` format specifier. To achieve this, it is necessary to explicitly cast the value from its current `usize` type into a `*const usize` pointer.
+ The `println!("[...]:\n{:p}", ptr_to_heap as *const usize)` macro prints the value of `ptr_to_heap` to the terminal. Because `ptr_to_heap` represents a memory address on the heap (specifically, the one pointing to the first character of `hello`, which is `h`), we can use the `:p` format specifier. To achieve this, we can explicitly cast the value from its current `usize` type into a `*const usize` pointer.
  </li>
  <li>
  At this point, we finally trigger the printing of the values stored on the stack for `len` (`5`) and `capacity` (`10`).
@@ -331,9 +331,9 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  </li>
 </ol>
 
-## Variables and Data Interacting with Move
+## Analyzing Memory - Move Behavior
 
-Let us now (re-)consider (we've already analyzed this behavior in depth in section 3.2) Code 4.2.3, where the address of `s1` is implicitly moved into `s2`.
+Let us now (re-)consider (we've already analyzed this behavior in depth in section 3.2 and 4.1) Code 4.2.3, where the address of `s1` is implicitly moved into `s2`.
 
 <CodeGroup>
 ```rust Code 4.2.3
@@ -409,63 +409,49 @@ Code 4.2.3 corresponds directly to Figure 4.2.3, as demonstrated by the executio
   </div>
 </div>
 
-Let us now consider Code 4.2.4. This scenario was also analyzed previously in section 3.2. Here, the memory address of `s1` (in the STACK) is explicitly assigned to `s2` so that both references remain valid. A compiler behavior that might escape notice at first glance is that, by assigning `s2` as shown in Code 4.2.4, <u>`s2` appears to assume the exact same stack and heap data as `s1`</u>, even though <u>only `s1`'s stack address was copied</u> (E-Output 4.2.4). Note that `s1`'s address points to the `capacity` field.
+## Analyzing Memory - References and Borrowing
+
+Let us now (re-)consider Code 4.2.4. This scenario was also analyzed previously in section 3.2 and 4.1. Here, <u>the memory address of `s1` (in the STACK) is explicitly assigned to `s`</u>. A compiler behavior that might escape notice at first glance is that, by assigning `s` as shown in Code 4.2.4, <u>`s` appears to assume the exact same stack and heap data as `s1`</u>, even though <u>only `s1`'s stack address was copied</u> (E-Output 4.2.4). Note that `s1`'s address points to the `capacity` field. Code 4.2.4 has been intentionally abbreviated, as it is almost identical to Code 4.2.3.
 
 <CodeGroup>
 ```rust Code 4.2.4
 fn main() {
-    let s1 = String::from("hello");
+    // --snip
 
-    let ptr1 = &s1 as *const String as *const usize;
+    let s = &s1; // Copy occurs.
 
-    unsafe {
-        println!("Capacity = {}, address: {:p}=-|", *ptr1, ptr1);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
-        /* The 0x{:x} syntax allows a usize to be represented as a memory address
-           by formatting it in hexadecimal ({:x}). */
-        println!("Len = {}, address: {:p}=------|", *(ptr1.add(2)), ptr1.add(2));
-    }
-
-    let s2 = &s1; // Copy occurs.
-
-    let ptr2 = s2 as *const String as *const usize;
-    
-    println!("                                       |");
-
-    unsafe {
-        println!("Capacity = {}, address: {:p}=-|", *ptr2, ptr2);
-        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
-        println!("Len = {}, address: {:p}=------|", *(ptr2.add(2)), ptr2.add(2));
-    }
+    // --snip--
     
     println!("{s1}");
 }
 ```
 ```text E-Output 4.2.4
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
      Running `target/debug/ch_4_lab`
-Capacity = 5, address: 0x7ffd8e20aa90=-|
-'hello' address (HEAP): 0x55ef10c08d60=|
-Len = 5, address: 0x7ffd8e20aaa0=------|
+s1 address in memory: 0x7ffde5cd2388
+Capacity = 5, address: 0x7ffde5cd2388=-|
+'hello' address (HEAP): 0x561a59e37d60=|
+Len = 5, address: 0x7ffde5cd2398=------|
                                        |
-Capacity = 5, address: 0x7ffd8e20aa90=-|
-'hello' address (HEAP): 0x55ef10c08d60=|
-Len = 5, address: 0x7ffd8e20aaa0=------|
+s address in memory: 0x7ffde5cd2488    |
+Capacity = 5, address: 0x7ffde5cd2388=-|
+'hello' address (HEAP): 0x561a59e37d60=|
+Len = 5, address: 0x7ffde5cd2398=------|
 hello
 ```
 </CodeGroup>
 
-<u>This seamless interaction happens due to Rust's type inference and auto-dereferencing</u>. Because the compiler implicitly assigns `s2` the type of a string reference (`&String`), it treats `s2` as a direct pathway to the original string. <u>When `s2` is used, the compiler automatically follows the reference in memory and handles data as a `String` type</u>. As a result, `s2` doesn't need to physically 'inherit' the fields; it simply accesses `s1`'s `len` field and heap data (`hello`) directly, functioning exactly as if it were the original string.
+<u>This seamless interaction happens due to Rust's type inference and auto-dereferencing</u>. Because the compiler implicitly assigns `s` the type of a string reference (`&String`), it treats `s` as a direct pathway to the original string. <u>When `s` is used, the compiler automatically follows the reference in memory and handles data as a `String` type</u>. As a result, `s` doesn't need to physically 'inherit' the fields; it simply accesses `s1`'s metadata (`capacity` and `len`) and heap data (`hello`) directly, functioning exactly as if it were the original string. Nevertheless, <u>`s` is not an exact copy of `s1`</u>. This is because <u>the value stored in `s` is a COPY of `s1`'s memory address (specifically, the `capacity`'s address), rather than the actual data contained within `s1`</u>! Since the two copies of the address must exist in two distinct memory locations, writing `&s1` and `&s` yields two distinct results. Specifically, `&s1` (the memory address of `s1`) is exactly the memory address of its `capacity` component, whereas `&s` is a completely separate memory address that contains a pointer to `s1` (meaning it holds the value `&s1`).
 
-Figure 4.2.4 provides a direct visual representation of Code 4.2.4.
+Figure 4.2.4 provides a direct visual representation of Code 4.2.4. However, keep in mind that there is a slight difference regarding the memory layout of `s1`'s fields. Specifically, `s` points to the `capacity` field, not directly to `ptr`.
 
 <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
   {/* The Unified Outer Box */}
   <div 
     className="rounded-xl flex flex-col" 
     style={{ 
-      width: '65%', 
+      width: '85%', 
       border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
       padding: '1rem'
     }}>
@@ -488,5 +474,129 @@ Figure 4.2.4 provides a direct visual representation of Code 4.2.4.
   </div>
 </div>
 
+## Overriding Rust's Default Behavior
 
-Code 4.2.5 analyzes the memory layout of Code 4.2.4 to provide a more detailed understanding of the low-level operations performed by the Rust compiler.
+This section has been added to take our analysis of previously covered topics to the next level. Code 4.2.5 was specifically designed to generate Figure 4.2.5—a memory architecture not normally achievable using only the features we have seen so far. Not only does Code 4.2.5 deepen your understanding of the preceding concepts, but it also provides a thorough explanation of the string's `capacity` field, a topic omitted by the official book.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '65%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.2.5
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/shared_heap.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
+
+As noted earlier, attempting to use the raw `=` assignment <u>triggers a move of the string's ownership from the variable on the right to the one on the left</u>. <u>This prevents the variable on the right from surviving after the assignment.</u> Code 4.2.5 resolves this issue, as evidenced by E-Output 4.2.5. Specifically, the proof of `s1`'s 'survival' is demonstrated by the final three calls to the `println!` macro, marked as `#`, `##` and `###`.
+
+<CodeGroup>
+```rust Code 4.2.5
+fn main() {
+    let s1 = String::from("hello");
+    let ptr1 = &s1 as *const String as *const usize;
+
+    let mut s2 = String::new();
+    let ptr2 = &mut s2 as *mut String as *mut usize;
+
+    unsafe {
+        *ptr2 = 5;
+        *(ptr2.add(1)) = *(ptr1.add(1));
+        *(ptr2.add(2)) = 5;
+
+        println!("s1 address in memory: {:p}", &s1);
+        println!("Capacity = {}, address: {:p}", *ptr1, ptr1);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr1.add(1)));
+        println!(
+            "Len = {}, address: {:p}       |",
+            *(ptr1.add(2)),
+            ptr1.add(2)
+        );
+        println!("                                       |");
+        println!("s2 address in memory: {:p}   |", &s2);
+        println!("Capacity = {}, address: {:p}  |", *ptr2, ptr2);
+        println!("'hello' address (HEAP): 0x{:x}=|", *(ptr2.add(1)));
+        println!("Len = {}, address: {:p}", *(ptr2.add(2)), ptr2.add(2));
+    }
+
+    println!("{s1}"); // #
+    println!("{}", s1.len()); // ##
+    println!("{}", s1.capacity()); // ###
+    
+    { let _destructor = s1; } // Move occurs -> s1 is destroyed.
+    
+    println!("{s2}");
+}
+```
+```text E-Output 4.2.5
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/ch_4_lab`
+s1 address in memory: 0x7ffdb4937d98
+Capacity = 5, address: 0x7ffdb4937d98
+'hello' address (HEAP): 0x5601f23dbd60=|
+Len = 5, address: 0x7ffdb4937da8       |
+                                       |
+s2 address in memory: 0x7ffdb4937db8   |
+Capacity = 5, address: 0x7ffdb4937db8  |
+'hello' address (HEAP): 0x5601f23dbd60=|
+Len = 5, address: 0x7ffdb4937dc8
+hello
+5
+5
+�#`
+free(): double free detected in tcache 2
+[1]    2459541 IOT instruction (core dumped)  cargo run
+```
+</CodeGroup>
+
+Even though the code somehow manages to compile and run, E-Output 4.2.5 clearly reveals a severe crash at the end of execution. This is the direct result of excessive experimentation that completely bypasses Rust's idiomatic safeguards. Although this setup is fundamentally flawed—and, as we will soon explain, completely impractical for real-world use—the resulting `free(): double free detected in tcache 2` error is highly instructive. It helps us understand both the purpose of the `capacity` field and the fundamental reason why Rust's ownership rules are designed the way they are. Enforcing a strict single-owner model is absolutely necessary to prevent exactly this type of memory corruption.
+
+Indeed, the architecture of Code 4.2.5 successfully breaks Rust's idiomatic ownership mechanics. The mere fact that the code compiles is proof of this, as is the fact that the final `println!` call executes but prints unreadable garbage data. This corrupted output occurs because, from the compiler's perspective, `s1` still retains ownership of the underlying `hello` string data. Therefore, when `_destructor` goes out of the inner scope, all memory associated with `s1`—including the string `hello`—is physically wiped from the heap. It does not matter that `s2` was artificially engineered to be nearly identical to `s1`; <u>the compiler strictly recognizes only one owner</u>.
+
+Now, let us address the reason for this extensive prelude regarding the `capacity` field. If we were to modify Code 4.2.5 by changing the line `*ptr2 = 5` to `*ptr2 = 0`, the runtime output of the program would be as follows:
+
+```text E-Output 4.2.5
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running `target/debug/ch_4_lab`
+s1 address in memory: 0x7ffeb0f524e8
+Capacity = 5, address: 0x7ffeb0f524e8
+'hello' address (HEAP): 0x5615c47e4d60=|
+Len = 5, address: 0x7ffeb0f524f8       |
+                                       |
+s2 address in memory: 0x7ffeb0f52508   |
+Capacity = 0, address: 0x7ffeb0f52508  |
+'hello' address (HEAP): 0x5615c47e4d60=|
+Len = 5, address: 0x7ffeb0f52518
+hello
+5
+5
+�G\a
+```
+
+As you can clearly see, the double-free memory error has disappeared, allowing the code to terminate gracefully without crashing the program! This specific fix provides the perfect clue to understanding the true purpose of the `capacity` field. In fact, it is a field used by Rust's allocator to <u>deallocate the memory of its associated string</u>.
+
+When a `String` goes out of scope, Rust automatically calls its `drop` implementation to clean up the memory. <u>The deallocator looks at the `capacity` field to determine exactly how many bytes need to be freed. By manually forcing the `capacity` to `0` in our experiment, we effectively tricked the deallocator: when it checked how much heap memory to clean up, it saw 0 and therefore did nothing.</u> By skipping the deallocation step, the heap memory was left untouched, successfully preventing the double-free error when the second variable went out of scope.
+
+<u>Rust's ownership mechanism is expressly designed to prevent double (or triple, etc.) free memory errors, dangling pointers, and unsafe programming patterns.</u> The language's architects have truly thought of everything. Furthermore, <u>writing idiomatic Rust is significantly simpler</u>. For instance, the earlier section demonstrating assignment (`=`) via the `&` reference showcases a native language feature officially known as <u>borrowing</u>. By utilizing borrowing, the complex workaround seen in Code 4.2.5 becomes completely obsolete. It is far safer and more efficient to pass a temporary reference to `s1` to modify its content within a function, rather than manually forging a second `String` struct to unsafely share the same heap data!
+
+An attentive reader might also have noticed that the memory addresses change at each execution of the code. This behavior is due to the ASLR (Address Space Layout Randomization) system, which randomizes the allocation space of each process for security reasons that will not be analyzed here (as they are quite complex to understand and involve advanced operating system protections).
