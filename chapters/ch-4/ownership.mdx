@@ -90,7 +90,9 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 
 As mentioned above, ownership mechanics for the scalar types discussed in section 3.3 are rather trivial. However, they can be intentionally made more complex if one chooses to <u>copy the stack address where these types are stored</u> (i.e., by taking a reference). In such scenarios, the exact same logic applies as when copying the address of a `String` variable. The reasoning is entirely analogous because, as initially mentioned and as we will analyze in detail in the next section, <u>the pointer to a `String` is also stored on the stack</u>. Ultimately, in both cases—whether dealing with types that implement the `Copy` trait or those that do not—<u>copying an address creates a situation where the left-side variable takes ownership of the address itself, but not the underlying value it points to, regardless of whether that data resides on the stack or the heap</u> (Code 4.1.1 and Code 4.1.2 clear up this mystery once and for all).
 
-One might therefore wonder why the compiler's behavior differs between types that do not implement the `Copy` trait and those that do, in cases where the variable itself is assigned rather than its address. The answer is that the compiler is smart enough to know that, for scalar types, it is simply not worth the effort to copy a memory address and introduce ownership complexities. This is because copying the actual data is so cheap that it generates no meaningful computational or spatial overhead.
+One might therefore wonder why the compiler's behavior differs between types that do not implement the `Copy` trait and those that do, in cases where the variable itself is assigned rather than its address. The answer is that the compiler is smart enough to know that, for scalar types, it is simply not worth the effort to move the ownership (invalidating the RIGHT side variable) instead of generate two distinct copies of data having two distinct owners. This is because copying the actual data is so cheap that it generates no meaningful computational or spatial overhead.
+
+### Introducing Ownership Mechanics for References Through Block Scopes
 
 <Columns>
  <Column>
@@ -105,15 +107,16 @@ One might therefore wonder why the compiler's behavior differs between types tha
          not the heap. */
      
          &x /* The address of 'x' is COPIED
-               into 'y'. However, 'x'
-               maintains full ownership of
-               the value '17' on the stack. */              
-     }; /* The inner scope ends here, and 'x'
-           is dropped, deallocating '17' from
-           the stack. Consequently, 'y' holds
-           the original 'x' address, but it
-           now points to freed memory,
-           becoming a dangling pointer! */
+         into 'y'. However, 'x' maintains
+         full ownership of the value '17'
+         on the stack. */
+                    
+     }; /* The inner scope ends here,
+     and 'x' is dropped, deallocating
+     '17' from the stack. Consequently,
+     'y' holds the original 'x' address,
+     but it now points to freed memory,
+     becoming a dangling pointer! */
  }
  ```
  ```text C-Output 4.1.1
@@ -130,7 +133,7 @@ One might therefore wonder why the compiler's behavior differs between types tha
   9 |         &x /* The address of 'x' is COPIED
     |         ^^ borrowed value does not live long enough
  ...
- 13 |     }; /* The inner scope ends here, and 'x'
+ 14 |     }; /* The inner scope ends here,
     |     - `x` dropped here while still borrowed
  ```
  </CodeGroup>
@@ -154,11 +157,11 @@ One might therefore wonder why the compiler's behavior differs between types tha
          and stack metadata. */
                         
      } /* The inner scope ends here, and 's'
-       is dropped, deallocating the heap data
-       and stack metadata. Consequently, 's2'
-       still holds the original address, but
-       it now points to freed memory,
-       becoming a dangling pointer! */
+     is dropped, deallocating the heap data
+     and stack metadata. Consequently, 's2'
+     still holds the original address, but
+     it now points to freed memory,
+     becoming a dangling pointer! */
           
      println!("{s2}"); /* The compiler
      will throw an error here to prevent
@@ -199,6 +202,89 @@ The language itself makes it difficult for these issues to occur in the first pl
 In fact, a standard programming pattern in Rust is to <u>define your core, non-temporary variables</u> (your main application state) <u>within the `main` function</u>, often <u>instantiating them from specific imported modules</u>. <u>If these variables need to be modified, you do so by passing them to functions. Within those function scopes, local variables (parameters) temporarily borrow the original data to read or mutate it safely.</u>
 
 Regarding Code 4.4.1, a beginner might mistakenly assume that avoiding returning references from an inner scope is the ultimate solution. As we will see later, however, <u>returning references from inner scopes is entirely possible</u>! To allow this, Rust simply requires additional information to guarantee that the reference will not point to data that gets dropped at the end of the inner scope—or anytime before the reference's final use in the outer scope. Specifically, this information (which introduces the concept of **lifetimes**) is tied directly to function constructs rather than raw scopes. This makes sense because, as noted in section 3.2, <u>you will never use raw scopes instead of functions, except for the rapid deallocation of temporary variables</u>.
+
+### Transferring the Reasoning to Function Scopes
+
+For the sake of completeness, and to return to our discussion on functions, we will examine two more examples (Code 4.1.3 and Code 4.1.4). Just as in section 3.2, these will replicate the issues seen in the earlier examples (Code 4.1.1 and Code 4.1.2), but this time through the use of function calls. Unlike in Code 4.1.2, where `s1` is directly accessed from within an inner block, in Code 4.1.4 we must explicitly pass `s1` as an argument to `takes_ownership_and_drop` because function scopes cannot see variables defined in the outer scope.
+
+<Columns>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.1.3
+ fn ret_dangling_pointer() -> &u8 {
+     let x: u8 = 17;
+     &x
+ }
+
+ fn main() {
+     let y = ret_dangling_pointer();
+ }
+ ```
+ ```text C-Output 4.1.3
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+ error[E0106]: missing lifetime specifier
+  --> src/main.rs:1:30
+   |
+ 1 | fn ret_dangling_pointer() -> &u8 {
+   |                              ^ expected named lifetime parameter
+   |
+   = help: this function's return type contains a borrowed value, but there is no value for it to be borrowed from
+ help: consider using the `'static` lifetime, but this is uncommon unless you're returning a borrowed value from a `const` or a `static`
+ ```
+ </CodeGroup>
+ </Column>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.1.4
+ fn takes_ownership_and_drop(_s: String) {
+     // Yes, nothing.
+ }
+
+ fn main() {
+     let s1 = String::from("hello");
+ 
+     let s2 = &s1; /* The address of 's1' is
+     COPIED into 's2'. However, 's1'
+     maintains full ownership of the 'hello'
+     string on the heap, as well as its own
+     metadata on the stack. */
+ 
+     takes_ownership_and_drop(s1);
+ 
+     println!("{s2}"); /* The compiler
+     will throw an error here to prevent
+     the use of the dangling pointer. */
+ }
+ ```
+ ```text C-Output 4.1.4
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+ error[E0505]: cannot move out of `s1` because it is borrowed
+   --> src/main.rs:25:30
+    |
+ 17 |     let s1 = String::from("hello");
+    |         -- binding `s1` declared here
+ 18 |
+ 19 |     let s2 = &s1; /* The address of 's1' is
+    |              --- borrow of `s1` occurs here
+ ...
+ 25 |     takes_ownership_and_drop(s1);
+    |                              ^^ move out of `s1` occurs here
+ 26 |
+ 27 |     println!("{s2}"); /* The compiler
+    |                -- borrow later used here
+    |
+ help: consider cloning the value if the performance cost is acceptable
+    |
+ 19 |     let s2 = &s1.clone(); /* The address of 's1' is
+    |                 ++++++++
+ ```
+ </CodeGroup>
+ </Column>
+</Columns>
+
+Observing C-Output 4.1.4, one can note how this is practically equivalent to C-Output 4.1.2. This does not happen, however, regarding Code 4.1.3; that is, its C-Output 4.1.3 is different compared to that of Code 4.1.1. This happens for the reason explained shortly ago: Rust tries to allow the return of references from functions through a careful use of the functionalities offered by <u>lifetimes</u>. At the same time, however, the compiler reports: `this function's return type contains a borrowed value, but there is no value for it to be borrowed from`. This note is quite unclear, but it indicates that even though we are trying to return a reference, at the end of the function's scope, such a reference no longer exists because it has been dropped. This means that the compiler does not find any value to return through the `&x` reference.
+
+### Clarifying the 'Borrowing' Terminology
 
 At this point, we can finally conclude this section by recalling Rust's official terminology regarding the use of references.
 

@@ -70,7 +70,6 @@
             "pages": [
               "chapters/ch-4/ownership",
               "chapters/ch-4/memory-and-allocation",
-              "chapters/ch-4/references-and-borrowing",
               "chapters/ch-4/the-slice-type"
             ]
           },

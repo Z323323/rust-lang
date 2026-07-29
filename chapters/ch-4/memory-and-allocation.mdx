@@ -4,15 +4,15 @@ mode: "wide"
 sidebarTitle: "4.2 - Memory and Allocation"
 ---
 
-From this point forward, several topics have been omitted either because they were already analyzed in detail in section 3.2 or in the previous one, or because they were deemed superfluous. Nevertheless, it is worth mentioning one concept that is perhaps less marginal:
+In Ch. 4, several contents from the official book have been omitted, either because they were explored in detail in section 3.2 or because they were deemed superfluous. Nevertheless, one concept is worth highlighting, as it clarifies once and for all why 'dropped' is the precise terminology used for memory deallocation when a variable when a variable goes out of scope:
 
 >When a variable goes out of scope, Rust calls a special function for us. This function is called `drop`. Rust calls `drop` automatically at the closing curly bracket.
 
-The following section, however, has been preserved—though heavily modified—and directly integrated with our raw memory analysis. Even though it revisits the same reasoning found in section 3.2 and 4.1, it offers a more visual and less abstract perspective on memory addresses and data, while also providing a few details not yet covered.
+The following sections have been heavily modified and directly integrated with our raw memory analysis. Although they revisit some of the logic introduced in sections 3.2 and 4.1, they provide a much more visual and less abstract perspective on memory addresses and data, while uncovering many details not yet discussed.
 
-Regarding the concept of 'abstract', it is important to emphasize that abstraction is ultimately what every Rust programmer must grapple with sooner or later. From any programmer's perspective, memory and data are inherently abstract. For this reason, every image provided by the official book is paired with a corresponding code snippet. These snippets access memory directly to reveal the low-level details needed to first understand, and subsequently manage, data at a granular level. They also allow you to observe exactly what happens in memory at an atomic level regarding the topics covered in Ch. 4.
+Regarding the concept of 'abstraction', it is important to emphasize that navigating abstractions is something every Rust programmer must eventually master. From a high-level programmer's perspective, memory and data often appear inherently abstract. To bridge this gap, every image provided by the official book is paired here with a corresponding code snippet. These snippets access memory directly, revealing the low-level mechanics required to truly understand—and subsequently manage—data at a granular level. They allow you to observe exactly how the concepts covered in Ch. 4 behave in physical memory.
 
-## The `String` Type
+## Analyzing Memory - The `String` Type
 
 ><u>A `String` is made up of three parts</u>, shown below: a <u>pointer</u> to the memory that holds the contents of the string, a <u>length</u>, and a <u>capacity</u>. <u>This group of data is stored on the stack.</u> On the right is the <u>memory on the heap that holds the contents</u>.
 
@@ -331,7 +331,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  </li>
 </ol>
 
-## Analyzing Memory - Move Behavior
+## Analyzing Memory - The Move Behavior
 
 Let us now (re-)consider (we've already analyzed this behavior in depth in section 3.2 and 4.1) Code 4.2.3, where the address of `s1` is implicitly moved into `s2`.
 
@@ -506,7 +506,7 @@ This section has been added to take our analysis of previously covered topics to
   </div>
 </div>
 
-As noted earlier, attempting to use the raw `=` assignment <u>triggers a move of the string's ownership from the variable on the right to the one on the left</u>. <u>This prevents the variable on the right from surviving after the assignment.</u> Code 4.2.5 resolves this issue, as evidenced by E-Output 4.2.5. Specifically, the proof of `s1`'s 'survival' is demonstrated by the final three calls to the `println!` macro, marked as `#`, `##` and `###`.
+As noted earlier, attempting to use the raw `=` assignment <u>triggers a move of the string's ownership from the variable on the right to the one on the left</u>. <u>This prevents the variable on the right from surviving after the assignment.</u> Code 4.2.5 resolves this issue, as evidenced by E-Output 4.2.5.1. Specifically, the proof of `s1`'s 'survival' is demonstrated by the final three calls to the `println!` macro, marked as `#`, `##` and `###`.
 
 <CodeGroup>
 ```rust Code 4.2.5
@@ -546,7 +546,7 @@ fn main() {
     println!("{s2}");
 }
 ```
-```text E-Output 4.2.5
+```text E-Output 4.2.5.1
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
      Running `target/debug/ch_4_lab`
@@ -568,13 +568,13 @@ free(): double free detected in tcache 2
 ```
 </CodeGroup>
 
-Even though the code somehow manages to compile and run, E-Output 4.2.5 clearly reveals a severe crash at the end of execution. This is the direct result of excessive experimentation that completely bypasses Rust's idiomatic safeguards. Although this setup is fundamentally flawed—and, as we will soon explain, completely impractical for real-world use—the resulting `free(): double free detected in tcache 2` error is highly instructive. It helps us understand both the purpose of the `capacity` field and the fundamental reason why Rust's ownership rules are designed the way they are. Enforcing a strict single-owner model is absolutely necessary to prevent exactly this type of memory corruption.
+Even though the code somehow manages to compile and run, E-Output 4.2.5.1 clearly reveals a severe crash at the end of execution. This is the direct result of excessive experimentation that completely bypasses Rust's idiomatic safeguards. Although this setup is fundamentally flawed—and, as we will soon explain, completely impractical for real-world use—the resulting `free(): double free detected in tcache 2` error is highly instructive. It helps us understand both the purpose of the `capacity` field and the fundamental reason why Rust's ownership rules are designed the way they are. Enforcing a strict single-owner model is absolutely necessary to prevent exactly this type of memory corruption.
 
 Indeed, the architecture of Code 4.2.5 successfully breaks Rust's idiomatic ownership mechanics. The mere fact that the code compiles is proof of this, as is the fact that the final `println!` call executes but prints unreadable garbage data. This corrupted output occurs because, from the compiler's perspective, `s1` still retains ownership of the underlying `hello` string data. Therefore, when `_destructor` goes out of the inner scope, all memory associated with `s1`—including the string `hello`—is physically wiped from the heap. It does not matter that `s2` was artificially engineered to be nearly identical to `s1`; <u>the compiler strictly recognizes only one owner</u>.
 
 Now, let us address the reason for this extensive prelude regarding the `capacity` field. If we were to modify Code 4.2.5 by changing the line `*ptr2 = 5` to `*ptr2 = 0`, the runtime output of the program would be as follows:
 
-```text E-Output 4.2.5
+```text E-Output 4.2.5.2
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
      Running `target/debug/ch_4_lab`
@@ -600,3 +600,174 @@ When a `String` goes out of scope, Rust automatically calls its `drop` implement
 <u>Rust's ownership mechanism is expressly designed to prevent double (or triple, etc.) free memory errors, dangling pointers, and unsafe programming patterns.</u> The language's architects have truly thought of everything. Furthermore, <u>writing idiomatic Rust is significantly simpler</u>. For instance, the earlier section demonstrating assignment (`=`) via the `&` reference showcases a native language feature officially known as <u>borrowing</u>. By utilizing borrowing, the complex workaround seen in Code 4.2.5 becomes completely obsolete. It is far safer and more efficient to pass a temporary reference to `s1` to modify its content within a function, rather than manually forging a second `String` struct to unsafely share the same heap data!
 
 An attentive reader might also have noticed that the memory addresses change at each execution of the code. This behavior is due to the ASLR (Address Space Layout Randomization) system, which randomizes the allocation space of each process for security reasons that will not be analyzed here (as they are quite complex to understand and involve advanced operating system protections).
+
+## Analyzing Memory - `Copy` vs `Clone`
+
+Up to this point, we have demonstrated the difference in behavior between types that implement `Copy` and those that do not, specifically in the context of the `=` assignment. What has not yet been mentioned, however, is that Rust offers the ability to achieve the same result as `Copy`, but for types that do not implement it, provided they implement `Clone`. Implementing `Clone`—and more importantly, <u>invoking the `clone` method</u>—is discouraged unless absolutely necessary. This is because <u>it performs all the expensive memory duplication discussed in section 3.2, which the Rust compiler actively tries to prevent through its move semantics</u>!
+
+<u>In short, invoking the `clone` method from the `Clone` trait yields the exact same outcome for dynamically allocated types as a raw `=` assignment does for types implementing `Copy`.</u> Code 4.2.6 and Code 4.2.7, along with their respective outputs, definitively clarify the effect of this 'hard copy': via `=` for scalar types implementing `Copy`, and via the `clone` method (+ `=`) for dynamically allocated types.
+
+<Columns>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.2.6
+ fn main() {
+     let s1 = String::from("hello");
+     let s2 = s1.clone();
+ 
+     let ptr1 = &s1 as *const String as *const usize;
+     let ptr2 = &s2 as *const String as *const usize;
+ 
+     unsafe {
+      println!("s1 address in memory: {:p}",
+               &s1);
+      println!("Capacity = {}, address: {:p}",
+               *ptr1, ptr1);
+      println!("'hello' address (HEAP): 0x{:x}",
+               *(ptr1.add(1)));
+      println!("Len = {}, address: {:p}",
+               *(ptr1.add(2)), ptr1.add(2));
+      println!("");
+      println!("s2 address in memory: {:p}",
+               &s2);
+      println!("Capacity = {}, address: {:p}",
+               *ptr2, ptr2);
+      println!("'hello' address (HEAP): 0x{:x}",
+               *(ptr2.add(1)));
+      println!("Len = {}, address: {:p}",
+               *(ptr2.add(2)), ptr2.add(2));
+     }
+ }
+ ```
+ ```text E-Output 4.2.6
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+      Running `target/debug/ch_4_lab`
+ s1 address in memory: 0x7ffde216ce98
+ Capacity = 5, address: 0x7ffde216ce98
+ 'hello' address (HEAP): 0x55b339309d60
+ Len = 5, address: 0x7ffde216cea8
+ 
+ s2 address in memory: 0x7ffde216ceb0
+ Capacity = 5, address: 0x7ffde216ceb0
+ 'hello' address (HEAP): 0x55b339309d80
+ Len = 5, address: 0x7ffde216cec0
+ ```
+ </CodeGroup>
+ </Column>
+ <Column>
+ <CodeGroup>
+ ```rust Code 4.2.7
+ fn main() {
+     let x: u8 = 17;
+     let y = x;
+     
+     println!("x address in memory: {:p}",
+              &x);
+     println!("y address in memory: {:p}",
+              &y);
+     println!("{x}");
+     println!("{y}");
+ }
+ ```
+ ```text E-Output 4.2.7
+    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+      Running `target/debug/ch_4_lab`
+ x address in memory: 0x7fffdd248146
+ y address in memory: 0x7fffdd248147
+ 17
+ 17
+ ```
+ </CodeGroup>
+ </Column>
+</Columns>
+
+Below, Figure 4.2.6 visually depicts the result of Code 4.2.6. Although the result of Code 4.2.7 is not visually represented, keep in mind that its mechanics are entirely analogous. The only difference lies in the actual data stored in memory: for Code 4.2.7, the stack simply holds the raw value itself (meaning there is no metadata, no pointer to the heap, and no heap data).
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '65%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.2.6
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/clone.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
+
+Since the official book dedicates an entire paragraph in Appendix C, specifically to this topic, that content has been reproduced below.
+
+### Appendix C: Derivable Traits - `Clone` and `Copy` for Duplicating Values
+
+>The `Clone` trait allows you to explicitly create a deep copy of a value, and <u>the duplication process might involve running arbitrary code and copying heap data</u>.
+
+>Deriving `Clone` implements the `clone` method, which <u>when implemented for the whole type, calls `clone` on each of the parts of the type</u>. This means <u>all the fields or values in the type must also implement `Clone` to derive `Clone`</u>.
+
+><p><u>The `Copy` trait allows you to duplicate a value by only copying bits stored on the STACK; no arbitrary code is necessary.</u></p>
+
+>The `Copy` trait doesn’t define any methods to prevent programmers from overloading those methods and violating the assumption that no arbitrary code is being run. That way, all programmers can assume that copying a value will be very fast.
+
+>You can derive `Copy` on any type whose parts all implement `Copy`. A type that implements `Copy` must also implement `Clone` because <u>a type that implements `Copy` has a trivial implementation of `Clone` that performs the same task as `Copy`</u>.
+
+>The `Copy` trait is rarely required; types that implement `Copy` have optimizations available, meaning <u>you don’t have to call `clone`</u>, which makes the code more concise.
+
+><u>Everything possible with `Copy` you can also accomplish with `Clone`, but the code might be slower</u> or have to use `clone` in places.
+
+## Strings Mutability
+
+Kudos on making it to this point safe and sound! 😂 This segment was added mostly for the sake of completeness and is relatively trivial. We can finally conclude this section by providing a visual representation in Figure 4.2.7 of a simple mutation applied to a mutable string (Code 4.2.8).
+
+```rust Code 4.2.8
+fn main() {
+    let mut s = String::from("hello");
+    s = String::from("ahoy");
+}
+```
+```math
+\downarrow
+```
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '60%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.2.7
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/string_redef.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
