@@ -4,4 +4,170 @@ mode: "wide"
 sidebarTitle: "4.3 - The Slice Type"
 ---
 
+**Slices** are an intricate subject in Rust, and for this reason, they were left as the concluding section of Ch. 4. By now, you should possess the theoretical foundation required to understand their underlying mechanics. To start, let's look at the definition provided by the official book.
+
+>Slices let you reference a contiguous sequence of elements in a **collection**. A slice is a kind of reference, so it does not have ownership.
+
+First of all, as noted by the official book, <u>slices are not exclusively related to strings</u>. In fact, <u>slices can be used to access contiguous sequences of elements within any collection</u>.
+
+<Note>
+The adjective 'contiguous' alone provides a vital clue for understanding heap allocation. The fact that <u>slices can be used on any collection</u>—which, as we will see later, often point to data stored on the heap—reveals a fundamental rule: even on the heap, <u>the data belonging to a single collection must be allocated in one contiguous block</u>. However, this strict contiguity per variable does not prevent memory reuse; if deallocations create 'holes' or fragmentation in the heap, Rust's underlying memory allocator will attempt to backfill these gaps with new allocations whenever the space permits.
+</Note>
+
+<u>Slices are</u>, for all intents and purposes, <u>pointers</u>. They represent the language's safe mechanism for harnessing the power of pointers without requiring `unsafe` blocks.
+
+This concept is far from trivial to such an extent that even the official book introduces a bit of confusion in its explanation of the concept. For instance, the official text primarily focuses on using slices to reference <u>sequences</u> of elements. Indeed, the very word 'slice' implies a sequence rather than a single item. The truth, however, is that slices—functioning as 'pointers with superpowers'—allow you to reference both sequences of elements and single elements within a collection, as we will see later on.
+
+Because <u>the specific type designated for `String` slices is named `&str`</u>—an obvious abbreviation for 'string'—beginners often mistakenly assume that the entire concept of 'slices' is exclusively tied to text, rather than understanding it as a universal mechanism for any contiguous collection. For example, the slice type used to reference a contiguous sequence of 8-bit integers (`u8`) is written as `&[u8]`. While it looks visually very different from `&str`, the underlying concept is exactly the same. Under the hood, `&str` is physically identical to `&[u8]` (a slice of raw bytes). However, the compiler gives it a special name, `&str`, to enforce a strict rule at the type-system level: <u>the bytes inside a `&str` must always form valid UTF-8 text</u>. The only reason `&str` has its own dedicated name—rather than just being written as `&[char]` or `&[u8]`—is because strings in Rust require specific validation.
+
+<p><u>Whether you are dealing with primitive numbers, standard library structs, or your own custom types, the slice type is simply the target type enclosed in square brackets:</u></p>
+
+- **Primitives**: `&[i8]`, ..., `&[u8]`, ..., `&[f32]`, `&[f64]`, `&[bool]`, `&[char]`.
+- **Standard Library Types**: `&[String]`, `&[Option<i32>]`, ... .
+- **Your Custom Types**: `&[MyStruct]`, `&[User]`.
+
+At this point, one might wonder what the difference is between `&[char]` and `&str`. The answer is that a `&[char]` references a contiguous block of memory where every single element is strictly 4 bytes wide, while `&str`, on the other hand, references data encoded in UTF-8. UTF-8 is a variable-length encoding, meaning different characters take up different amounts of memory.
+
+Let us now focus on the second statement from the official book: 'A slice is a kind of reference, so it does not have ownership'.
+
+- <span style={{ color: "#964B00" }}><b>Q</b>: If Rust is fundamentally built on the ownership model, why are slices exempt?</span><br />
+- <span style={{ color: "#008080" }}><b>A</b>: The book points out that this is because slices are a kind of reference. It is true in a broad sense because, as previously analyzed, references and pointers—being simple memory addresses—implement the `Copy` trait. This means <u>assigning one slice to another neither triggers a move of the underlying data, nor invalidates the slice on the RIGHT side of the assignment</u>, because TWO distinct copies of that pointer are simply generated on the stack. However, stating that slices lack ownership is not entirely accurate. In reality, a <u>slice has ownership of its own pointer, but not of the underlying data it points to</u>.</span>
+
+### Slices vs &Slices
+
+<p><u>Every single slice type without the '`&`' is a Dynamically Sized Type (DST).</u></p>
+
+To understand DSTs, you first have to understand the Rust compiler's strictest rule regarding the stack: <u>the compiler must know the exact size (in bytes) of every local variable at compile time</u>.
+
+When you compile a function, the compiler calculates exactly how much memory to allocate for that function's stack frame. <u>If it doesn't know the physical size of a variable, it is mathematically impossible for it to build the stack frame.</u>
+
+<p><u>A Dynamically Sized Type (DST) is a type whose size is only known at runtime.</u></p>
+
+If you tell the compiler, "I have a `[i32]`" (a slice of 32-bit signed integers), the compiler asks, "How many elements?".
+
+Because the bare `[i32]` type does not contain a length encoded in its type signature (unlike a fixed array like `[i32; 5]`), the compiler throws its hands up. <u>It strictly forbids you from declaring `let my_slice: [i32] = ...` because it has no idea how much stack space to reserve</u>.
+
+This logic applies universally to every single slice type in the language. <u>The bare types represent the actual contiguous block of memory itself, which is of an unknown length.</u>
+
+This is where the reference operator (`&`) comes to the rescue. In the context of slices, `&` does much more than just <u>borrow</u> data. It acts as a physical bridge between the unknown and the known.
+
+When you apply `&` to a DST, Rust creates a pointer. <u>It takes the memory address of where the unknown block starts, counts how many elements are currently in it at runtime, and bundles them together into a neat, fixed-size package (address + length).</u>
+
+As a result, <u>the `&` symbol and DSTs are almost exclusively used in tandem, practically functioning as a composite type designated as `&[T]`</u>. Yet, as previously established, viewing this strictly as a single intrinsic type is not entirely accurate.
+
+## String Slices
+
+String slices, identified by the `&str` type, are arguably the most commonly used type of slice, precisely because they allow us to isolate and access specific substrings within a larger string.
+
+Just as we did in the previous section, we will now analyze the physical memory layout of `&str`.
+
+Notably, this analysis allows us to investigate not only the structure of `&str`, but of any slice type in general, as they all share the exact same underlying structural blueprint.
+
+### Memory Analysis
+
+Let us now examine Code 4.3.1, which might seem somewhat counterintuitive at first glance.
+
+<CodeGroup>
+```rust Code 4.3.1 focus={5-38}
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+  
+fn main() {
+    let str_slice = "hehe";
+    
+    print_type(&str_slice);
+      
+    unsafe {
+    
+        let ptr = std::ptr::addr_of!(str_slice) as *const usize; // #1
+    
+        println!("'str_slice' pointer address (STACK): {:p}", ptr);
+        println!("'str_slice' heap pointer value on the STACK: 0x{:x}", *ptr);
+        println!("'str_slice' len address on the STACK: {:p}", ptr.add(1));
+        println!("'str_slice' len value on the STACK: {}", *(ptr.add(1)));
+        
+        let heap_ptr = *ptr as *const u8; // #2
+        
+        println!("'h' as u8: {}, parsed as char: {}",
+         *heap_ptr, *heap_ptr as char);
+        println!("'e' as u8: {}, parsed as char: {}",
+         *(heap_ptr.add(1)), *(heap_ptr.add(1)) as char);
+        println!("'h' as u8: {}, parsed as char: {}",
+         *(heap_ptr.add(2)), *(heap_ptr.add(2)) as char);
+        println!("'e' as u8: {}, parsed as char: {}",
+         *(heap_ptr.add(3)), *(heap_ptr.add(3)) as char);
+          
+    }
+    
+    println!("{str_slice}");
+    println!("Checking ownership behavior...");
+    
+    let str_slice_dup = str_slice; // Trying to trigger a move...
+    
+    println!("{str_slice}"); // 'str_slice' is not moved because it is a pointer!
+}
+```
+```text E-Output 4.3.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running `target/debug/ch_4_lab`
+&str
+'str_slice' pointer address (STACK): 0x7fffd8a4a888
+'str_slice' heap pointer value on the STACK: 0x55eb4f51eadc
+'str_slice' len address on the STACK: 0x7fffd8a4a890
+'str_slice' len value on the STACK: 4
+'h' as u8: 104, parsed as char: h
+'e' as u8: 101, parsed as char: e
+'h' as u8: 104, parsed as char: h
+'e' as u8: 101, parsed as char: e
+hehe
+Checking ownership behavior...
+hehe
+```
+</CodeGroup>
+
+<ol className="list-comments">
+ <li>
+ The `std::ptr::addr_of!(str_slice)` macro is a tool we have not yet analyzed. The value it returns is <u>a raw pointer to the physical STACK address where the `str_slice` variable itself is stored</u>.
+ 
+ The reason we must use this macro relates to the structural nature of the `str_slice` pointer. If we proceeded as before—defining `ptr` as `str_slice as *const str as *const usize`—we would encounter an unresolvable issue when trying to print the STACK address and the value of the `len` field.
+
+ Specifically, one might logically attempt to write `(&ptr).add(1)` to read the pointer's STACK address and shift it by `1` (which translates to 8 bytes, since `ptr` is `*const usize`) to reach the `len` field.
+ 
+ The problem here lies in how the dot operator (`.`) works: <u>it automatically dereferences a value until it finds a type that implements the requested method</u>. Because `add` is a method belonging to raw pointers, calling `(&ptr).add(1)` causes the compiler to strip away the reference, dereferencing `&ptr` back to the raw `ptr`. Consequently, <u>it applies the 8-byte shift to the target address (the text data itself), rather than the STACK address</u>! By using `std::ptr::addr_of!(str_slice)` instead, <u>we obtain a true raw pointer to the stack memory</u>, allowing us to successfully apply `.add(1)` and reveal the `len` field.
+  
+ At this point, we should emphasize that a slice (whether it contains a string literal or not) is structurally very different from a standard `String`. Most notably, <u>a slice only 'contains' a `len` field; it lacks a `capacity` field</u>.
+ 
+ Considering our previous analysis of `capacity`, this makes perfect sense. Capacity exists solely to track dynamically allocated heap space for potential deallocation. Because a slice is merely a pointer on the stack (occupying exactly 16 bytes: 8 for the address, 8 for the length), the compiler does not need to read a `capacity` field to deallocate it. The 16 bytes are simply popped off the stack when the scope ends. Furthermore, as noted earlier, destroying a slice does not erase the underlying data it points to.
+
+ One might rightfully ask: how can we free the string `hehe` from Code 4.3.1 from memory? The ultimate truth is that <u>we cannot</u>. <u>The string `hehe` is not stored on the heap.</u> Instead, <u>it is hardcoded into a distinct memory region known as `.rodata` (Read-Only Data)</u>. <u>This segment is physically baked into the compiled executable binary itself, meaning the data is loaded by the operating system at startup and persists for the entire duration of the program.</u>
+ </li>
+ <li>
+ The expression `*ptr as *const u8` is necessary to analyze each byte of the string `hehe` individually, allowing us to perform the `.add(x)` pointer arithmetic intuitively, just as we did before. Had we not cast it to a 1-byte type, calling `.add(1)` would have shifted the address forward by 8 bytes from the starting letter '`h`'. This would have caused the pointer to overshoot the string entirely, resulting in the reading of garbage data in memory that does not belong to `hehe`.
+ </li>
+</ol>
+
+### Usage
+
+In the previous section, we analyzed the physical memory structure of a slice (specifically `&str`). However, we have not yet utilized the slice itself to access specific text sequences or individual elements—which is the exact reason why `&str` exists.
+
+In this section, we will analyze `&str` from a more practical perspective, initially following the official book's approach.
+
+To this end, the official text first presents an example using the `String` type to highlight its limitations.
+
+Specifically, <u>through the canonical use of the `String` type alone</u>—without resorting to manually accessing individual bytes on the heap via `unsafe` blocks, as we did earlier—<u>it is not possible to extract substrings from an initial string</u>. This limitation can be elegantly and idiomatically resolved by `&str`.
+
+Code 4.3.2 therefore demonstrates the use of a function that takes a string of words separated by spaces and returns the first word it finds in that string. If the function doesn’t find a space in the string, the whole string must be one word, so the entire string should be returned. In particular, by exclusively using the `String` type, Code 4.3.2 is constrained to returning the index of the word, deriving its location from the occurrence of a space character. Later, Code 4.3.3 will show how to overcome this limitation in an idiomatic way through `&str`, allowing the function to return the literal content of the substring rather than a detached index.
+
+<CodeGroup>
+```rust Code 4.3.2
+
+```
+```text E-Output 4.3.2
+
+```
+</CodeGroup>
+
+
 
