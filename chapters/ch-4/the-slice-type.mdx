@@ -158,16 +158,110 @@ To this end, the official text first presents an example using the `String` type
 
 Specifically, <u>through the canonical use of the `String` type alone</u>—without resorting to manually accessing individual bytes on the heap via `unsafe` blocks, as we did earlier—<u>it is not possible to extract substrings from an initial string</u>. This limitation can be elegantly and idiomatically resolved by `&str`.
 
-Code 4.3.2 therefore demonstrates the use of a function that takes a string of words separated by spaces and returns the first word it finds in that string. If the function doesn’t find a space in the string, the whole string must be one word, so the entire string should be returned. In particular, by exclusively using the `String` type, Code 4.3.2 is constrained to returning the index of the word, deriving its location from the occurrence of a space character. Later, Code 4.3.3 will show how to overcome this limitation in an idiomatic way through `&str`, allowing the function to return the literal content of the substring rather than a detached index.
+Code 4.3.2 therefore demonstrates the use of a function that takes a string of words separated by spaces and returns the first word it finds in that string. If the function doesn’t find a space in the string, the whole string must be one word, so the entire string should be returned. In particular, <u>by exclusively using the `String` type, Code 4.3.2 is constrained to returning the index of the word</u>, deriving its location from the occurrence of a space character. Later, Code 4.3.3 will show how to overcome this limitation in an idiomatic way through `&str`, allowing the function to return the literal content of the substring rather than a detached index.
+
+Although Code 4.3.2 takes inspiration from the code presented in the official book, note that it has been heavily modified to make more logical sense and avoid introducing inconsistencies.
+
+For example, even though the following code does not follow an idiomatic approach—since it returns the final index of the found word rather than the word itself (within the `first_word` function)—it still allows us to achieve the desired result. To do this, using a slice in the `main` function is mandatory (assuming we want to avoid introducing yet another `unsafe` block).
+
+Furthermore, Code 4.3.2 resolves any logical inconsistencies regarding the string passed as an argument. Specifically, if an empty string `""` is provided, the function halts immediately and returns `None` (a variant of the `Option<T>` type); otherwise, it attempts to analyze the content.
+
+At this point, we must be careful, as <u>a space could appear as the very first character</u>. In that case, since our goal is to 'return the first word before the first space', <u>a leading space must immediately trigger the return of `None`</u>.
+
+The reader is encouraged to try writing a version that finds the first word regardless of leading spaces, recalling the `trim` function from Ch. 2.
+
+If, instead, valid text is present before the first space, <u>returning the space's index minus one (- 1) will tell the main function exactly where to stop reading the word</u>!
+
+One might now think that all edge cases have been covered, but that is not the case. <u>If a string contains a single word with no spaces whatsoever, searching for a space will yield no result!</u> In this scenario, we must return the entire string—which means returning the index corresponding to the string's total length minus one (since indices always start at 0).
+
+Broadly speaking, this is exactly what Code 4.3.2 accomplishes. Building on the previous explanation, E-Output 4.3.2.1 shows the program's output for `s = String::from("Hello slices!")`, E-Output 4.3.2.2 shows the output for `s = String::from("quertyuiop")`, and Output 4.3.2.3 demonstrates the result for any `s` that begins with a leading space or is an empty string (`""`).
 
 <CodeGroup>
 ```rust Code 4.3.2
+fn first_word(s: &String) -> Option<usize> {
+    let bytes = s.as_bytes(); // #1
 
+    if s.len() == 0 {
+        return None;
+    }
+
+    for (i, &item) in bytes.iter().enumerate() { // #2
+        if item == b' ' { // #3
+            match i {
+                0 => return None,
+                _ => return Some(i - 1),
+            }
+        }
+    }
+    Some(s.len() - 1)
+}
+
+fn main() {
+    let s = String::from("Hello slices!");
+
+    let mut _str_slice: &str = &s; /* #4. 's' is not moved, and str_slice holds a pointer
+    to the 's' String, on the STACK. */
+    
+    let ptr = &s as *const String as *const usize;
+    
+    println!("_str_slice content on the STACK: {:p}", _str_slice);
+    unsafe { println!("s content on the STACK: 0x{:x}", *(ptr.add(1))); }
+    
+    let index = first_word(&s).unwrap_or_else(|| {
+        panic!(
+            "Error! The string either begins with a space character, or it is completely empty!"
+        );
+    }); // #5
+
+    println!("The first word in the string is: {}", &_str_slice[..=index]); // #6
+}
 ```
-```text E-Output 4.3.2
+```text E-Output 4.3.2.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
+_str_slice content on the STACK: Pointer { addr: 0x560b5fb32d60, metadata: 13 }
+s content on the STACK: 0x560b5fb32d60
+The first word in the string is: Hello
+```
+```text E-Output 4.3.2.2
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
+_str_slice content on the STACK: Pointer { addr: 0x55793ed74d60, metadata: 10 }
+s content on the STACK: 0x55793ed74d60
+The first word in the string is: qwertyuiop
+```
+```text E-Output 4.3.2.3
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
+_str_slice content on the STACK: Pointer { addr: 0x5624c256ed60, metadata: 8 }
+s content on the STACK: 0x5624c256ed60
 
+thread 'main' (1083261) panicked at src/main.rs:31:9:
+Error! The string either begins with a space character, or it is completely empty!
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ```
 </CodeGroup>
 
+<ol className="list-comments">
+<li>
+The statement `let bytes = s.as_bytes()` introduces the `as_bytes` method. This method is specifically implemented for string types (such as `str` and `String`) to provide a safe, zero-cost way to view the text's underlying UTF-8 sequence as a raw byte slice: `&[u8]`.
 
+To understand why we need `as_bytes()`—and what it actually does—we have to look at how the Rust compiler protects us from corrupting text.
 
+As we discussed earlier, a string slice (`&str`) is encoded in UTF-8, meaning characters can be anywhere from 1 to 4 bytes long. If Rust allowed you to use the array index operator on a string slice (like `my_string[0]`), the compiler wouldn't know if you were asking for 'the first byte' or 'the first character'. <u>If it blindly grabbed the first byte, and that byte happened to be just one piece of a 4-byte emoji, your program would read inconsistent data.</u> 
+
+To prevent this, Rust forbids single-element indexing on strings (e.g., `my_string[0]`), <u>but it allows range slicing (e.g., &my_string[0..4])</u>. When you write `&my_string[0..4]`, you are explicitly telling the compiler: "Give me a new &str pointing to the block of memory from byte index 0 up to byte index 4."
+
+To get around this restriction and access the text like a standard array, we use the as_bytes() method.
+
+When you call my_string.as_bytes(), it returns a &[u8] (a slice of 8-bit unsigned integers).
+
+Because a u8 is strictly and consistently 1 byte in size, the compiler knows exactly how to perform the pointer math. It is 100% safe to use the [] operator on a &[u8] because there is no risk of cutting a variable-length character in half—you are explicitly telling the compiler, "I only want to look at the raw bytes, not the logical characters."
+</li>
+<li>
+
+</li>
+</ol>
