@@ -8,67 +8,269 @@ sidebarTitle: "4.3 - The Slice Type"
 
 >Slices let you reference a contiguous sequence of elements in a **collection**. A slice is a kind of reference, so it does not have ownership.
 
-First of all, as noted by the official book, <u>slices are not exclusively related to strings</u>. In fact, <u>slices can be used to access contiguous sequences of elements within any collection</u>.
-
 <Note>
-The adjective 'contiguous' alone provides a vital clue for understanding heap allocation. The fact that <u>slices can be used on any collection</u>—which, as we will see later, often point to data stored on the heap—reveals a fundamental rule: even on the heap, <u>the data belonging to a single collection must be allocated in one contiguous block</u>. However, this strict contiguity per variable does not prevent memory reuse; if deallocations create 'holes' or fragmentation in the heap, Rust's underlying memory allocator will attempt to backfill these gaps with new allocations whenever the space permits.
+The adjective 'contiguous' alone provides a vital clue for understanding heap allocation. The fact that <u>slices can be used on any collection</u>—which <u>often point to data stored on the heap</u>—reveals a fundamental rule: even on the heap, <u>the data belonging to a single collection must be allocated in one contiguous block</u>. However, this strict contiguity per variable does not prevent memory reuse; if deallocations create 'holes' or fragmentation in the heap, Rust's underlying memory allocator will attempt to backfill these gaps with new allocations whenever the space permits.
 </Note>
 
-<u>Slices are</u>, for all intents and purposes, <u>pointers</u>. They represent the language's safe mechanism for harnessing the power of pointers without requiring `unsafe` blocks.
+Beneath the surface, <u>slices are essentially pointers bundled with length metadata</u>.
 
-This concept is far from trivial to such an extent that even the official book introduces a bit of confusion in its explanation of the concept. For instance, the official text primarily focuses on using slices to reference <u>sequences</u> of elements. Indeed, the very word 'slice' implies a sequence rather than a single item. The truth, however, is that slices—functioning as 'pointers with superpowers'—allow you to reference both sequences of elements and single elements within a collection, as we will see later on.
+As the official book clarifies, this metadata allows these pointers to safely reference <u>sequences</u> of elements within any typed collection. This is a crucial concept to grasp: <u>the primary purpose of a slice is to reference a continuous sequence, not a single element</u>. <u>Accessing an isolated element—even one located deep within a collection—can already be achieved safely (without `unsafe` blocks) using standard references.</u>
 
-Because <u>the specific type designated for `String` slices is named `&str`</u>—an obvious abbreviation for 'string'—beginners often mistakenly assume that the entire concept of 'slices' is exclusively tied to text, rather than understanding it as a universal mechanism for any contiguous collection. For example, the slice type used to reference a contiguous sequence of 8-bit integers (`u8`) is written as `&[u8]`. While it looks visually very different from `&str`, the underlying concept is exactly the same. Under the hood, `&str` is physically identical to `&[u8]` (a slice of raw bytes). However, the compiler gives it a special name, `&str`, to enforce a strict rule at the type-system level: <u>the bytes inside a `&str` must always form valid UTF-8 text</u>. The only reason `&str` has its own dedicated name—rather than just being written as `&[char]` or `&[u8]`—is because strings in Rust require specific validation.
+This is demonstrated in Code 4.3.1 below. In this example, we analyze `slice_to_u8_array`, which references a contiguous block of data within the `a` array, alongside `safe_ptr_to_u8_array`, which is a standard reference to a single, <u>arbitrary</u> element inside the same array. Ultimately, Code 4.3.1 illustrates exactly what slices are and how they differ from standard (safe) pointers.
+
+<CodeGroup>
+```rust Code 4.3.1 focus={5-42}
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+fn main() {
+    let a = [17_u8; 3];
+    let ptr = &a as *const u8;
+
+    println!("'a': {:?}", a);
+    println!("'a' address on the STACK: {:p}", &a);
+    unsafe {
+        println!("'a' address on the STACK + 2: {:p}", ptr.add(2));
+    }
+    println!("'a' length: {}", a.len());
+
+    let safe_ptr_to_u8_array = &a[2];
+    print_type(&safe_ptr_to_u8_array); // &u8
+
+    println!(
+        "'safe_ptr_to_u8_array' pointer (points to the STACK's 'a' address + 2): {:p}",
+        safe_ptr_to_u8_array
+    );
+    println!("'safe_ptr_to_u8_array' pointed data (on the STACK): {safe_ptr_to_u8_array}");
+    // println!("'safe_ptr_to_u8_array' length: {}", safe_ptr_to_u8_array.len());
+
+    let slice_to_u8_array = &a[0..=1];
+    print_type(&slice_to_u8_array); // &[u8]
+
+    println!(
+        "'slice_to_u8_array' pointed data (on the STACK): {:?}",
+        slice_to_u8_array
+    );
+    println!(
+        "'slice_to_u8_array' address (on the STACK): {:p}",
+        &slice_to_u8_array
+    );
+    println!(
+        "Address (on the STACK) of the first element pointed by 'slice_to_u8_array' (it's the 'a' address on the STACK!) + metadata: {:p}",
+        slice_to_u8_array
+    );
+    println!("'slice_to_u8_array' length: {}", slice_to_u8_array.len());
+}
+```
+```text E-Output 4.3.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/ch_4_lab`
+'a': [17, 17, 17]
+'a' address on the STACK: 0x7ffddb578955
+'a' address on the STACK + 2: 0x7ffddb578957
+'a' length: 3
+&u8
+'safe_ptr_to_u8_array' pointer (points to the STACK's 'a' address + 2): 0x7ffddb578957
+'safe_ptr_to_u8_array' pointed data (on the STACK): 17
+&[u8]
+'slice_to_u8_array' pointed data (on the STACK): [17, 17]
+'slice_to_u8_array' address (on the STACK): 0x7ffddb578a38
+Address (on the STACK) of the first element pointed by 'slice_to_u8_array' (it's the 'a' address on the STACK!) + metadata: Pointer { addr: 0x7ffddb578955, metadata: 2 }
+'slice_to_u8_array' length: 2
+```
+</CodeGroup>
+
+<p><u>The length `metadata` dictates the exact number of bytes to consider when the slice is accessed.</u></p>
+
+By uncommenting the line `println!("{}", safe_ptr_to_u8_array.len())` and attempting to run the code, we can observe a <u>compilation error</u>. This error clearly demonstrates the fundamental difference between slices and standard pointers: the `metadata` field tracking the length of a slice simply does not exist on a standard pointer! This happens trivially because standard pointers and slices are two <u>distinct</u> sides of the same coin.
+
+Regarding this point, pay close attention to the types of `slice_to_u8_array` and `safe_ptr_to_u8_array`. <u>The former is `&[u8]`</u>, while the latter is `&u8`. <u>Square brackets are a universal feature for all slices that point to collections other than strings!</u>
 
 <p><u>Whether you are dealing with primitive numbers, standard library structs, or your own custom types, the slice type is simply the target type enclosed in square brackets:</u></p>
 
-- **Primitives**: `&[i8]`, ..., `&[u8]`, ..., `&[f32]`, `&[f64]`, `&[bool]`, `&[char]`.
-- **Standard Library Types**: `&[String]`, `&[Option<i32>]`, ... .
-- **Your Custom Types**: `&[MyStruct]`, `&[User]`.
+- Primitives: `&[i8]`, ..., `&[u8]`, ..., `&[f32]`, `&[f64]`, `&[bool]`, `&[char]`.
+- Standard Library Types: `&[String]`, `&[Option<i32>]`, ... .
+- Your Custom Types: `&[MyStruct]`, `&[User]`.
 
-At this point, one might wonder what the difference is between `&[char]` and `&str`. The answer is that a `&[char]` references a contiguous block of memory where every single element is strictly 4 bytes wide, while `&str`, on the other hand, references data encoded in UTF-8. UTF-8 is a variable-length encoding, meaning different characters take up different amounts of memory.
+<p><u>However, there is one notable exception: the specific type used for `String` slices is called `&str`—a clear abbreviation for 'string'.</u></p>
+
+One might wonder what the difference is between `&[char]` and `&str`. The answer is that a `&[char]` references a contiguous block of memory where <u>every single element is strictly 4 bytes wide</u>, while `&str`, on the other hand, references <u>data encoded in UTF-8</u>. UTF-8 is a variable-length encoding, meaning <u>different characters take up different amounts of memory</u>.
+
+The next paragraphs will analyze string slices in detail, explaining why the `&str` type <u>must be handled carefully</u> and differs slightly from other slice types, beyond just the absence of square brackets in its name.
+
+At this point, it is crucial to clarify a fundamental concept. <u>The `[]` operator essentially allows us to perform pointer arithmetic on safe references (obtained via the `&` operator).</u> Given what we observed in section 4.2, a natural question arises:
+
+- <span style={{ color: "#964B00" }}><b>Q1</b>: If the very purpose of `unsafe` blocks is to restrict pointer arithmetic, why is it permitted on safe references? After all, one could theoretically still jump into unsafe memory regions using pointer math.</span><br />
+- <span style={{ color: "#008080" }}><b>A1</b>: In reality, this is precisely what makes the `[]` operator safe: unlike raw arithmetic on raw pointers, it performs additional validations (bounds checking) on the memory regions being accessed. For instance, attempting to access an element outside the bounds of array a will trigger a runtime error rather than a compilation error, as we saw in section 3.3. Thus, the language guarantees the safety of any pointer operations conducted through the `[]` operator.</span>
+
+You might not have noticed this detail in Code 4.3.1, but <u>we performed a memory analysis almost entirely without using `unsafe` blocks</u>! This was possible thanks to safe references, the features of the `println!` macro, and the `[]` operator.
 
 Let us now focus on the second statement from the official book: 'A slice is a kind of reference, so it does not have ownership'.
 
-- <span style={{ color: "#964B00" }}><b>Q</b>: If Rust is fundamentally built on the ownership model, why are slices exempt?</span><br />
-- <span style={{ color: "#008080" }}><b>A</b>: The book points out that this is because slices are a kind of reference. It is true in a broad sense because, as previously analyzed, references and pointers—being simple memory addresses—implement the `Copy` trait. This means <u>assigning one slice to another neither triggers a move of the underlying data, nor invalidates the slice on the RIGHT side of the assignment</u>, because TWO distinct copies of that pointer are simply generated on the stack. However, stating that slices lack ownership is not entirely accurate. In reality, a <u>slice has ownership of its own pointer, but not of the underlying data it points to</u>.</span>
+- <span style={{ color: "#964B00" }}><b>Q2</b>: If Rust is fundamentally built on the ownership model, why are slices exempt?</span><br />
+- <span style={{ color: "#008080" }}><b>A2</b>: The book points out that this is because slices are a kind of reference. It is true in a broad sense because, as previously analyzed, references and pointers—being simple memory addresses—implement the `Copy` trait. This means <u>assigning one slice to another neither triggers a move of the underlying data, nor invalidates the slice on the RIGHT side of the assignment</u>, because TWO distinct copies of that pointer are simply generated on the stack. However, stating that slices lack ownership is not entirely accurate. In reality, a <u>slice has ownership of its own pointer, but not of the underlying data it points to</u>.</span>
 
-### Slices vs &Slices
+## The Power of Slices: Zero-Cost Memory Access
 
-<p><u>Every single slice type without the '`&`' is a Dynamically Sized Type (DST).</u></p>
+In the previous section, our primary focus was on the structure of slices compared to standard references. Now, it is important to clarify exactly why they represent a fundamental construct for programming correctly in Rust.
 
-To understand DSTs, you first have to understand the Rust compiler's strictest rule regarding the stack: <u>the compiler must know the exact size (in bytes) of every local variable at compile time</u>.
+Suppose we want to access and process a substring of a pre-existing string (of type `String`) using a function. If string slices (`&str`) did not exist, we would either have to physically copy the desired substring into a new area of heap memory (the one created inside the function's scope), or manually pair a pointer to the starting address with a separate length variable to let the function know how many bytes to read. Fortunately, this latter approach is exactly what slices do for us: they are simply a pointer bundled with length metadata! <u>This exact same principle applies to any sub-collection within any collection of elements, not just to the characters in a string.</u>
 
-When you compile a function, the compiler calculates exactly how much memory to allocate for that function's stack frame. <u>If it doesn't know the physical size of a variable, it is mathematically impossible for it to build the stack frame.</u>
+The issue of physically copying sub-collections into new areas of the HEAP, alone, would generate computational overhead and, above all, an immense waste of space. This is especially true considering the same process would have to occur every time we wanted to access a sub-section of any collection—even on the STACK (where it would still cause needless memory duplication and execution delays).
 
-<p><u>A Dynamically Sized Type (DST) is a type whose size is only known at runtime.</u></p>
+## The Data Flow Pipeline
 
-If you tell the compiler, "I have a `[i32]`" (a slice of 32-bit signed integers), the compiler asks, "How many elements?".
+Recapping what has been discussed thus far: functions (along with 'methods', a specialized variant of functions we will explore later) are the primary mechanism for processing data in Rust. Specifically, <u>the fundamental data required for a program's execution will reside in the `main` function, which utilizes reference passing to interact with other functions</u> for the reasons previously detailed. These references come in two forms: <u>safe single references via `&`, and slices</u>.
 
-Because the bare `[i32]` type does not contain a length encoded in its type signature (unlike a fixed array like `[i32; 5]`), the compiler throws its hands up. <u>It strictly forbids you from declaring `let my_slice: [i32] = ...` because it has no idea how much stack space to reserve</u>.
+When considering a database—the de facto standard for long-term storage—the overall data pipeline operates similarly: <u>data is fetched from the database, initialized in the `main` function, and then processed by passing references or slices down to functions or methods</u>.
 
-This logic applies universally to every single slice type in the language. <u>The bare types represent the actual contiguous block of memory itself, which is of an unknown length.</u>
+### Idiomatic Slice Usage in Functions
 
-This is where the reference operator (`&`) comes to the rescue. In the context of slices, `&` does much more than just <u>borrow</u> data. It acts as a physical bridge between the unknown and the known.
+It is useful to note that <u>the primary use of slices will involve mutating specific sections (sequences of elements) within collection types</u>. <u>What cannot be achieved through slices, however, is the insertion or removal of elements from these collections.</u> This constraint exists because <u>adding or removing values within a slice</u>—which by definition is just a window into a larger collection—<u>would either fragment the underlying collection's memory or risk overwriting unintended adjacent values</u>. For this reason, <u>any structural changes must be applied directly to the original collection variable itself</u>. <u>Slices are entirely excluded from this capability.</u>
 
-When you apply `&` to a DST, Rust creates a pointer. <u>It takes the memory address of where the unknown block starts, counts how many elements are currently in it at runtime, and bundles them together into a neat, fixed-size package (address + length).</u>
+Code 4.3.2 is presented below to clarify the following points:
 
-As a result, <u>the `&` symbol and DSTs are almost exclusively used in tandem, practically functioning as a composite type designated as `&[T]`</u>. Yet, as previously established, viewing this strictly as a single intrinsic type is not entirely accurate.
-
-## String Slices
-
-String slices, identified by the `&str` type, are arguably the most commonly used type of slice, precisely because they allow us to isolate and access specific substrings within a larger string.
-
-Just as we did in the previous section, we will now analyze the physical memory layout of `&str`.
-
-Notably, this analysis allows us to investigate not only the structure of `&str`, but of any slice type in general, as they all share the exact same underlying structural blueprint.
-
-### Memory Analysis
-
-Let us now examine Code 4.3.1, which might seem somewhat counterintuitive at first glance.
+- The idiomatic use of slices (in this case, `&[u8]`) passed through functions.
+- The difference in usage between slices and references, again within the idiomatic context of functions.
+- The possibility of leveraging single-element slices as if they were standard references, in order to avoid using the `*` operator.
 
 <CodeGroup>
-```rust Code 4.3.1 focus={5-38}
+```rust Code 4.3.2
+fn mutate_slice(u8_slice: &mut [u8]) {
+    u8_slice[0] = 20;
+    u8_slice[1] = 20;
+}
+
+fn mutate_ref(u8_ref: &mut u8) {
+    *u8_ref = 0;
+}
+
+fn mutate_ref_as_a_slice(u8_slice: &mut [u8]) {
+    u8_slice[0] = 0;
+}
+
+fn main() {
+    let mut a = [17_u8; 5]; // [17, 17, 17, 17, 17]
+
+    mutate_slice(&mut a[3..=4]);
+    println!("{:?}", a);
+
+    mutate_ref(&mut a[1]);
+    println!("{:?}", a);
+
+    mutate_ref_as_a_slice(&mut a[0..=0]);
+    println!("{:?}", a);
+}
+```
+```text E-Output 4.3.2
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/ch_4_lab`
+[17, 17, 17, 20, 20]
+[17, 0, 17, 20, 20]
+[0, 0, 17, 20, 20]
+```
+</CodeGroup>
+
+## The `&str` Slice Type
+
+Code 4.3.1 demonstrates how simply accessing a substring of a given `String`—using the `&` + `[]` operators—and binding it to a variable—using the `let` keyword—automatically <u>generates a pointer to the heap</u>, without copying any data in memory, bundled with length metadata under the hood. Indeed, <u>`sub_string` is automatically and implicitly stored by the compiler as a string slice (`&str`)</u>. <u>The compiler is able to set this length metadata via `0..=3`: it knows it must create a pointer with a length of 4 bytes.</u>
+
+<CodeGroup>
+```rust Code 4.3.3 focus={5-16}
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+fn main() {
+    let s = String::from("Some very long string");
+       
+    let sub_string = &s[0..=3]; // 'Some'
+    print_type(&sub_string);
+    
+    let ptr = &s as *const String as *const usize;
+    let sub_str_ptr = sub_string as *const str as *const usize;
+    
+    unsafe { println!("s data address (on the HEAP): 0x{:x}", *(ptr.add(1))); }
+    println!("sub_string pointer to the HEAP: {:p}", sub_str_ptr);
+}
+```
+```text E-Output 4.3.3.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/ch_4_lab`
+&str
+s data address (on the HEAP): 0x55af8db6bd60
+sub_string pointer to the HEAP: 0x55af8db6bd60
+```
+</CodeGroup>
+
+<u>Attempting to access a single element of a string via the `[]` operator, rather than using a range, is flagged by the compiler as an error.</u> To clarify, the syntax `0..=3` used in Code 4.3.3 literally generates an instance of type `std::ops::RangeInclusive`, just as `0..4` would generate a `std::ops::Range`.
+
+If we had written `let character = &s[0]` in Code 4.3.3, the compiler—instead of assigning the (address of) value '`S`' to `character`—would have produced C-Output 4.3.3.2:
+
+```text C-Output 4.3.3.2
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+error[E0277]: the type `str` cannot be indexed by `{integer}`
+   --> src/main.rs:8:24
+    |
+  8 |     let character = &s[0];
+    |                        ^ string indices are ranges of `usize`
+    |
+    = help: the trait `SliceIndex<str>` is not implemented for `{integer}`
+    = note: you can use `.chars().nth()` or `.bytes().nth()`
+            for more information, see chapter 8 in The Book: <https://doc.rust-lang.org/book/ch08-02-strings.html#indexing-into-strings>
+```
+
+Rust forbids single-element indexing on strings (e.g., `s[0]`), but it absolutely allows range slicing (e.g., `&s[0..4]`).
+
+Although <u>this error could easily be resolved by employing the previous 'trick' and writing `let character = &s[0..=0]`</u>, Code 4.3.1 and Code 4.3.2 clearly demonstrate how <u>accessing a single element of an array of unsigned `u8` integers via `&a[0]` generates no compilation error</u>.
+
+This happens because if you try to write `let c = s[0]` Rust has to make a hard decision about what `[0]` should actually return, and <u>both available options violate core Rust philosophies</u>:
+
+- Option A: <u>Return a byte (`u8`).</u> If `[0]` returns just the first byte, it breaks the programmer's mental model. <u>If a string starts with a 4-byte emoji, getting just the first byte gives you a meaningless fragment of data, not a character.</u>
+- Option B: <u>Return a logical character (`char`).</u> If `[0]` is supposed to return the first full character, then what happens when you ask for `s[100]`? <u>Because UTF-8 characters vary from 1 to 4 bytes in length, the compiler cannot simply "jump" to the 100th character. It would have to start at the beginning of the string and read through it, byte by byte, counting characters until it reaches 100.</u>
+
+<p><u>In programming, the `[]` operator comes with a strong universal expectation: it must be a fast, constant-time $O(1)$ operation. If Rust chose Option B, `[]` would secretly be an $O(N)$ operation, hiding a potentially massive performance cost. Rust refuses to hide expensive operations behind innocent-looking syntax. Therefore, it completely forbids single-element indexing on `&str`.</u></p>
+
+While you cannot ask for a single element, you can ask for a chunk of bytes using a range. When you write `&s[0..4]`, you are explicitly telling the compiler: 'Give me a new `&str` pointing to the block of memory <u>from byte index 0 up to byte index 4</u>'.
+
+Because you are explicitly providing the <u>raw byte indices</u>, it remains a blazing fast $O(1)$ operation. The compiler simply creates a new pointer with the starting address you specified and a length of 4.
+
+<p><u>Because you are working with byte indices, you could accidentally slice a multi-byte character right in half, which would result in invalid UTF-8 (corrupted text) and compromise the 'Option A' avoidance we just talked about. In this case, we must find a safe workaround to be able to use slices with strings, and we are therefore forced to follow this path.</u></p>
+
+To prevent the problem we just discussed, <u>the `[]` operator with ranges includes a built-in safety check</u>. <u>At runtime, Rust checks if the indices you provided fall exactly on valid UTF-8 character boundaries:</u>
+
+- If they do, it successfully returns the new `&str`.
+- If you accidentally slice through the middle of a character, <u>the program will immediately panic and crash</u> to protect the integrity of the text data. Code 4.3.4 and C-Output 4.3.4 clearly demonstrate this specific issue.
+
+<CodeGroup>
+```rust Code 4.3.4
+fn main() {
+    let s = String::from("Hello slices 😂!");
+    //                    0123456789012
+    let _str_slice = &s[12..=13];
+}
+```
+```text C-Output 4.3.4
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/ch_4_lab`
+
+thread 'main' (3369003) panicked at src/main.rs:116:24:
+end byte index 14 is not a char boundary; it is inside '😂' (bytes 13..17 of string)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+</CodeGroup>
+
+### `&str` - Memory Analysis
+
+Let us now examine Code 4.3.5, which might seem somewhat counterintuitive at first glance.
+
+<CodeGroup>
+```rust Code 4.3.5 focus={5-38}
 fn print_type<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
 }
@@ -108,7 +310,7 @@ fn main() {
     println!("{str_slice}"); // 'str_slice' is not moved because it is a pointer!
 }
 ```
-```text E-Output 4.3.1
+```text E-Output 4.3.5
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
      Running `target/debug/ch_4_lab`
@@ -135,36 +337,35 @@ hehe
 
  Specifically, one might logically attempt to write `(&ptr).add(1)` to read the pointer's STACK address and shift it by `1` (which translates to 8 bytes, since `ptr` is `*const usize`) to reach the `len` field.
  
- The problem here lies in how the dot operator (`.`) works: <u>it automatically dereferences a value until it finds a type that implements the requested method</u>. Because `add` is a method belonging to raw pointers, calling `(&ptr).add(1)` causes the compiler to strip away the reference, dereferencing `&ptr` back to the raw `ptr`. Consequently, <u>it applies the 8-byte shift to the target address (the text data itself), rather than the STACK address</u>! By using `std::ptr::addr_of!(str_slice)` instead, <u>we obtain a true raw pointer to the stack memory</u>, allowing us to successfully apply `.add(1)` and reveal the `len` field.
+ The problem here lies in how the dot operator (`.`) works: <u>it automatically dereferences a value until it finds a type that implements the requested method</u>. Because `add` is a method belonging to raw pointers, calling `(&ptr).add(1)` causes the compiler to strip away the reference, dereferencing `&ptr` back to the raw `ptr`. Consequently, <u>it applies the 8-byte shift to the HEAP pointer address (the text data starting address itself), rather than the STACK address</u>! By using `std::ptr::addr_of!(str_slice)` instead, <u>we obtain a true raw pointer to the stack memory</u>, allowing us to successfully apply `.add(1)` and reveal the `len` field.
   
  At this point, we should emphasize that a slice (whether it contains a string literal or not) is structurally very different from a standard `String`. Most notably, <u>a slice only 'contains' a `len` field; it lacks a `capacity` field</u>.
  
  Considering our previous analysis of `capacity`, this makes perfect sense. Capacity exists solely to track dynamically allocated heap space for potential deallocation. Because a slice is merely a pointer on the stack (occupying exactly 16 bytes: 8 for the address, 8 for the length), the compiler does not need to read a `capacity` field to deallocate it. The 16 bytes are simply popped off the stack when the scope ends. Furthermore, as noted earlier, destroying a slice does not erase the underlying data it points to.
 
- One might rightfully ask: how can we free the string `hehe` from Code 4.3.1 from memory? The ultimate truth is that <u>we cannot</u>. <u>The string `hehe` is not stored on the heap.</u> Instead, <u>it is hardcoded into a distinct memory region known as `.rodata` (Read-Only Data)</u>. <u>This segment is physically baked into the compiled executable binary itself, meaning the data is loaded by the operating system at startup and persists for the entire duration of the program.</u>
+ One might rightfully ask:
+ 
+ - <span style={{ color: "#964B00" }}><b>Q3</b>: How can we free the string `hehe` from Code 4.3.5 from memory?</span>
+ - <span style={{ color: "#008080" }}><b>A3</b>: The ultimate truth is that <u>we cannot</u>. <u>The string `hehe` is not stored on the heap.</u> Instead, <u>it is hardcoded into a distinct memory region known as `.rodata` (Read-Only Data)</u>. <u>This segment is physically baked into the compiled executable binary itself, meaning the data is loaded by the operating system at startup and persists for the entire duration of the program.</u></span>
  </li>
  <li>
  The expression `*ptr as *const u8` is necessary to analyze each byte of the string `hehe` individually, allowing us to perform the `.add(x)` pointer arithmetic intuitively, just as we did before. Had we not cast it to a 1-byte type, calling `.add(1)` would have shifted the address forward by 8 bytes from the starting letter '`h`'. This would have caused the pointer to overshoot the string entirely, resulting in the reading of garbage data in memory that does not belong to `hehe`.
  </li>
 </ol>
 
-### Usage
-
-In the previous section, we analyzed the physical memory structure of a slice (specifically `&str`). However, we have not yet utilized the slice itself to access specific text sequences or individual elements—which is the exact reason why `&str` exists.
+### `&str` - Usage
 
 In this section, we will analyze `&str` from a more practical perspective, initially following the official book's approach.
 
 To this end, the official text first presents an example using the `String` type to highlight its limitations.
 
-Specifically, <u>through the canonical use of the `String` type alone</u>—without resorting to manually accessing individual bytes on the heap via `unsafe` blocks, as we did earlier—<u>it is not possible to extract substrings from an initial string</u>. This limitation can be elegantly and idiomatically resolved by `&str`.
+Code 4.3.6 demonstrates the use of a function that takes a string of words separated by spaces and returns the first word it finds in that string. If the function doesn’t find a space in the string, the whole string must be one word, so the entire string should be returned. In particular, <u>by exclusively using the `String` type, Code 4.3.6 is constrained to returning the index of the word</u>, deriving its location from the occurrence of a space character. Later, Code 4.3.7 will show how to overcome this limitation in an idiomatic way through `&str`, allowing the function to return the literal content of the substring rather than a detached index.
 
-Code 4.3.2 therefore demonstrates the use of a function that takes a string of words separated by spaces and returns the first word it finds in that string. If the function doesn’t find a space in the string, the whole string must be one word, so the entire string should be returned. In particular, <u>by exclusively using the `String` type, Code 4.3.2 is constrained to returning the index of the word</u>, deriving its location from the occurrence of a space character. Later, Code 4.3.3 will show how to overcome this limitation in an idiomatic way through `&str`, allowing the function to return the literal content of the substring rather than a detached index.
-
-Although Code 4.3.2 takes inspiration from the code presented in the official book, note that it has been heavily modified to make more logical sense and avoid introducing inconsistencies.
+Although Code 4.3.6 takes inspiration from the code presented in the official book, note that it has been heavily modified to make more logical sense and avoid introducing inconsistencies.
 
 For example, even though the following code does not follow an idiomatic approach—since it returns the final index of the found word rather than the word itself (within the `first_word` function)—it still allows us to achieve the desired result. To do this, using a slice in the `main` function is mandatory (assuming we want to avoid introducing yet another `unsafe` block).
 
-Furthermore, Code 4.3.2 resolves any logical inconsistencies regarding the string passed as an argument. Specifically, if an empty string `""` is provided, the function halts immediately and returns `None` (a variant of the `Option<T>` type); otherwise, it attempts to analyze the content.
+Furthermore, Code 4.3.6 resolves any logical inconsistencies regarding the string passed as an argument. Specifically, if an empty string `""` is provided, the function halts immediately and returns `None` (a variant of the `Option<T>` type); otherwise, it attempts to analyze the content.
 
 At this point, we must be careful, as <u>a space could appear as the very first character</u>. In that case, since our goal is to 'return the first word before the first space', <u>a leading space must immediately trigger the return of `None`</u>.
 
@@ -174,12 +375,18 @@ If, instead, valid text is present before the first space, <u>returning the spac
 
 One might now think that all edge cases have been covered, but that is not the case. <u>If a string contains a single word with no spaces whatsoever, searching for a space will yield no result!</u> In this scenario, we must return the entire string—which means returning the index corresponding to the string's total length minus one (since indices always start at 0).
 
-Broadly speaking, this is exactly what Code 4.3.2 accomplishes. Building on the previous explanation, E-Output 4.3.2.1 shows the program's output for `s = String::from("Hello slices!")`, E-Output 4.3.2.2 shows the output for `s = String::from("quertyuiop")`, and Output 4.3.2.3 demonstrates the result for any `s` that begins with a leading space or is an empty string (`""`).
+Broadly speaking, this is exactly what Code 4.3.6 accomplishes. Building on the previous explanation, E-Output 4.3.6.1 shows the program's output for `s = String::from("hello world")`, E-Output 4.3.6.2 shows the output for `s = String::from("quertyuiop")`, and E-Output 4.3.6.3 demonstrates the result for any `s` that begins with a leading space or is an empty string (`""`).
 
 <CodeGroup>
-```rust Code 4.3.2
+```rust Code 4.3.6 focus={5-38}
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
 fn first_word(s: &String) -> Option<usize> {
-    let bytes = s.as_bytes(); // #1
+    let bytes = s.as_bytes(); // \
+                               // #1
+    print_type(&bytes); // ------/
 
     if s.len() == 0 {
         return None;
@@ -197,49 +404,43 @@ fn first_word(s: &String) -> Option<usize> {
 }
 
 fn main() {
-    let s = String::from("Hello slices!");
+    let s = String::from("hello world");
 
-    let mut _str_slice: &str = &s; /* #4. 's' is not moved, and str_slice holds a pointer
-    to the 's' String, on the STACK. */
-    
-    let ptr = &s as *const String as *const usize;
-    
-    println!("_str_slice content on the STACK: {:p}", _str_slice);
-    unsafe { println!("s content on the STACK: 0x{:x}", *(ptr.add(1))); }
-    
-    let index = first_word(&s).unwrap_or_else(|| {
+    let index = first_word(&s).unwrap_or_else(|| { // #4
         panic!(
             "Error! The string either begins with a space character, or it is completely empty!"
         );
-    }); // #5
+    });
+    
+    let world = &s[..=index];
+    print_type(&world);
 
-    println!("The first word in the string is: {}", &_str_slice[..=index]); // #6
+    println!("The first word in the string is: {}", world);
 }
 ```
-```text E-Output 4.3.2.1
-   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
-     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
-_str_slice content on the STACK: Pointer { addr: 0x560b5fb32d60, metadata: 13 }
-s content on the STACK: 0x560b5fb32d60
-The first word in the string is: Hello
-```
-```text E-Output 4.3.2.2
+```text E-Output 4.3.6.1
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
-     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
-_str_slice content on the STACK: Pointer { addr: 0x55793ed74d60, metadata: 10 }
-s content on the STACK: 0x55793ed74d60
+     Running `target/debug/ch_4_lab`
+&[u8]
+&str
+The first word in the string is: hello
+```
+```text E-Output 4.3.6.2
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/ch_4_lab`
+&[u8]
+&str
 The first word in the string is: qwertyuiop
 ```
-```text E-Output 4.3.2.3
+```text E-Output 4.3.6.3
    Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
-     Running `/var/home/z561/rust_projects/ch_4_lab/target/debug/ch_4_lab`
-_str_slice content on the STACK: Pointer { addr: 0x5624c256ed60, metadata: 8 }
-s content on the STACK: 0x5624c256ed60
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/ch_4_lab`
+&[u8]
 
-thread 'main' (1083261) panicked at src/main.rs:31:9:
+thread 'main' (1147557) panicked at src/main.rs:144:9:
 Error! The string either begins with a space character, or it is completely empty!
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ```
@@ -247,21 +448,168 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
 <ol className="list-comments">
 <li>
-The statement `let bytes = s.as_bytes()` introduces the `as_bytes` method. This method is specifically implemented for string types (such as `str` and `String`) to provide a safe, zero-cost way to view the text's underlying UTF-8 sequence as a raw byte slice: `&[u8]`.
+The statement `s.as_bytes()` returns a `&[u8]` (a slice of 8-bit unsigned integers).
 
-To understand why we need `as_bytes()`—and what it actually does—we have to look at how the Rust compiler protects us from corrupting text.
+We need this step to iterate over the string as an array of bytes rather than a sequence of UTF-8 characters. <u>Without this conversion, attempting to call `.iter()` directly on the string would fail to compile; Rust intentionally omits a default iterator for strings to force developers to explicitly choose between iterating over raw bytes or Unicode characters (`.chars()`).</u>
 
-As we discussed earlier, a string slice (`&str`) is encoded in UTF-8, meaning characters can be anywhere from 1 to 4 bytes long. If Rust allowed you to use the array index operator on a string slice (like `my_string[0]`), the compiler wouldn't know if you were asking for 'the first byte' or 'the first character'. <u>If it blindly grabbed the first byte, and that byte happened to be just one piece of a 4-byte emoji, your program would read inconsistent data.</u> 
-
-To prevent this, Rust forbids single-element indexing on strings (e.g., `my_string[0]`), <u>but it allows range slicing (e.g., &my_string[0..4])</u>. When you write `&my_string[0..4]`, you are explicitly telling the compiler: "Give me a new &str pointing to the block of memory from byte index 0 up to byte index 4."
-
-To get around this restriction and access the text like a standard array, we use the as_bytes() method.
-
-When you call my_string.as_bytes(), it returns a &[u8] (a slice of 8-bit unsigned integers).
-
-Because a u8 is strictly and consistently 1 byte in size, the compiler knows exactly how to perform the pointer math. It is 100% safe to use the [] operator on a &[u8] because there is no risk of cutting a variable-length character in half—you are explicitly telling the compiler, "I only want to look at the raw bytes, not the logical characters."
+Furthermore, this conversion allows us to access individual bytes directly using the `[n]` index operator (where `0 <= n < s.len()`). As we saw previously, this kind of direct integer indexing is strictly forbidden on a standard `&str`.
 </li>
 <li>
+The expression `bytes.iter().enumerate()` allows us to iterate through the collection while simultaneously tracking our position. Specifically, it creates a pipeline that yields both the current index and a reference to the byte at that index.
 
+Because `bytes` is a byte slice (`&[u8]`), calling `.iter()` creates an **iterator** over that slice. <u>An iterator is an object responsible for fetching items from a collection one by one. It is important to note that `.iter()` returns references to the elements (in this case, `&u8`), meaning it only reads the data without taking ownership or modifying it.</u>
+
+While `.iter()` gives us the items, <u>it does not tell us where we are in the collection</u>. This is where `.enumerate()` comes in. <u>It takes the iterator and wraps it (in a tuple), attaching an index to each item.</u>
+</li>
+<li>
+The statement `if item == b' '` compares each item found in the collection against the byte literal `b' '` (which represents the space character as a `u8` integer rather than a standard Unicode `char`). This means every byte of the string is checked to see if it is a space. If there is a match, the `if` block is executed; otherwise, the `for` loop continues to the next iteration.
+
+Searching for an ASCII character like `b' '` using `.as_bytes()` is 100% safe and will not cause issues, thanks to the brilliant design of UTF-8 encoding. In UTF-8 encoding, all standard ASCII characters (like letters, numbers, and the standard space) take exactly 1 byte, and their values range from 0 to 127 (or 0x00 to 0x7F in hexadecimal). When UTF-8 encodes a multi-byte character (like an emoji or an accented letter), it only uses bytes with values from 128 to 255 (0x80 to 0xFF). Because these numeric ranges never overlap, it is mathematically impossible for a part of a multi-byte character to accidentally look like an ASCII space (`b' '`). Therefore, comparing raw bytes is perfectly safe for ASCII targets.
+
+While searching for a standard space with `b' '` is safe, using `.as_bytes()` breaks down in two specific scenarios where `.chars()` must be used instead:
+
+- <u>Searching for non-ASCII characters</u>: If you want to find an accented letter (like `è`) or an emoji, you cannot use `.as_bytes()`. You must iterate over the Unicode scalar values using `.chars()`.
+- Handling 'Unicode Whitespace': A standard space (`b' '`) is not the only type of space. Unicode includes non-breaking spaces, tabs, and em-spaces. If your goal is to find any type of whitespace, byte comparison will fail. You must use `.chars()` combined with the `.is_whitespace()` method.
+
+We will see the method `.chars()` in action later on.
+</li>
+<li>
+The `unwrap_or_else` method has not been analyzed yet. It can be considered an enhancement over the standard `unwrap` (introduced in section 3.2). <u>While `unwrap` extracts the value `T` from a `Some(T)` instance but abruptly panics with a generic message if it encounters a `None`, `unwrap_or_else` allows you to define an **anonymous function** (a **closure**) that executes specifically when a `None` variant is found.</u>
+
+In this example, we chose to execute the `panic!` macro inside this closure, which immediately terminates the program and displays a custom message explaining the reason for the crash.
+
+Anonymous functions, known as 'closures' in Rust, will be explored in detail later on.
 </li>
 </ol>
+
+Figure 4.3.1 below illustrates the outcome of Code 4.3.6, which corresponds to E-Output 4.3.6.1.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
+  {/* The Unified Outer Box */}
+  <div 
+    className="rounded-xl flex flex-col" 
+    style={{ 
+      width: '65%', 
+      border: '1px solid color-mix(in srgb, currentColor 30%, transparent)',
+      padding: '1rem'
+    }}>
+    
+    {/* Transparent Title Area */}
+    <div 
+      className="text-sm font-medium" 
+      style={{ 
+        paddingBottom: '0.8rem',
+        color: 'color-mix(in srgb, currentColor 60%, transparent)'
+      }}>
+      Figure 4.3.1
+    </div>
+    
+    {/* The Image */}
+    <img 
+      src="/assets/images/str_slice.png" 
+      style={{ width: '100%', margin: 0, display: 'block', borderRadius: '0.25rem' }} 
+    />
+  </div>
+</div>
+
+At this point, we can finally examine Code 4.3.7, which resolves the primary issue found in Code 4.3.6 and demonstrates a completely safe approach to memory analysis by leveraging the concepts we have discussed so far.
+
+E-Output 4.3.7.1 shows the program's output for `s = String::from("hello world")`, E-Output 4.3.7.2 shows the output for `s = String::from("quertyuiop")`, and E-Output 4.3.7.3 demonstrates the result for any `s` that begins with a leading space or is an empty string (`""`).
+
+<CodeGroup>
+```rust Code 4.3.7
+fn first_word(s: &String) -> Option<&str> {
+    let bytes = s.as_bytes();
+
+    if s.len() == 0 {
+        return None;
+    }
+    
+    for (i, &item) in bytes.iter().enumerate() {
+        println!(
+                "Index [{i}] | Letter: = {} | Address: {:p}",
+                item as char, &(bytes[i])
+            );
+        
+        if item == b' ' {
+            match i {
+                0 => return None,
+                _ => return Some(&s[..i]),
+            }
+        }
+    }
+    Some(&s[..])
+}
+
+fn main() {
+    let s = String::from("");
+
+    let world = first_word(&s).unwrap_or_else(|| {
+        panic!(
+            "Error! The string either begins with a space character, or it is completely empty!"
+        );
+    });
+
+    println!("The first word in the string is: {}", world);
+}
+```
+```text E-Output 4.3.7.1
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/ch_4_lab`
+Index [0] | Letter: = h | Address: 0x564387688d60
+Index [1] | Letter: = e | Address: 0x564387688d61
+Index [2] | Letter: = l | Address: 0x564387688d62
+Index [3] | Letter: = l | Address: 0x564387688d63
+Index [4] | Letter: = o | Address: 0x564387688d64
+Index [5] | Letter: =   | Address: 0x564387688d65
+The first word in the string is: hello
+```
+```text E-Output 4.3.7.2
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/ch_4_lab`
+Index [0] | Letter: = q | Address: 0x55c64c75ed60
+Index [1] | Letter: = w | Address: 0x55c64c75ed61
+Index [2] | Letter: = e | Address: 0x55c64c75ed62
+Index [3] | Letter: = r | Address: 0x55c64c75ed63
+Index [4] | Letter: = t | Address: 0x55c64c75ed64
+Index [5] | Letter: = y | Address: 0x55c64c75ed65
+Index [6] | Letter: = u | Address: 0x55c64c75ed66
+Index [7] | Letter: = i | Address: 0x55c64c75ed67
+Index [8] | Letter: = o | Address: 0x55c64c75ed68
+Index [9] | Letter: = p | Address: 0x55c64c75ed69
+The first word in the string is: qwertyuiop
+```
+```text E-Output 4.3.7.3
+   Compiling ch_4_lab v0.1.0 (/var/home/z561/rust_projects/ch_4_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ch_4_lab`
+
+thread 'main' (2828406) panicked at src/main.rs:146:9:
+Error! The string either begins with a space character, or it is completely empty!
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+</CodeGroup>
+
+## Slices vs &Slices
+
+<p><u>Every single slice type without the '`&`' is a Dynamically Sized Type (DST).</u></p>
+
+To understand DSTs, you first have to understand the Rust compiler's strictest rule regarding the stack: <u>the compiler must know the exact size (in bytes) of every local variable at compile time</u>.
+
+When you compile a function, the compiler calculates exactly how much memory to allocate for that function's stack frame. <u>If it doesn't know the physical size of a variable, it is mathematically impossible for it to build the stack frame.</u>
+
+<p><u>A Dynamically Sized Type (DST) is a type whose size is only known at runtime.</u></p>
+
+If you tell the compiler, 'I have a `[i32]`' (a slice of 32-bit signed integers), the compiler asks, 'How many elements?'.
+
+Because the bare `[i32]` type does not contain a length encoded in its type signature (unlike a fixed array like `[i32; 5]`), the compiler throws its hands up. <u>It strictly forbids you from declaring `let my_slice: [i32] = ...` because it has no idea how much stack space to reserve</u>.
+
+This logic applies universally to every single slice type in the language. <u>The bare types represent the actual contiguous block of memory itself, which is of an unknown length.</u>
+
+This is where the reference operator (`&`) comes to the rescue. In the context of slices, `&` does much more than just <u>borrow</u> data. It acts as a physical bridge between the unknown and the known.
+
+When you apply `&` to a DST, Rust creates a pointer. <u>It takes the starting memory address of the data block and bundles it together with the length metadata field. This creates a neat, fixed-size package—often referred to as a 'fat pointer' (address + length). While the actual address and length values are strictly populated at runtime, the compiler knows the exact size of this package in advance, allowing it to safely allocate space on the stack.</u>
+
+As a result, <u>the `&` symbol and DSTs are almost exclusively used in tandem, practically functioning as a composite type designated as `&[T]`</u>. Yet, as previously established, viewing this strictly as a single intrinsic type is not entirely accurate.
