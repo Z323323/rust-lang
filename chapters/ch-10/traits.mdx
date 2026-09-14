@@ -1,198 +1,784 @@
 ---
-title: "Traits in Rust: Defining and Implementing Shared Behavior"
-sidebarTitle: "Traits"
-description: "Define and implement Rust traits to express shared behavior. Covers default implementations, trait bounds, the + syntax, and where clauses."
+title: "Defining Shared Behavior with Traits"
+sidebarTitle: "10.2 - Defining Shared Behavior with Traits"
 mode: "wide"
 ---
 
-A trait tells the Rust compiler about functionality a particular type has and can share with other types. Traits are Rust's primary abstraction mechanism — similar to interfaces in other languages, but more powerful. They let you write generic code that works for any type satisfying a set of behavioral requirements, and they're at the heart of Rust's approach to polymorphism. You've already encountered traits like `Display`, `Debug`, `Clone`, and `PartialOrd`; this chapter shows you how to define and implement your own.
+><u>A trait defines the functionality a particular type has and can share with other types.</u> We can use traits to define shared behavior in an abstract way. <u>We can use **trait bounds** to specify that a generic type can be any type that has certain behavior.</u>
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+<Note>
+Traits are similar to a feature often called interfaces in other languages, although with some differences.
+</Note>
 
 ## Defining a Trait
 
-A trait definition names a set of method signatures that a type must implement. Here we define a `Summary` trait for types that can produce a short summary string:
+><u>A type’s behavior consists of the methods we can call on that type. Different types share the same behavior if we can call the same methods on all of those types.</u> <u>Trait definitions are a way to group method signatures together to define a set of behaviors</u> necessary to accomplish some purpose.
 
-```rust
+>For example, let’s say we have multiple structs that hold various kinds and amounts of text: a `NewsArticle` struct that holds a news story filed in a particular location and a `SocialPost` that can have, at most, 280 characters along with metadata that indicates whether it was a new post, a repost, or a reply to another post.
+
+>We want to make a media aggregator library crate named `aggregator` that can display summaries of data that might be stored in a `NewsArticle` or `SocialPost` instance. To do this, we need a summary from each type, and we’ll request that summary by calling a `summarize` method on an instance. Code 10.2.1 shows the definition of a public `Summary` trait that expresses this behavior.
+
+```rust Code 10.2.1
 pub trait Summary {
     fn summarize(&self) -> String;
 }
 ```
 
-The body of each method in a trait definition is replaced by a semicolon. Any type that implements `Summary` must provide a concrete `summarize` method.
+>Here, we declare a trait using the trait keyword and then the trait’s name, which is `Summary` in this case. We also declare the trait as `pub` so that crates depending on this crate can make use of this trait too, as we’ll see in a few examples. Inside the curly brackets, we declare the method signatures that describe the behaviors of the types that implement this trait, which in this case is `fn summarize(&self) -> String`.
+
+>After the method signature, instead of providing an implementation within curly brackets, we use a semicolon. Each type implementing this trait must provide its own custom behavior for the body of the method. The compiler will enforce that any type that has the `Summary` trait will have the method `summarize` defined with this signature exactly.
+
+>A trait can have multiple methods in its body: The method signatures are listed one per line, and each line ends in a semicolon.
 
 ## Implementing a Trait on a Type
 
-Use `impl TraitName for TypeName` syntax:
+>Now that we’ve defined the desired signatures of the `Summary` trait’s methods, we can implement it on the types in our media aggregator. Code 10.2.2 shows an implementation of the `Summary` trait on the `NewsArticle` struct that uses the headline, the author, and the location to create the return value of `summarize`. For the `SocialPost` struct, we define `summarize` as the username followed by the entire text of the post, assuming that the post content is already limited to 280 characters.
 
-```rust
+```rust Code 10.2.2
 pub struct NewsArticle {
-    pub title: String,
+    pub headline: String,
+    pub location: String,
     pub author: String,
     pub content: String,
 }
 
 impl Summary for NewsArticle {
     fn summarize(&self) -> String {
-        format!("{}, by {} — {}", self.title, self.author, &self.content[..80])
+        format!("{}, by {} ({})", self.headline, self.author, self.location)
     }
 }
 
-pub struct Tweet {
+pub struct SocialPost {
     pub username: String,
     pub content: String,
+    pub reply: bool,
+    pub repost: bool,
 }
 
-impl Summary for Tweet {
+impl Summary for SocialPost {
     fn summarize(&self) -> String {
         format!("{}: {}", self.username, self.content)
     }
 }
+```
+
+>Implementing a trait on a type is similar to implementing regular methods. The difference is that after `impl`, we put the trait name we want to implement, then use the `for` keyword, and then specify the name of the type we want to implement the trait for. Within the `impl` block, we put the method signatures that the trait definition has defined. Instead of adding a semicolon after each signature, we use curly brackets and fill in the method body with the specific behavior that we want the methods of the trait to have for the particular type.
+
+>Now that the library has implemented the `Summary` trait on `NewsArticle` and `SocialPost`, users of the crate can call the trait methods on instances of `NewsArticle` and `SocialPost` in the same way we call regular methods. The only difference is that the user must bring the trait into scope as well as the types. Here’s an example of how a binary crate could use our `aggregator` library crate:
+
+<CodeGroup>
+```rust Code 10.2.3
+use aggregator::{SocialPost, Summary};
 
 fn main() {
-    let tweet = Tweet {
-        username: String::from("rustlang"),
-        content: String::from("Exciting new Rust release!"),
+    let post = SocialPost {
+        username: String::from("horse_ebooks"),
+        content: String::from(
+            "of course, as you probably already know, people",
+        ),
+        reply: false,
+        repost: false,
     };
 
-    println!("{}", tweet.summarize());
+    println!("1 new post: {}", post.summarize());
+}
+```
+```text E-Output 10.2.3
+1 new post: horse_ebooks: of course, as you probably already know, people
+```
+</CodeGroup>
+
+>One restriction to note is that <u>we can implement a trait on a type only if either the trait or the type, or both, are local to our crate</u>. For example, <u>we can implement standard library traits like `Display` on a custom type like `SocialPost` as part of our `aggregator` crate functionality because the type `SocialPost` is local to our `aggregator` crate</u>. <u>We can also implement `Summary` on `Vec<T>` in our aggregator crate because the trait `Summary` is local to our aggregator crate.</u>
+
+>But <u>we can’t implement external traits on external types. For example, we can’t implement the `Display` trait on `Vec<T>` within our `aggregator` crate, because `Display` and `Vec<T>` are both defined in the standard library and aren’t local to our aggregator crate</u>. This restriction is part of a property called **coherence**, and more specifically the **orphan rule**, so named because the parent type is not present. <u>This rule ensures that other people’s code can’t break your code and vice versa.</u>
+
+## Using Default Implementations
+
+><u>Sometimes it’s useful to have default behavior for some or all of the methods in a trait instead of requiring implementations for all methods on every type.</u> Then, as we implement the trait on a particular type, <u>we can keep or override each method’s default behavior</u>.
+
+In Code 10.2.4, we specify a default string for the `summarize` method of the `Summary` trait instead of only defining the method signature.
+
+```rust Code 10.2.4
+pub trait Summary {
+    fn summarize(&self) -> String {
+        String::from("(Read more...)")
+    }
 }
 ```
 
-**Coherence rule**: you can only implement a trait on a type if either the trait or the type is defined in your crate. You cannot implement `Display` on `Vec<T>` in your own crate because both are external. This prevents two crates from providing conflicting implementations.
+>To use a default implementation to `summarize` instances of `NewsArticle`, we specify an empty `impl` block with <u>`impl Summary for NewsArticle {}`</u>.
 
-## Default Implementations
+>Even though we’re no longer defining the `summarize` method on `NewsArticle` directly, <u>we’ve provided a default implementation and specified that `NewsArticle` implements the `Summary` trait</u>. As a result, we can still call the `summarize` method on an instance of `NewsArticle`, like this:
 
-You can provide a default body for trait methods. Types that implement the trait can use the default, override it, or both:
+<CodeGroup>
+```rust Code 10.2.5
+fn main() {
+    let article = NewsArticle {
+        headline: String::from("Penguins win the Stanley Cup Championship!"),
+        location: String::from("Pittsburgh, PA, USA"),
+        author: String::from("Iceburgh"),
+        content: String::from(
+            "The Pittsburgh Penguins once again are the best \
+             hockey team in the NHL.",
+        ),
+    };
 
-```rust
+    println!("New article available! {}", article.summarize());
+}
+```
+```text E-Output 10.2.5
+New article available! (Read more...)
+```
+</CodeGroup>
+
+><u>Default implementations can call other methods in the same trait, even if those other methods don’t have a default implementation. In this way, a trait can provide a lot of useful functionality and only require implementors to specify a small part of it.</u> For example, we could define the `Summary` trait to have a `summarize_author` method whose implementation is required, and then define a `summarize` method that has a default implementation that calls the `summarize_author` method:
+
+```rust Code 10.2.6
 pub trait Summary {
-    fn author(&self) -> String;
+    fn summarize_author(&self) -> String;
 
-    // Default implementation — calls the required method
     fn summarize(&self) -> String {
-        format!("(Read more from {}...)", self.author())
+        format!("(Read more from {}...)", self.summarize_author())
     }
 }
+```
 
-pub struct Tweet {
-    pub username: String,
-    pub content: String,
-}
+>To use this version of `Summary`, we only need to define `summarize_author` when we implement the trait on a type:
 
-impl Summary for Tweet {
-    fn author(&self) -> String {
+```rust Code 10.2.7
+impl Summary for SocialPost {
+    fn summarize_author(&self) -> String {
         format!("@{}", self.username)
     }
-    // No summarize() — uses the default
-}
-
-fn main() {
-    let t = Tweet { username: String::from("rustlang"), content: String::from("Hello!") };
-    println!("{}", t.summarize()); // "(Read more from @rustlang...)"
 }
 ```
 
-Default implementations can call other methods in the trait, even ones that don't have defaults — as long as the implementor provides those required methods.
+>After we define `summarize_author`, we can call `summarize` on instances of the `SocialPost` struct, and the default implementation of `summarize` will call the definition of `summarize_author` that we’ve provided. Because we’ve implemented `summarize_author`, the `Summary` trait has given us the behavior of the `summarize` method without requiring us to write any more code. Here’s what that looks like:
 
-## Traits as Parameters: `impl Trait` Syntax
+<CodeGroup>
+```rust Code 10.2.8
+fn main() {
+    let post = SocialPost {
+        username: String::from("horse_ebooks"),
+        content: String::from(
+            "of course, as you probably already know, people",
+        ),
+        reply: false,
+        repost: false,
+    };
 
-You can accept any type that implements a trait using `impl Trait` in a function parameter:
+    println!("1 new post: {}", post.summarize());
+}
+```
+```text E-Output 10.2.8
+(Read more from @horse_ebooks...)
+```
+</CodeGroup>
 
-```rust
+>Note that <u>it isn’t possible to call the default implementation from an overriding implementation of that same method</u>.
+
+## Using Traits as Parameters
+
+>Now that you know how to define and implement traits, we can explore how to <u>use traits to define functions that accept many different types</u>. We’ll use the `Summary` trait we implemented on the `NewsArticle` and `SocialPost` types to define a `notify` function that calls the `summarize` method on its item parameter, which is of some type that implements the `Summary` trait. To do this, we use the `impl Trait` syntax, like this:
+
+```rust Code 10.2.9
 pub fn notify(item: &impl Summary) {
     println!("Breaking news! {}", item.summarize());
 }
 ```
 
-This is syntactic sugar for a **trait bound** using a generic:
+>Instead of a concrete type for the `item` parameter, we specify the `impl` keyword and the trait name. <u>This parameter accepts any type that implements the specified trait.</u> In the body of notify, we can call any methods on item that come from the `Summary` trait, such as `summarize`. We can call `notify` and pass in any instance of `NewsArticle` or `SocialPost`. Code that calls the function with any other type, such as a `String` or an `i32`, won’t compile, because those types don’t implement `Summary`.
 
-```rust
+## Trait Bound Syntax
+
+>The `impl Trait` syntax works for straightforward cases but is actually syntax sugar for a longer form known as a trait bound; it looks like this:
+
+```rust Code 10.2.10
 pub fn notify<T: Summary>(item: &T) {
     println!("Breaking news! {}", item.summarize());
 }
 ```
 
-Both are equivalent for single parameters, but the generic form is more flexible when you need multiple parameters of the *same* type.
+><u>This longer form is equivalent to the example in the previous section</u> but is more verbose. We place trait bounds with the declaration of the generic type parameter after a colon and inside angle brackets.
 
-## Multiple Trait Bounds with `+`
+>The `impl Trait` syntax is convenient and makes for more concise code in simple cases, while the fuller trait bound syntax can express more complexity in other cases. For example, we can have two parameters that implement `Summary`. Doing so with the `impl Trait` syntax looks like this:
 
-Use `+` to require a type to implement more than one trait:
+>- `pub fn notify(item1: &impl Summary, item2: &impl Summary)`
 
-```rust
-use std::fmt::{Debug, Display};
+>Using `impl Trait` is appropriate if we want this function to allow `item1` and `item2` to have different types (as long as both types implement `Summary`). If we want to force both parameters to have the same type, however, we must use a trait bound, like this:
 
-// item must implement both Display and Summary
-pub fn notify(item: &(impl Summary + Display)) {
-    println!("{}", item);
-    println!("{}", item.summarize());
-}
+>- `pub fn notify<T: Summary>(item1: &T, item2: &T)`
 
-// Equivalent with generic syntax:
-pub fn notify_generic<T: Summary + Display>(item: &T) {
-    println!("{}", item);
-    println!("{}", item.summarize());
-}
-```
+>The generic type `T` specified as the type of the `item1` and `item2` parameters constrains the function such that the concrete type of the value passed as an argument for `item1` and `item2` must be the same.
 
-## `where` Clauses for Clarity
+## Multiple Trait Bounds with the + Syntax
 
-Long lists of trait bounds in a function signature can get hard to read. Move them to a `where` clause after the return type:
+><u>We can also specify more than one trait bound.</u> Say we wanted `notify` to use display formatting as well as `summarize` on item: We specify in the `notify` definition that item must implement both `Display` and `Summary`. We can do so using the `+` syntax:
 
-```rust
-use std::fmt::{Debug, Display};
+>- `pub fn notify(item: &(impl Summary + Display))`
 
-fn compare_and_display<T, U>(t: &T, u: &U) -> String
-where
-    T: Display + Clone,
-    U: Debug + Clone,
-{
-    format!("t = {}, u = {:?}", t, u)
-}
-```
+>The `+` syntax is also valid with trait bounds on generic types:
 
-The `where` clause doesn't change semantics — it's purely a readability improvement.
+>- `pub fn notify<T: Summary + Display>(item: &T)`
 
-## Returning Types That Implement a Trait
+>With the two trait bounds specified, the body of `notify` can call `summarize` and use `{}` to format item.
 
-Use `impl Trait` as a return type to return some type that implements the trait without naming it:
+## Clearer Trait Bounds with `where` Clauses
 
-```rust
-pub fn new_summarizable() -> impl Summary {
-    Tweet {
-        username: String::from("rustbot"),
-        content: String::from("something interesting"),
+>Using too many trait bounds has its downsides. Each generic has its own trait bounds, so functions with multiple generic type parameters can contain lots of trait bound information between the function’s name and its parameter list, making the function signature hard to read. For this reason, Rust has alternate syntax for specifying trait bounds inside a where clause after the function signature. So, instead of writing this:
+
+>- `fn some_function<T: Display + Clone, U: Clone + Debug>(t: &T, u: &U) -> i32`
+
+>we can use a `where` clause, like this:
+
+>- `fn some_function<T, U>(t: &T, u: &U) -> i32 where T: Display + Clone, U: Clone + Debug,`
+
+>This function’s signature is less cluttered: The function name, parameter list, and return type are close together, similar to a function without lots of trait bounds.
+
+## Returning Types That Implement Traits
+
+>We can also use the `impl Trait` syntax in the return position to return a value of some type that implements a trait, as shown here:
+
+```rust Code 10.2.11
+fn returns_summarizable() -> impl Summary {
+    SocialPost {
+        username: String::from("horse_ebooks"),
+        content: String::from(
+            "of course, as you probably already know, people",
+        ),
+        reply: false,
+        repost: false,
     }
 }
 ```
 
-This is especially useful with closures and iterators, where the concrete type is complex or unnameable. The limitation is that you can only return *one* concrete type — you can't conditionally return a `Tweet` or a `NewsArticle` from the same function with `impl Trait` (for that, use a trait object `Box<dyn Summary>`).
+>By using `impl Summary` for the return type, we specify that the `returns_summarizable` function returns some type that implements the `Summary` trait without naming the concrete type. In this case, `returns_summarizable` returns a `SocialPost`, but the code calling this function doesn’t need to know that.
+
+>The ability to specify a return type only by the trait it implements is especially useful in the context of closures and iterators, which we cover in Ch. 13. Closures and iterators create types that only the compiler knows or types that are very long to specify. The `impl Trait` syntax lets you concisely specify that a function returns some type that implements the `Iterator` trait without needing to write out a very long type.
+
+>However, <u>you can only use `impl Trait` if you’re returning a single type</u>. For example, this code that returns either a `NewsArticle` or a `SocialPost` with the return type specified as `impl Summary` wouldn’t work:
+
+```rust Code 10.2.12
+fn returns_summarizable(switch: bool) -> impl Summary {
+    if switch {
+        NewsArticle {
+            headline: String::from(
+                "Penguins win the Stanley Cup Championship!",
+            ),
+            location: String::from("Pittsburgh, PA, USA"),
+            author: String::from("Iceburgh"),
+            content: String::from(
+                "The Pittsburgh Penguins once again are the best \
+                 hockey team in the NHL.",
+            ),
+        }
+    } else {
+        SocialPost {
+            username: String::from("horse_ebooks"),
+            content: String::from(
+                "of course, as you probably already know, people",
+            ),
+            reply: false,
+            repost: false,
+        }
+    }
+}
+```
+
+>Returning either a `NewsArticle` or a `SocialPost` isn’t allowed due to restrictions around how the `impl Trait` syntax is implemented in the compiler. We’ll cover how to write a function with this behavior in Ch. 18.
 
 ## Using Trait Bounds to Conditionally Implement Methods
 
-A type can conditionally have methods depending on the trait bounds its type parameter satisfies:
+><u>By using a trait bound with an `impl` block that uses generic type parameters, we can implement methods conditionally for types that implement the specified traits.</u> For example, the type `Pair<T>` in Code 10.2.13 always implements the `new` function to return a new instance of `Pair<T>` (`Self` is a type alias for the type of the `impl` block, which in this case is `Pair<T>`). But in the next `impl` block, <u>`Pair<T>` only implements the `cmp_display` method if its inner type `T` implements the `PartialOrd` trait that enables comparison and the `Display` trait that enables printing</u>.
 
-```rust
+```rust Code 10.2.13
 use std::fmt::Display;
 
-struct Wrapper<T> {
-    value: T,
+struct Pair<T> {
+    x: T,
+    y: T,
 }
 
-// This method only exists when T implements Display
-impl<T: Display> Wrapper<T> {
-    fn display(&self) {
-        println!("Wrapper holds: {}", self.value);
+impl<T> Pair<T> {
+    fn new(x: T, y: T) -> Self {
+        Self { x, y }
     }
 }
 
-fn main() {
-    let w = Wrapper { value: 42 };
-    w.display(); // works: i32 implements Display
-
-    let w2 = Wrapper { value: vec![1, 2, 3] };
-    // w2.display(); // would not compile: Vec<i32> does not implement Display
+impl<T: Display + PartialOrd> Pair<T> {
+    fn cmp_display(&self) {
+        if self.x >= self.y {
+            println!("The largest member is x = {}", self.x);
+        } else {
+            println!("The largest member is y = {}", self.y);
+        }
+    }
 }
 ```
 
-This technique is called a *blanket implementation* when applied to all types satisfying a bound — the standard library uses it extensively, for example implementing `ToString` for every type that implements `Display`.
+><u>We can also conditionally implement a trait for any type that implements another trait</u>. Implementations of a trait on any type that satisfies the trait bounds are called **blanket implementations** and are used extensively in the Rust standard library. <u>For example, the standard library implements the `ToString` trait on any type that implements the `Display` trait.</u> The `impl` block in the standard library looks similar to this code:
+
+```rust Code 10.2.14
+impl<T: Display> ToString for T {
+    // --snip--
+}
+```
+
+>Because the standard library has this blanket implementation, we can call the `to_string` method defined by the `ToString` trait on any type that implements the `Display` trait. For example, we can turn integers into their corresponding `String` values like this because integers implement `Display`:
+
+>- `let s = 3.to_string();`
+
+><u>Traits and trait bounds let us write code that uses generic type parameters to reduce duplication but also specify to the compiler that we want the generic type to have particular behavior.</u> The compiler can then use the trait bound information to check that all the concrete types used with our code provide the correct behavior. In dynamically typed languages, we would get an error at runtime if we called a method on a type that didn’t define the method. But Rust moves these errors to compile time so that we’re forced to fix the problems before our code is even able to run. Additionally, we don’t have to write code that checks for behavior at runtime, because we’ve already checked at compile time. Doing so improves performance without having to give up the flexibility of generics.
+
+## Key Takeaways & Observations
+
+It is important to pause once again and reflect on what we have observed so far regarding the structures offered by the language, because the bigger picture really starts to expand once traits are introduced.
+
+First and foremost, it is crucial to realize that <u>traits can be implemented on every type in Rust: primitive types, tuple types, array types, pointer types, structs, enums, and even function types</u> (both anonymous closures and regular functions).
+
+Before we analyze simple, practical examples of implementing a trait on each of these elements, we need to solidify our understanding of what traits actually are and why they exist. As the official book clarifies, <u>traits define shared behavior across the types that implement them</u>. <u>This shared behavior manifests as common methods available on those types</u>, regardless of whether they are primitive types, tuple types, array types, etc..
+
+You might initially wonder how it is even possible to define methods on a primitive type or a function type; this will be cleared up shortly with a few simple examples. For now, the crucial takeaway regarding their purpose is this: <u>traits provide an idiomatic way to define shared behaviors—via common interfaces—across the elements that implement them</u>. Ultimately, <u>these shared behaviors are simply exposed as methods on those underlying elements</u>.
+
+As we have just seen, traits are also incredibly useful for defining <u>default methods</u> and avoiding code duplication. Ultimately, these are the core concepts you need to cement regarding the overall utility of traits.
+
+It is also worth adding that <u>you can define read-only constants within a trait definition, as well as associated types</u>. We will analyze these associated types in detail later on.
+
+One further clarification I want to make concerns the syntactic options offered by the language. Personally, I strongly prefer writing `<T: SomeTrait>(val: &T)` rather than `(val: &impl SomeTrait)`. <u>The explicit generic syntax makes it much clearer that the function is generic but constrained by a trait bound.</u> However, when it comes to <u>returning results</u>, it might seem—based on what we just saw—that you are forced to use `-> impl SomeTrait`. While this is technically true, <u>the use of this syntax is strictly limited to returning a single concrete type already known to the compiler</u>. <u>This means you cannot truly leverage the power of traits to return dynamically determined types at runtime.</u>
+
+This means you can comfortably forget about the `impl SomeTrait` syntax altogether and simply stick to explicit trait bounds (`:`) whenever necessary; however, keep in mind that <u>when directly implementing a trait for a specific type, you must use the `impl SomeTrait for Type` block</u>. Ultimately, this is the only scenario where writing `impl SomeTrait` is actually mandatory.
+
+## Implementing Traits for Primitive Types
+
+You extend primitive types using a technique called the **extension trait pattern**. <u>Because of Rust's orphan rule, you cannot implement an external trait on an external primitive, but you can always implement your own local trait on any primitive type.</u>
+
+For example, Code 10.2.15 extends integer primitive types by creating the `Parity` trait interface, and implementing it over each of them through the use of a macro.
+
+<CodeGroup>
+```rust Code 10.2.15
+trait Parity {
+    fn is_even(&self) -> bool;
+    
+    fn is_odd(&self) -> bool { // default
+        !self.is_even()
+    }
+}
+
+macro_rules! impl_parity { // #1
+    ($($t:ty),*) => {
+        $(
+            impl Parity for $t { // 'impl SomeTrait for Type' usage is always enforced.
+                fn is_even(&self) -> bool {
+                    *self % 2 == 0
+                }
+            }
+        )*
+    }
+}
+
+// Apply it to as many types as you want in one single line (the power of macros).
+impl_parity!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
+
+fn main() {
+    let number = 42;
+    
+    if number.is_even() {
+        println!("It works on primitives (i32)!");
+    }
+    
+    let number: u8 = 17;
+    
+    if number.is_odd() {
+        println!("It works on primitives (u8)!");
+    }
+    
+    let number: usize = 0xFFFF_FFFF_FFFF_FFFF; // 64 bits set to '1'
+    
+    if number.is_even() {
+        println!("It works on primitives (usize)!");
+    }
+    
+    if number.is_odd() {
+        println!("It works on primitives (usize)!");
+        println!("{number}");
+        let max_usize = usize::MAX;
+        println!("{max_usize}");
+    } 
+}
+```
+```text E-Output 10.2.15
+   Compiling ch_10_lab v0.1.0 (/var/home/z561/rust_projects/ch_10_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/ch_10_lab`
+It works on primitives (i32)!
+It works on primitives (u8)!
+It works on primitives (usize)!
+18446744073709551615
+18446744073709551615
+```
+</CodeGroup>
+
+<ol className="list-comments">
+ <li>
+ Rust's `macro_rules!` system operates purely on syntax matching, acting like a highly advanced find-and-replace before the code even compiles.
+
+ ### The Matcher (Input)
+ 
+ The first half of the macro `($($t:ty),*)` dictates exactly what syntax the macro is allowed to accept.
+
+ - `$t`: A metavariable name used to store the matched input.
+ - `:ty`: The fragment specifier. It strictly tells the compiler that `$t` must be a valid Rust type (like `i32` or `usize`). If you pass a variable name or a keyword, it will reject it.
+ - `$( ... ),*`: The repetition syntax. It translates to 'match the pattern inside the parentheses zero or more times (`*`), separated by commas (`,`)'.
+
+ ### The Transcriber (Output)
+
+ The right side of the arrow `=> { ... }` defines the exact code block the macro will generate.
+
+ - `$( ... )*`: The expansion loop. The compiler iterates over every single type captured in the matcher and stamps out the code inside these parentheses.
+ - `impl Parity for $t`: During each iteration, `$t` is swapped out for the current type in the list.
+
+ ### The Expansion Process
+
+ When you write `impl_parity!(i8, i16, ...)`, the macro system silently expands it into standard Rust code before the type-checker even runs.
+ </li>
+</ol>
+
+## Implementing Traits for Arrays, Tuples, Enums and Function Pointers
+
+To minimize the length of this section, which has already grown quite long, we will now implement a `Describe` trait on arrays, tuples, enums, and function pointers. This will provide a comprehensive 360-degree view of the capabilities traits offer for defining shared behavior across different types.
+
+<CodeGroup>
+```rust Code 10.2.16
+use std::fmt::Display;
+use std::any::type_name;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+// 1. Array 
+// Traits must be implemented for a specific array size, or using
+// const generics for any size: impl<const N: usize> Describe for [T; N].
+impl<T: Display, const N: usize> Describe for [T; N] {
+    fn describe(&self) -> String {
+        if N < 2 {
+            return String::from("Array length is less than 3. Describing it wasn't possible.");
+        }
+        format!("An array of size {}. First element: {}. Second element: {}, Third element: {}.",
+            N, self[0], self[1], self[2]
+            )
+    }
+}
+
+// 2. Tuple
+// You can use generics for the types inside the tuple (e.g., T, U), but you cannot be generic
+// about the length of the tuple. Therefore, an implementation for a 2-tuple (T, U) will not
+// work for a 3-tuple (T, U, V). You must write a separate impl block for every single tuple
+// length you want to support.
+
+// Generics for a 2-tuple
+impl<T: Display, U: Display> Describe for (T, U) {
+    fn describe(&self) -> String {
+        format!("A 2-tuple containing: '{}' and '{}'", self.0, self.1)
+    }
+}
+
+// Generics for a 3-tuple
+impl<T: Display, U: Display, V: Display> Describe for (T, U, V) {
+    fn describe(&self) -> String {
+        format!("A 3-tuple containing: '{}', '{}', '{}'", self.0, self.1, self.2)
+    }
+}
+
+// 3. Enum
+enum Status<T> {
+    Active(T),
+    Inactive(T),
+}
+
+// We constrain 'T' with the Display trait so the format! macro knows how to print it.
+impl<T: Display> Describe for Status<T> {
+    fn describe(&self) -> String {
+        match self {
+            Status::Active(mode) => format!("System is active in mode: {mode}"),
+            Status::Inactive(reason) => format!("System is inactive with reason: {}", reason),
+        }
+    }
+}
+
+// 4. Function Pointer
+// 'T' is the input type and 'U' is the return type.
+impl<T, U> Describe for fn(T) -> U {
+    fn describe(&self) -> String {
+        // type_name::<T>() extracts the string representation of the type at compile time.
+        format!(
+            "A function that takes '{}' and returns '{}'",
+            type_name::<T>(),
+            type_name::<U>()
+        )
+    }
+}
+
+// Concrete functions with different signatures
+fn double_value(x: i32) -> i32 {
+    x * 2
+}
+
+fn length_of_string(s: String) -> usize {
+    s.len()
+}
+
+fn main() {
+    // 1. Array
+    // The compiler sees a 3-element array.
+    // It silently replaces `N` with `3` and `T` with `i32`.
+    let small_array = [10, 20, 30];
+    println!("{}", small_array.describe());
+
+    // The compiler sees a 500-element array.
+    // It silently replaces `N` with `500` and `T` with `f64`.
+    let huge_array = [0.0; 500];
+    println!("{}", huge_array.describe());
+    
+    // 2. Tuple
+    let double = (String::from("Score"), 100);
+    println!("{}", double.describe());
+    
+    let triple = (String::from("Z561"), 17, 'Z');
+    println!("{}", triple.describe());
+
+    // 3. Enum
+    let first_enum = Status::Active(String::from("Waiting"));
+    println!("{}", first_enum.describe());
+    
+    let second_enum = Status::Inactive(404);
+    println!("{}", second_enum.describe());
+
+    // 4. Function pointer
+    // Cast the function to the exact function pointer type.
+    let d_v_fn_ptr: fn(i32) -> i32 = double_value;
+    println!("{}", d_v_fn_ptr.describe());
+    
+    let l_o_s_fn_ptr: fn(String) -> usize = length_of_string;
+    println!("{}", l_o_s_fn_ptr.describe());
+}
+```
+```text E-Output 10.2.16
+   Compiling ch_10_lab v0.1.0 (/var/home/z561/rust_projects/ch_10_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running `target/debug/ch_10_lab`
+An array of size 3. First element: 10. Second element: 20, Third element: 30.
+An array of size 500. First element: 0. Second element: 0, Third element: 0.
+A 2-tuple containing: 'Score' and '100'
+A 3-tuple containing: 'Z561', '17', 'Z'
+System is active in mode: Waiting
+System is inactive with reason: 404
+A function that takes 'i32' and returns 'i32'
+A function that takes 'alloc::string::String' and returns 'usize'
+```
+</CodeGroup>
+
+Code 10.2.16 clearly demonstrates how <u>a trait can be defined on any type</u>. Traits, therefore, provide a way to 'objectify' all types, making it possible to define methods on them.
+
+It is important to note that the definition of constants inside a trait, mentioned earlier, did not refer directly to the `impl<T: Display, N: const usize> Describe for [T; N]` construct used to implement `Describe` on the generic array `[T; N]` in Code 10.2.16. They are two distinct constructs, representing two different sides of the same coin.
+
+Here is the exact difference between the two concepts.
+
+### Const Generics (The Array Example)
+
+This is a way to pass a value as a generic parameter, rather than passing a data type like `T`.
+
+In the array example `impl<T: Display, N: const usize>`, the `const N` does not belong to the trait. It is simply a generic parameter telling the compiler: 'Expect a constant integer here, and whatever number that happens to be, plug it in for the array size'. It is an input variable for the implementation block, not a rule defined by the trait itself.
+
+### Associated Constants
+
+You define these directly inside the trait's curly braces.
+
+An associated constant is a rule established by the trait. It dictates that any data structure implementing the trait must declare a specific static value.
+
+<CodeGroup>
+```rust Code 10.2.17
+trait Vehicle {
+    // This is an Associated Constant. 
+    // The trait defines the requirement, but not the value.
+    const MAX_PASSENGERS: u32;
+
+    fn capacity_check(&self) {
+        // The trait can use the constant in its default methods.
+        println!("Maximum capacity is {} people.", Self::MAX_PASSENGERS);
+    }
+}
+
+struct Motorcycle;
+
+impl Vehicle for Motorcycle {
+    // The implementing struct is forced to provide the concrete value.
+    const MAX_PASSENGERS: u32 = 2;
+}
+
+struct Bus;
+
+impl Vehicle for Bus {
+    const MAX_PASSENGERS: u32 = 50;
+}
+
+fn main() {
+    let motorcycle = Motorcycle;
+    let bus = Bus;
+    
+    motorcycle.capacity_check();
+    bus.capacity_check();
+}
+```
+```text E-Output 10.2.17
+   Compiling ch_10_lab v0.1.0 (/var/home/z561/rust_projects/ch_10_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/ch_10_lab`
+Maximum capacity is 2 people.
+Maximum capacity is 50 people.
+```
+</CodeGroup>
+
+## A Sneak Peek at `Box`: Returning Multiple Types from a Function
+
+We conclude this section by looking at an example of how traits—alongside certain structures that will be analyzed later (such as `Box`)—can be leveraged to solve the problem presented in Code 10.2.12: <u>returning different types that implement the same trait but are unknown at compile time</u>. This example definitively clarifies why the use of `impl SomeTrait` outside of `impl SomeTrait for SomeType` can be completely discarded.
+
+<CodeGroup>
+```rust Code 10.2.18
+pub struct SocialPost {
+    pub username: String,
+    pub content: String,
+    pub reply: bool,
+    pub repost: bool,
+}
+
+impl Summary for SocialPost {
+    fn summarize(&self) -> String {
+        format!("{}: {}", self.username, self.content)
+    }
+    
+    fn display(&self) {
+        println!("{:#?}", self);
+    }
+}
+
+fn returns_summarizable(choice: &str) -> Box<dyn Summary> {
+    match choice {
+        "SocialPost" => Box::new(SocialPost {
+                            username: String::from("horse_ebooks"),
+                            content: String::from(
+                                "of course, as you probably already know, people",
+                            ),
+                            reply: false,
+                            repost: false,
+                        }),
+        "NewsArticle" => Box::new(NewsArticle {
+                             headline: String::from("Penguins win the Stanley Cup Championship!"),
+                             location: String::from("Pittsburgh, PA, USA"),
+                             author: String::from("Iceburgh"),
+                             content: String::from(
+                                 "The Pittsburgh Penguins once again are the best \
+                                  hockey team in the NHL.",
+                             ),
+                         }),
+        _ => panic!("Wrong choice."),
+    }          
+}
+
+fn main() {
+    let choice = String::from("SocialPost");
+    
+    let post = returns_summarizable(&choice[..]);
+    
+    post.display();
+    
+    let choice = String::from("NewsArticle");
+    
+    let article = returns_summarizable(&choice[..]);
+    
+    article.display();
+}
+```
+```text E-Output 10.2.18
+   Compiling ch_10_lab v0.1.0 (/var/home/z561/rust_projects/ch_10_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/ch_10_lab`
+SocialPost {
+    username: "horse_ebooks",
+    content: "of course, as you probably already know, people",
+    reply: false,
+    repost: false,
+}
+NewsArticle {
+    headline: "Penguins win the Stanley Cup Championship!",
+    location: "Pittsburgh, PA, USA",
+    author: "Iceburgh",
+    content: "The Pittsburgh Penguins once again are the best hockey team in the NHL.",
+}
+```
+</CodeGroup>
+
+In Code 10.2.18, the compiler allows returning `Box<dyn Summary>` from `returns_summarizable` because <u>`Box` acts as a pointer</u>. <u>Since a pointer has a fixed size on the STACK, the compiler can correctly allocate memory for it.</u> If, instead, we wanted to return any struct that implements `Summary` by value (without using a pointer), the compiler would not know how much STACK memory to allocate to store it (as this depends on the internal fields of the concrete struct itself).
+
+<p><u>When you instantiate a concrete struct and place it inside a `Box` to return it as a `Box<dyn Trait>`, the entirety of that struct's base memory footprint is allocated on the HEAP. The only data that remains on the local STACK is the fixed-size `Box` fat pointer. If, instead, you were to store a struct 'normally' via `let strct = Strct::new()`, the data associated with it would be structured as `STACK_PTR -> STACK_FIELDS`. While those `STACK_FIELDS` could potentially contain pointers to the HEAP, the pointers themselves would be stored directly on the STACK!</u></p>
+
+At this point, it is also useful to note that <u>it is impossible to dereference a `Box` containing a `dyn Trait` by value (`*`)</u>. <u>If this were allowed, the result of the dereference operation would necessarily have to be moved into stack memory, directly re-triggering the exact compile-time size error just explained.</u>
+
+To resolve this issue, we can interact with the type contained in the `Box` directly through the `Box`, because `Box`, being a pointer, has a fixed size on the STACK and can be followed by the compiler at runtime to read HEAP data without any problem. By doing so, the program can dynamically access the struct's methods on the HEAP during execution, completely bypassing STACK allocation errors.
+
+The same problem arises regarding the Dynamically Sized Types (DSTs) discussed at the end of Ch. 4. If references were not used before DSTs, such as `&str` for `str`, the compiler would not know how much memory to allocate to manage them. The compiler must always ensure proper stack allocation at compile time, leaving the 'dynamism' of the computation to the HEAP at runtime.
+
+### The `println!` Dilemma
+
+Let's say we want to print `*s` where `s` is declared as `let s: &str = &some_string[..]`.
+
+<u>The macro takes your argument `*s` and wraps it in a reference, passing it as `&(*s)` so that you might mistakenly assume that `&(*s) = s` and everything goes fine (because `s` has type `&str`).</u> When you use `println!`, the macro expands your code and passes it to an internal Rust formatting function (specifically `ArgumentV1::new`). Simplified, the signature of this generic function looks like this: `fn new<T>(value: &T, formatter: ...)`.
+
+Because `*s` extracts the raw type, <u>the compiler mathematically deduces that `T = str` (or `T = dyn Trait`)</u>.
+
+<u>In Rust, whenever you declare a generic type parameter `<T>`, the compiler secretly injects a mandatory bound: `<T: Sized>`.</u> This dictates that whatever type `T` represents must have a known, fixed size at compile time.
+
+This is where the compiler halts your code:
+
+1. It sees `T = str`.
+2. It knows `str` is a Dynamically Sized Type (DST).
+3. It realizes `str` does not implement `Sized`.
+4. It rejects the code with the exact error: `the trait Sized is not implemented for str`.
+
+If you pass `s` without dereferencing it (since it is already a `&str`), the macro wraps it, generating `&s`.
+
+In short: <u>the macro adds the `&`, but the internal generic function demands that the bare type `T` behind that reference has a fixed size</u>.
+
+Now, there's one last question to address.
+
+- <span style={{ color: "#964B00" }}><b>Q1</b>: What happens when the compiler appends an `&` in front of a type that already has an `&` in front of it, such as `&str`, inside `println!`? Why does this never cause problems? What exactly happens to `&&str`?</span>
+- <span style={{ color: "#008080" }}><b>A1</b>: <u>When you pass an existing reference like `s: &str` into `println!("{}", s)`, the macro indeed wraps it again, creating a double reference: `&&str`.</u> This works flawlessly and never causes compilation errors for two specific mechanical reasons.</span>
+  - <span style={{ color: "#008080" }}><u>It satisfies the `Sized` bound</u>: Every reference, no matter how many layers deep it goes, is just a pointer with a mathematically guaranteed fixed size.</span>
+    - <span style={{ color: "#008080" }}>`&str` is a fat pointer (16 bytes on a 64-bit system).</span>
+    - <span style={{ color: "#008080" }}>`&&str` is a standard 'thin' pointer (8 bytes) that simply points to where that fat pointer lives on the stack. When the internal formatting function signature `fn new<T>(value: &T)` receives your `&&str`, the compiler deduces that `T = &str`. Because `&str` has a fixed size of 16 bytes, it fully implements the invisible `Sized` trait. The compiler's memory requirements are perfectly satisfied.</span>
+  - <span style={{ color: "#008080" }}><u>Recursive trait implementations</u>: <u>You might logically wonder why printing a double reference (`&&str`) outputs the actual string text instead of a raw memory address.</u> Deep in the standard library, there is a blanket rule that looks roughly like this:</span>
+  
+    ```rust Code 10.2.18
+    impl<T: Display + ?Sized> Display for &T {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            // Automatically forward the formatting to the underlying data.
+            Display::fmt(&**self, f) // The double '**' removes one pointer layer at a time!
+        }
+    }
+    ```
+    
+    <span style={{ color: "#008080" }}>Because of this recursive implementation, traits pass the request down the chain.</span>
+    1. <span style={{ color: "#008080" }}>`println!` asks the `&&str` to format itself.</span>
+    2. <span style={{ color: "#008080" }}>The `&&str` strips away its outer pointer and delegates the task to `&str`.</span>
+    3. <span style={{ color: "#008080" }}>The `&str` strips away its pointer and delegates the task to the raw `str` on the heap, which finally prints the text to your screen.</span>
+    
+    <span style={{ color: "#008080" }}>Rust can follow this chain infinitely. You could write `&&&&str`, and `println!` would compile perfectly and print the exact same text, gracefully peeling back every layer of pointers at runtime until it hits the actual data.</span>
+    
+At this point, you should still have one lingering question.
+
+- <span style={{ color: "#964B00" }}><b>Q2</b>: If `fmt` removes one `&` at a time until it reaches the data, shouldn't it run into the `Sized` problem explained earlier?</span>
+- <span style={{ color: "#008080" }}><b>A2</b>: In Rust, `<T>` automatically means '`T` must be a fixed size'. <u>But `<T: ?Sized>` literally translates to: '`T` might or might not be sized.</u> I am explicitly turning off the strict size requirement for this block of code'. <u>When the trait delegates the printing job down the chain (`&&str -> &str -> str`), it does indeed eventually resolve `T = str`. However, because this happens inside the `Display` trait implementation that explicitly uses the `?Sized` escape hatch, the compiler allows it. The compiler knows that inside this specific trait method, it only needs to read the data dynamically from the heap using the pointer. It doesn't need to allocate local stack variables, so it doesn't need the strict `Sized` bound anymore.</u> So, `T` becoming `str` is a fatal problem at the macro's strict entry point, but perfectly legal inside the trait's relaxed implementation!</span>
+
+## Enums vs Trait Objects for Handling Multiple Types
+
+In section 8.1 ('Using an Enum to Store Multiple Types'), we compared using enums versus trait objects (`Box<dyn Trait>`) to <u>store different types in a single vector</u>. Now that you have a deeper understanding of dynamic types and memory allocation, this is the perfect time to revisit that paragraph. The technical context you have just acquired will make the trade-offs between those two approaches much clearer.

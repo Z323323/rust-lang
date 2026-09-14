@@ -119,6 +119,7 @@
             "pages": [
               "chapters/ch-10/generics",
               "chapters/ch-10/traits",
+              "chapters/ch-10/appendix-c",
               "chapters/ch-10/lifetimes"
             ]
           },

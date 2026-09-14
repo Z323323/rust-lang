@@ -1,50 +1,38 @@
 ---
-title: "Controlling Test Execution with cargo test Options"
-sidebarTitle: "Running Tests"
-description: "Control how Rust tests run with cargo test. Filter tests by name, run in parallel or single-threaded, show output, and ignore specific tests."
+title: "Controlling How Tests Are Run"
+sidebarTitle: "11.2 - Controlling How Tests Are Run"
 mode: "wide"
 ---
 
-`cargo test` compiles your code in test mode and runs the resulting test binary. By default it runs all tests in parallel, captures their output, and prints a summary. However, you often need more control: running a single failing test, forcing sequential execution when tests share state, or printing debug output from a passing test. This chapter covers the command-line options and attributes that give you that control.
+>The default behavior of the binary produced by `cargo test` is to run all the tests in parallel and capture output generated during test runs, preventing the output from being displayed and making it easier to read the output related to the test results. You can, however, specify command line options to change this default behavior.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+>Some command line options go to `cargo test`, and some go to the resultant test binary. <u>To separate these two types of arguments, you list the arguments that go to `cargo test` followed by the separator `--` and then the ones that go to the test binary.</u> Running `cargo test --help` displays the options you can use with `cargo test`, and running `cargo test -- --help` displays the options you can use after the separator.
 
-## Understanding the Two Layers of Arguments
+## Running Tests in Parallel or Consecutively
 
-`cargo test` accepts two sets of arguments, separated by `--`:
+><u>When you run multiple tests, by default they run in parallel using threads</u>, meaning they finish running more quickly and you get feedback sooner. <u>Because the tests are running at the same time, you must make sure your tests don’t depend on each other or on any shared state</u>, including a shared environment, such as the current working directory or environment variables.
 
-```bash
-cargo test [cargo options] -- [test binary options]
-```
+>For example, say each of your tests runs some code that creates a file on disk named _test-output.txt_ and writes some data to that file. Then, each test reads the data in that file and asserts that the file contains a particular value, which is different in each test. Because the tests run at the same time, one test might overwrite the file in the time between when another test is writing and reading the file. The second test will then fail, not because the code is incorrect but because the tests have interfered with each other while running in parallel. One solution is to make sure each test writes to a different file; another solution is to run the tests one at a time.
 
-Arguments *before* `--` go to `cargo` itself (e.g., `--release`). Arguments *after* `--` are forwarded to the compiled test binary.
+>If you don’t want to run the tests in parallel or if you want more fine-grained control over the number of threads used, you can send the `--test-threads` flag and the number of threads you want to use to the test binary. Take a look at the following example:
 
-## Running Tests in Parallel
+>- `cargo test -- --test-threads=1`
 
-By default, tests run in parallel across multiple threads, completing the full suite faster. Parallel execution is great unless tests share mutable state (such as writing to the same file or environment variable), in which case tests can interfere with each other.
+><u>We set the number of test threads to `1`, telling the program not to use any parallelism.</u> Running the tests using one thread will take longer than running them in parallel, but the tests won’t interfere with each other if they share state.
 
-Force single-threaded execution with `--test-threads`:
+## Showing Function Output
 
-```bash
-# Run all tests one at a time
-cargo test -- --test-threads=1
-```
+>By default, if a test passes, Rust’s test library captures anything printed to standard output. For example, <u>if we call `println!` in a test and the test passes, we won’t see the `println!` output in the terminal</u>; we’ll see only the line that indicates the test passed. If a test fails, we’ll see whatever was printed to standard output with the rest of the failure message.
 
-You can also set any number of threads — for example `--test-threads=4` to limit parallelism without going fully sequential.
+>As an example, Code 11.2.1 has a silly function that prints the value of its parameter and returns 10, as well as a test that passes and a test that fails.
 
-## Showing Output from Passing Tests
+>When we run these tests with `cargo test`, we’ll see T-Output 11.2.1.1.
 
-By default, `cargo test` captures everything printed to stdout during a passing test and suppresses it. Only output from *failing* tests is shown. To see printed output from all tests, pass `--show-output`:
-
-```bash
-cargo test -- --show-output
-```
-
-Example test with output:
-
-```rust
-fn double(x: i32) -> i32 {
-    x * 2
+<CodeGroup>
+```rust Code 11.2.1
+fn prints_and_returns_10(a: i32) -> i32 {
+    println!("I got the value {a}");
+    10
 }
 
 #[cfg(test)]
@@ -52,143 +40,245 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_double() {
-        let result = double(4);
-        println!("double(4) = {}", result); // only shown with --show-output
-        assert_eq!(result, 8);
+    fn this_test_will_pass() {
+        let value = prints_and_returns_10(4);
+        assert_eq!(value, 10);
+    }
+
+    #[test]
+    fn this_test_will_fail() {
+        let value = prints_and_returns_10(8);
+        assert_eq!(value, 5);
     }
 }
 ```
+```text T-Output 11.2.1.1
+   Compiling silly-function v0.1.0 (file:///projects/silly-function)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.58s
+     Running unittests src/lib.rs (target/debug/deps/silly_function-160869f38cff9166)
 
-Without `--show-output`, the `println!` is swallowed on a passing test. With it, the line appears under the test's output section.
+running 2 tests
+test tests::this_test_will_fail ... FAILED
+test tests::this_test_will_pass ... ok
 
-## Filtering Tests by Name
+failures:
 
-Pass a substring to `cargo test` (before `--`) to run only tests whose name contains that string:
+---- tests::this_test_will_fail stdout ----
+I got the value 8
 
-```bash
-# Run only tests with "add" in their name
-cargo test add
+thread 'tests::this_test_will_fail' panicked at src/lib.rs:19:9:
+assertion `left == right` failed
+  left: 10
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-# Run a single test by its exact name
-cargo test tests::test_add_two
+
+failures:
+    tests::this_test_will_fail
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
 ```
+```text T-Output 11.2.1.2
+   Compiling silly-function v0.1.0 (file:///projects/silly-function)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running unittests src/lib.rs (target/debug/deps/silly_function-160869f38cff9166)
 
-This matches against the full test name, including the module path. If you have:
+running 2 tests
+test tests::this_test_will_fail ... FAILED
+test tests::this_test_will_pass ... ok
 
-```rust
-#[cfg(test)]
-mod math {
-    #[test]
-    fn test_add() { /* … */ }
+successes:
 
-    #[test]
-    fn test_multiply() { /* … */ }
+---- tests::this_test_will_pass stdout ----
+I got the value 4
+
+
+successes:
+    tests::this_test_will_pass
+
+failures:
+
+---- tests::this_test_will_fail stdout ----
+I got the value 8
+
+thread 'tests::this_test_will_fail' panicked at src/lib.rs:19:9:
+assertion `left == right` failed
+  left: 10
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::this_test_will_fail
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+```
+</CodeGroup>
+
+>Note that nowhere in this output do we see `I got the value 4`, which is printed when the test that passes runs. That output has been captured. The output from the test that failed, `I got the value 8`, appears in the section of the test summary output, which also shows the cause of the test failure.
+
+>If we want to see printed values for passing tests as well, we can tell Rust to also show the output of successful tests with `--show-output`:
+
+>- `cargo test -- --show-output`
+
+>When we run the tests in Code 11.2.1 again with the `--show-output` flag, we see T-Output 11.2.1.2.
+
+## Running a Subset of Tests by Name
+
+>Running a full test suite can sometimes take a long time. If you’re working on code in a particular area, you might want to run only the tests pertaining to that code. <u>You can choose which tests to run by passing `cargo test` the name or names of the test(s) you want to run as an argument.</u>
+
+>To demonstrate how to run a subset of tests, we’ll first create three tests for our `add_two` function, as shown in Code 11.2.2, and choose which ones to run.
+
+<CodeGroup>
+```rust Code 11.2.2
+pub fn add_two(a: u64) -> u64 {
+    a + 2
 }
-```
 
-Then `cargo test math` runs both, while `cargo test add` runs only `test_add`.
-
-## Ignoring Expensive Tests with `#[ignore]`
-
-Mark a test with `#[ignore]` to exclude it from the normal `cargo test` run. This is useful for integration tests that take a long time or require external services:
-
-```rust
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn fast_test() {
-        assert_eq!(2 + 2, 4);
+    fn add_two_and_two() {
+        let result = add_two(2);
+        assert_eq!(result, 4);
+    }
+
+    #[test]
+    fn add_three_and_two() {
+        let result = add_two(3);
+        assert_eq!(result, 5);
+    }
+
+    #[test]
+    fn one_hundred() {
+        let result = add_two(100);
+        assert_eq!(result, 102);
+    }
+}
+```
+```text T-Output 11.2.2.1
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
+
+running 3 tests
+test tests::add_three_and_two ... ok
+test tests::add_two_and_two ... ok
+test tests::one_hundred ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests adder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+```text T-Output 11.2.2.2
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
+
+running 1 test
+test tests::one_hundred ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+```
+```text T-Output 11.2.2.3
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
+
+running 2 tests
+test tests::add_three_and_two ... ok
+test tests::add_two_and_two ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+```
+</CodeGroup>
+
+>If we run the tests without passing any arguments, as we saw earlier, all the tests will run in parallel (`cargo test` $\rightarrow$ T-Output 11.2.2.1).
+
+### Running Single Tests
+
+><u>We can pass the name of any test function to `cargo test` to run only that test</u> (`cargo test one_hundred` $\rightarrow$ T-Output 11.2.2.2).
+
+>Only the test with the name `one_hundred` ran; the other two tests didn’t match that name. <u>The test output lets us know we had more tests that didn’t run by displaying `2 filtered out` at the end.</u>
+
+><u>We can’t specify the names of multiple tests in this way; only the first value given to `cargo test` will be used.</u> But there is a way to run multiple tests.
+
+### Filtering to Run Multiple Tests
+
+><u>We can specify part of a test name, and any test whose name matches that value will be run.</u> For example, because two of our tests’ names contain `add`, we can run those two by running `cargo test add` (T-Output 11.2.2.3).
+
+><p><u>This command ran all tests with `add` in the name and filtered out the test named `one_hundred`. Also note that the module in which a test appears becomes part of the test’s name, so we can run all the tests in a module by filtering on the module’s name.</u></p>
+
+## Ignoring Tests Unless Specifically Requested
+
+>Sometimes a few specific tests can be very time-consuming to execute, so you might want to exclude them during most runs of `cargo test`. Rather than listing as arguments all tests you do want to run, you can instead annotate the time-consuming tests using the ignore attribute to exclude them, as shown here:
+
+<CodeGroup>
+```rust Code 11.2.3
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
     }
 
     #[test]
     #[ignore]
-    fn slow_expensive_test() {
-        // Simulate a slow test
-        std::thread::sleep(std::time::Duration::from_secs(10));
-        assert!(true);
+    fn expensive_test() {
+        // code that takes an hour to run
     }
 }
 ```
+```text T-Output 11.2.3.1
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
 
-Running `cargo test` will skip `slow_expensive_test` and report it as ignored:
-
-```
 running 2 tests
-test tests::fast_test ... ok
-test tests::slow_expensive_test ... ignored
+test tests::expensive_test ... ignored
+test tests::it_works ... ok
 
-test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests adder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+```text T-Output 11.2.3.2
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
 
-## Running Only Ignored Tests
+running 1 test
+test tests::expensive_test ... ok
 
-To run *only* the ignored tests (for example, in a nightly CI job):
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
 
-```bash
-cargo test -- --ignored
+   Doc-tests adder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+</CodeGroup>
 
-To run both normal and ignored tests together:
+>After `#[test]`, we add the `#[ignore]` line to the test we want to exclude. Now when we run our tests, `it_works` runs, but `expensive_test` doesn’t (T-Output 11.2.3.1).
 
-```bash
-cargo test -- --include-ignored
-```
+>The `expensive_test` function is listed as `ignored`. If we want to run only the ignored tests, we can use `cargo test -- --ignored` (T-Output 11.2.3.2).
 
-## Listing All Tests Without Running Them
-
-See every test name that would be run, without actually executing them:
-
-```bash
-cargo test -- --list
-```
-
-Output:
-
-```
-tests::fast_test: test
-tests::slow_expensive_test: test
-
-2 tests, 0 benchmarks
-```
-
-## Useful `cargo test` Combinations
-
-```bash
-# Run all tests sequentially with output shown
-cargo test -- --test-threads=1 --show-output
-
-# Run only tests matching "integration", show output
-cargo test integration -- --show-output
-
-# Run in release mode (optimizations on)
-cargo test --release
-
-# Run tests for a specific binary target
-cargo test --bin my_binary
-
-# Run tests for a specific library target
-cargo test --lib
-```
-
-## Setting Environment Variables for Tests
-
-Sometimes tests depend on environment variables. You can set them inline:
-
-```bash
-DATABASE_URL=postgres://localhost/test cargo test
-```
-
-Or in test setup code using `std::env::set_var` (be careful with parallel tests):
-
-```rust
-#[test]
-fn test_with_env() {
-    // Only safe if tests are single-threaded or this is isolated
-    std::env::set_var("MY_CONFIG", "test_value");
-    let result = read_config();
-    assert_eq!(result, "test_value");
-}
-```
-
-For parallel-safe environment manipulation in tests, consider the `temp-env` crate.
+>By controlling which tests run, you can make sure your `cargo test` results will be returned quickly. When you’re at a point where it makes sense to check the results of the `ignored` tests and you have time to wait for the results, you can run `cargo test -- --ignored` instead. If you want to run all tests whether they’re ignored or not, you can run `cargo test -- --include-ignored`.

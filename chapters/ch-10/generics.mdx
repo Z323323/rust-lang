@@ -1,191 +1,380 @@
 ---
-title: "Generic Types in Rust: Functions, Structs, and Enums"
-sidebarTitle: "Generics"
-description: "Use Rust generic type parameters to write flexible code. Learn generics in function signatures, struct and enum definitions, and method impl blocks."
+title: "Generic Data Types"
+sidebarTitle: "10.1 - Generic Data Types"
 mode: "wide"
 ---
 
-Generics allow you to write a single piece of code that works for many different concrete types, eliminating duplication without sacrificing type safety. If you've ever written two functions that do the same thing but for `i32` and `f64` respectively, generics are the answer. Rust's generic system is powerful, zero-cost (see *monomorphization* below), and used pervasively throughout the standard library — `Vec<T>`, `Option<T>`, `Result<T, E>`, and `HashMap<K, V>` are all generic types.
+>Every programming language has tools for effectively handling the <u>duplication of concepts</u>. In Rust, one such tool is <u>generics: abstract stand-ins for concrete types or other properties</u>. We can express the behavior of generics or how they relate to other generics without knowing what will be in their place when compiling and running the code.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+><u>Functions can take parameters of some generic type</u>, instead of a concrete type like `i32` or `String`, <u>in the same way they take parameters with unknown values to run the same code on multiple concrete values</u>. In fact, we already used generics in Ch. 6 with `Option<T>`, in Ch. 8 with `Vec<T>` and `HashMap<K, V>`, and in Ch. 9 with `Result<T, E>`.
 
-## Removing Duplication with Generics
+## Removing Duplication by Extracting a Function
 
-Consider these two functions that find the largest number in a slice:
+>Generics allow us to replace specific types with a placeholder that represents multiple types to remove code duplication.
 
-```rust
-fn largest_i32(list: &[i32]) -> &i32 {
-    let mut largest = &list[0];
-    for item in list {
-        if item > largest { largest = item; }
+>Let’s first look at how to <u>remove duplication in a way that doesn’t involve generic types</u> by extracting a function that replaces specific values with a placeholder that represents multiple values.
+
+<Columns>
+<Column>
+```rust Code 10.1.1
+fn main() {
+    let number_list = vec![34, 50, 25, 100, 65];
+
+    let mut largest = &number_list[0];
+
+    for number in &number_list {
+        if number > largest {
+            largest = number;
+        }
     }
-    largest
-}
 
-fn largest_f64(list: &[f64]) -> &f64 {
-    let mut largest = &list[0];
-    for item in list {
-        if item > largest { largest = item; }
+    println!("The largest number is {largest}");
+
+    let number_list = vec![102, 34, 6000, 89, 54, 2, 43, 8];
+
+    let mut largest = &number_list[0];
+
+    for number in &number_list {
+        if number > largest {
+            largest = number;
+        }
     }
-    largest
+
+    println!("The largest number is {largest}");
 }
 ```
-
-They're identical except for the type. We can merge them into one generic function:
-
-```rust
-fn largest<T: PartialOrd>(list: &[T]) -> &T {
+</Column>
+<Column>
+```rust Code 10.1.2
+fn largest(list: &[i32]) -> &i32 {
     let mut largest = &list[0];
+
     for item in list {
-        if item > largest { largest = item; }
+        if item > largest {
+            largest = item;
+        }
     }
+
     largest
 }
 
 fn main() {
-    let numbers = vec![34, 50, 25, 100, 65];
-    println!("Largest number: {}", largest(&numbers));
+    let number_list = vec![34, 50, 25, 100, 65];
 
-    let chars = vec!['y', 'm', 'a', 'q'];
-    println!("Largest char: {}", largest(&chars));
+    let result = largest(&number_list);
+    println!("The largest number is {result}");
+
+    let number_list = vec![102, 34, 6000, 89, 54, 2, 43, 8];
+
+    let result = largest(&number_list);
+    println!("The largest number is {result}");
 }
 ```
+</Column>
+</Columns>
 
-`T: PartialOrd` is a **trait bound** — it tells the compiler that `T` must support the `>` operator. Without it, the compiler would refuse to compile the comparison, because not every type supports ordering.
+>Although Code 10.1.1 works, duplicating code is tedious and error-prone. We also have to remember to update the code in multiple places when we want to change it.
 
-## Generic Structs
+>To eliminate this duplication, we created Code 10.1.2: an abstraction defining a function that operates on any list of integers passed in as a parameter. This solution makes our code clearer and lets us express the concept of finding the largest number in a list abstractly.
 
-You can parameterize a struct over one or more type parameters:
+>In Code 10.1.2, we extracted the code that finds the largest number into a function named `largest`. Then, we called the function to find the largest number in the two lists from Code 10.1.1. We could also use the function on any other list of `i32` values we might have in the future.
 
-```rust
+>The `largest` function has a parameter called `list`, which represents any concrete slice of `i32` values we might pass into the function. As a result, when we call the function, the code runs on the specific values that we pass in.
+
+>In summary, here are the steps we took to change Code 10.1.1 to Code 10.1.2:
+
+>- Identify duplicate code.
+>- Extract the duplicate code into the body of the function, and specify the inputs and return values of that code in the function signature.
+>- Update the two instances of duplicated code to call the function instead.
+
+>Next, we’ll use these same steps with generics to reduce code duplication. In the same way that the function body can operate on an abstract `list` instead of specific values, generics allow code to operate on abstract types.
+
+>For example, say we had two functions: one that finds the largest item in a slice of `i32` values and one that finds the largest item in a slice of `char` values. How would we eliminate that duplication? Let’s find out!
+
+>We use generics to create definitions for items like function signatures or structs, which we can then use with many different concrete data types.
+
+## In Function Definitions
+
+>When defining a function that uses generics, we place the generics in the signature of the function where we would usually specify the data types of the parameters and return value. Doing so makes our code more flexible and provides more functionality to callers of our function while preventing code duplication.
+
+>Continuing with our `largest` function, Code 10.1.3 shows two functions that both find the largest value in a slice while Code 10.1.4 shows the combined `largest` function definition using the generic data type in its signature. <u>Code 10.1.4 also shows how we can call the function with either a slice of `i32` values or `char` values.</u> Note that this code won’t compile yet.
+
+<Columns>
+<Column>
+```rust Code 10.1.3
+fn largest_i32(list: &[i32]) -> &i32 {
+    let mut largest = &list[0];
+
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+
+    largest
+}
+
+fn largest_char(list: &[char]) -> &char {
+    let mut largest = &list[0];
+
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+
+    largest
+}
+
+fn main() {
+    let number_list = vec![34, 50, 25, 100, 65];
+
+    let result = largest_i32(&number_list);
+    println!("The largest number is {result}");
+
+    let char_list = vec!['y', 'm', 'a', 'q'];
+
+    let result = largest_char(&char_list);
+    println!("The largest char is {result}");
+}
+```
+</Column>
+<Column>
+<CodeGroup>
+```rust Code 10.1.4
+fn largest<T>(list: &[T]) -> &T {
+    let mut largest = &list[0];
+
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+
+    largest
+}
+
+fn main() {
+    let number_list = vec![34, 50, 25, 100, 65];
+
+    let result = largest(&number_list);
+    println!("The largest number is {result}");
+
+    let char_list = vec!['y', 'm', 'a', 'q'];
+
+    let result = largest(&char_list);
+    println!("The largest char is {result}");
+}
+```
+```text C-Output 10.1.4.1
+   Compiling chapter10 v0.1.0 (file:///projects/chapter10)
+error[E0369]: binary operation `>` cannot be applied to type `&T`
+ --> src/main.rs:5:17
+  |
+5 |         if item > largest {
+  |            ---- ^ ------- &T
+  |            |
+  |            &T
+  |
+help: consider restricting type parameter `T` with trait `PartialOrd`
+  |
+1 | fn largest<T: std::cmp::PartialOrd>(list: &[T]) -> &T {
+  |             ++++++++++++++++++++++
+
+For more information about this error, try `rustc --explain E0369`.
+error: could not compile `chapter10` (bin "chapter10") due to 1 previous error
+```
+```text E-Output 10.1.4.2
+   Compiling ch_10_lab v0.1.0 (/var/home/z561/rust_projects/ch_10_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/ch_10_lab`
+The largest number is 100
+The largest char is y
+```
+</CodeGroup>
+</Column>
+</Columns>
+
+>The `largest_i32` function finds the largest `i32` in a slice. The `largest_char` function finds the largest `char` in a slice. The function bodies have the same code, so we eliminated the duplication by introducing a generic type parameter in a single function.
+
+>To parameterize the types in a new single function, we need to name the type parameter, just as we do for the value parameters to a function. <u>You can use any identifier as a type parameter name. But we’ll use `T` because, by convention, type parameter names in Rust are short, often just one letter, and Rust’s type-naming convention is UpperCamelCase.</u> <u>Short for type</u>, `T` is the default choice of most Rust programmers.
+
+>When we use a parameter in the body of the function, we have to declare the parameter name in the signature so that the compiler knows what that name means. Similarly, when we use a type parameter name in a function signature, we have to declare the type parameter name before we use it. To define the generic `largest` function, we place type name declarations inside angle brackets, `<>`, between the name of the function and the parameter list: `fn largest<T>(list: &[T]) -> &T`. We read this definition as 'The function `largest` is generic over some type `T`'. This function has one parameter named list, which is a slice of values of type `T`. The `largest` function will return a reference to a value of the same type `T`.
+
+>If we compile Code 10.1.4, we get C-Output 10.1.4.1. The help text mentions `std::cmp::PartialOrd`, which is a trait, and we’re going to talk about traits in the next section. For now, know that this error states that <u>the body of `largest` won’t work for all possible types that `T` could be</u>. Because we want to compare values of type `T` in the body, <u>we can only use types whose values can be ordered</u>. <u>To enable comparisons, the standard library has the `std::cmp::PartialOrd` trait that you can implement on types. To fix Code 10.1.4, we can follow the help text’s suggestion and restrict the types valid for `T` to only those that implement `PartialOrd` by rewriting the function signature of `largest` to be `fn largest<T: std::cmp::PartialOrd>(list: &[T]) -> &T`. The listing will then compile, producing E-Output 10.1.4.2 because the standard library implements `PartialOrd` on both `i32` and `char`.</u>
+
+A fundamental concept that the official book glosses over here—since it was introduced back in Ch. 4—is hidden in all the code snippets we've examined in this section: <u>slice types can also be used to reference contiguous elements of a `Vec<T>`</u>. As previously mentioned, <u>slices reference contiguous elements of any collection, regardless of whether the underlying data lives on the heap or the stack</u>!
+
+## In Struct Definitions
+
+>We can also define structs to use a generic type parameter in one or more fields using the `<>` syntax. Code 10.1.5 defines a `Point<T>` struct to hold `x` and `y` coordinate values of any type.
+
+```rust Code 10.1.5
 struct Point<T> {
     x: T,
     y: T,
 }
 
 fn main() {
-    let integer_point = Point { x: 5, y: 10 };
-    let float_point   = Point { x: 1.0, y: 4.0 };
-
-    println!("integer_point: ({}, {})", integer_point.x, integer_point.y);
-    println!("float_point:   ({}, {})", float_point.x,   float_point.y);
-
-    // This would NOT compile — x and y must be the same type T
-    // let mixed = Point { x: 5, y: 4.0 };
+    let integer = Point { x: 5, y: 10 };
+    let float = Point { x: 1.0, y: 4.0 };
 }
 ```
 
-To allow `x` and `y` to be *different* types, use two type parameters:
+>The syntax for using generics in struct definitions is similar to that used in function definitions. First, we declare the name of the type parameter inside angle brackets just after the name of the struct. Then, we use the generic type in the struct definition where we would otherwise specify concrete data types.
 
-```rust
+>Note that because we’ve used only one generic type to define `Point<T>`, this definition says that the `Point<T>` struct is generic over some type `T`, and the fields `x` and `y` are both that same type, whatever that type may be. If we create an instance of a `Point<T>` that has values of different types, for ex. by writing `let wont_work = Point { x: 5, y: 4.0 }` our code won’t compile (`4.0` defaults to `f64`, while `5` to `i32`).
+
+>To define a `Point` struct where `x` and `y` are both generics but could have different types, we can use multiple generic type parameters. For example, in Code 10.1.6, we change the definition of `Point` to be generic over types `T` and `U` where `x` is of type `T` and `y` is of type `U`.
+
+```rust Code 10.1.6
 struct Point<T, U> {
     x: T,
     y: U,
 }
 
 fn main() {
-    let mixed = Point { x: 5, y: 4.0 }; // T = i32, U = f64
-    println!("mixed: ({}, {})", mixed.x, mixed.y);
+    let both_integer = Point { x: 5, y: 10 };
+    let both_float = Point { x: 1.0, y: 4.0 };
+    let integer_and_float = Point { x: 5, y: 4.0 };
 }
 ```
 
-## Generic Enums
+>Now <u>all the instances of `Point` shown are allowed</u>! You can use as many generic type parameters in a definition as you want, but <u>using more than a few makes your code hard to read</u>. If you’re finding you need lots of generic types in your code, it could indicate that your code needs restructuring into smaller pieces.
 
-You've already been using generic enums without thinking about it. `Option<T>` and `Result<T, E>` are both defined this way in the standard library:
+## In Enum Definitions
 
-```rust
-// How Option is actually defined:
+>As we did with structs, we can define enums to hold generic data types in their variants. Let’s take another look at the `Option<T>` enum that the standard library provides, which we used in Ch. 6:
+
+```rust Code 10.1.7
 enum Option<T> {
     Some(T),
     None,
 }
+```
 
-// How Result is actually defined:
+>This definition should now make more sense to you. As you can see, the `Option<T>` enum is generic over type `T` and has two variants: `Some`, which holds one value of type `T`, and a `None` variant that doesn’t hold any value. By using the `Option<T>` enum, we can express the abstract concept of an optional value, and because `Option<T>` is generic, we can use this abstraction no matter what the type of the optional value is.
+
+>Enums can use multiple generic types as well. The definition of the `Result` enum that we used in Ch. 9 is one example:
+
+```rust Code 10.1.8
 enum Result<T, E> {
     Ok(T),
     Err(E),
 }
 ```
 
-You can define your own:
+>The `Result` enum is generic over two types, `T` and `E`, and has two variants: `Ok`, which holds a value of type `T`, and `Err`, which holds a value of type `E`. This definition makes it convenient to use the `Result` enum anywhere we have an operation that might succeed (return a value of some type `T`) or fail (return an error of some type `E`). In fact, this is what we used to open a file in Ch. 9, where `T` was filled in with the type `std::fs::File` when the file was opened successfully and `E` was filled in with the type `std::io::Error` when there were problems opening the file.
 
-```rust
-#[derive(Debug)]
-enum Tree<T> {
-    Leaf(T),
-    Node(Box<Tree<T>>, Box<Tree<T>>),
-}
+## In Method Definitions
 
-fn main() {
-    let t = Tree::Node(
-        Box::new(Tree::Leaf(1)),
-        Box::new(Tree::Leaf(2)),
-    );
-    println!("{:?}", t);
-}
-```
+>We can implement methods on structs and enums (as we did in Ch. 5) and use generic types in their definitions too. Code 10.1.9 shows the `Point<T>` struct with a method named `x` implemented on it.
 
-## Generic Methods with `impl<T>`
-
-To define methods on a generic struct, you must declare the type parameter after `impl`:
-
-```rust
+```rust Code 10.1.9
 struct Point<T> {
     x: T,
     y: T,
 }
 
 impl<T> Point<T> {
-    // Works for any T
-    fn x(&self) -> &T {
+    fn x(&self) -> &T { // getter
         &self.x
     }
 }
 
-impl Point<f64> {
-    // Only available when T is f64
-    fn distance_from_origin(&self) -> f64 {
-        (self.x * self.x + self.y * self.y).sqrt()
+fn main() {
+    let p = Point { x: 5, y: 10 };
+
+    println!("p.x = {}", p.x());
+}
+```
+
+>Here, we’ve defined a method named `x` on `Point<T>` that returns a reference to the data in the field `x`.
+
+>Note that <u>we have to declare `T` just after `impl` so that we can use `T` to specify that we’re implementing methods on the type `Point<T>`</u>. By declaring `T` as a generic type after `impl`, Rust can identify that the type in the angle brackets in `Point` is a generic type rather than a concrete type. We could have chosen a different name for this generic parameter than the generic parameter declared in the struct definition, but using the same name is conventional. <u>If you write a method within an `impl` that declares a generic type, that method will be defined on any instance of the type, no matter what concrete type ends up substituting for the generic type.</u>
+
+>We can also specify constraints on generic types when defining methods on the type. We could, for example, implement methods only on `Point<f32>` instances rather than on `Point<T>` instances with any generic type. In Code 10.1.10, we use the concrete type `f32`, meaning we don’t declare any types after `impl`.
+
+```rust Code 10.1.10
+impl Point<f32> {
+    fn distance_from_origin(&self) -> f32 {
+        (self.x.powi(2) + self.y.powi(2)).sqrt()
+    }
+}
+```
+
+><u>This code means the type `Point<f32>` will have a `distance_from_origin` method; other instances of `Point<T>` where `T` is not of type `f32` will not have this method defined.</u> The method measures how far our point is from the point at coordinates (0.0, 0.0) and uses mathematical operations that are available only for floating-point types.
+
+This final example perfectly clarifies why you must redeclare generic types inside `<>` immediately after the `impl` keyword. By doing this, <u>you are explicitly telling the compiler that these methods and associated functions apply to the generic version of the struct or enum, and not for some specific type implementation</u>!
+
+>Generic type parameters in a struct definition aren’t always the same as those you use in that same struct’s method signatures. Code 10.1.11 uses the generic types `X1` and `Y1` for the `Point` struct and `X2` and `Y2` for the `mixup` method signature to make the example clearer. The method creates a new `Point` instance with the `x` value from the `self` `Point` (of type `X1`) and the `y` value from the passed-in `Point` (of type `Y2`).
+
+<CodeGroup>
+```rust Code 10.1.11
+struct Point<X1, Y1> {
+    x: X1,
+    y: Y1,
+}
+
+impl<X1, Y1> Point<X1, Y1> {
+    fn mixup<X2, Y2>(self, other: Point<X2, Y2>) -> Point<X1, Y2> {
+        Point {
+            x: self.x,
+            y: other.y,
+        }
     }
 }
 
 fn main() {
-    let p_int   = Point { x: 5, y: 10 };
-    let p_float = Point { x: 3.0_f64, y: 4.0_f64 };
+    let p1 = Point { x: 5, y: 10.4 };
+    let p2 = Point { x: "Hello", y: 'c' };
 
-    println!("p.x = {}", p_int.x());
-    println!("distance = {}", p_float.distance_from_origin()); // 5.0
-    // p_int.distance_from_origin() — COMPILE ERROR, not defined for i32
+    let p3 = p1.mixup(p2);
+
+    println!("p3.x = {}, p3.y = {}", p3.x, p3.y);
+}
+```
+```text E-Output 10.1.11
+p3.x = 5, p3.y = c
+```
+</CodeGroup>
+
+>The purpose of this example is to demonstrate a situation in which some generic parameters are declared with `impl` and some are declared with the method definition. Here, the generic parameters `X1` and `Y1` are declared after `impl` because they go with the struct definition. The generic parameters `X2` and `Y2` are declared after `fn mixup` because they’re only relevant to the method.
+
+## Performance of Code Using Generics
+
+>You might be wondering whether there is a runtime cost when using generic type parameters. The good news is that <u>using generic types won’t make your program run any slower than it would with concrete types</u>.
+
+>Rust accomplishes this by performing **monomorphization** of the code using generics at compile time. Monomorphization is the process of turning generic code into specific code by filling in the concrete types that are used <u>when compiled</u>. <u>In this process, the compiler looks at all the places where generic code is called and generates code for the concrete types the generic code is called with.</u>
+
+>Let’s look at how this works by using the standard library’s generic `Option<T>` enum:
+
+```rust Code 10.1.12
+fn main() {
+    let integer = Some(5);
+    let float = Some(5.0);
 }
 ```
 
-The `impl<T>` block applies to all `Point<T>`, while `impl Point<f64>` adds methods only for the concrete `f64` specialization.
+>When Rust compiles this code, it performs monomorphization. During that process, the compiler reads the values that have been used in `Option<T>` instances and identifies two kinds of `Option<T>`: One is `i32` and the other is `f64`. As such, it expands the generic definition of `Option<T>` into two definitions specialized to `i32` and `f64`, thereby replacing the generic definition with the specific ones.
 
-## Monomorphization: Zero-Cost Generics
+>The monomorphized version of the code looks similar to the following (the compiler uses different names than what we’re using here for illustration):
 
-Rust uses **monomorphization** to implement generics. At compile time, Rust inspects every concrete type that a generic function or struct is instantiated with and generates dedicated machine code for each one. There is no runtime overhead — it's as if you had written the type-specific versions by hand.
+```rust Code 10.1.13
+enum Option_i32 {
+    Some(i32),
+    None,
+}
 
-```rust
-fn double<T: std::ops::Add<Output = T> + Copy>(x: T) -> T {
-    x + x
+enum Option_f64 {
+    Some(f64),
+    None,
 }
 
 fn main() {
-    // The compiler generates separate `double_i32` and `double_f64` functions
-    println!("{}", double(5_i32));
-    println!("{}", double(3.14_f64));
+    let integer = Option_i32::Some(5);
+    let float = Option_f64::Some(5.0);
 }
 ```
 
-The compiled binary contains two distinct machine-code functions. This is fundamentally different from how generics work in languages like Java (type erasure) or Go (interface boxing), both of which have runtime overhead. In Rust, **you pay nothing at runtime for using generics**.
-
-## Summary
-
-| Location | Syntax |
-|---|---|
-| Generic function | `fn foo<T>(x: T) -> T { … }` |
-| Generic struct | `struct Foo<T> { … }` |
-| Generic enum | `enum Foo<T> { … }` |
-| `impl` block for all T | `impl<T> Foo<T> { … }` |
-| `impl` block for one type | `impl Foo<i32> { … }` |
-| With trait bounds | `fn foo<T: Display + Clone>(x: T)` |
+>The generic `Option<T>` is replaced with the specific definitions created by the compiler. Because Rust compiles generic code into code that specifies the type in each instance, we pay no runtime cost for using generics. When the code runs, it performs just as it would if we had duplicated each definition by hand. The process of monomorphization makes Rust’s generics extremely efficient at runtime.

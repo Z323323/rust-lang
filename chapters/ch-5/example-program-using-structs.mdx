@@ -212,3 +212,11 @@ fn main() {
 >The `dbg!` macro can be really helpful when you’re trying to figure out what your code is doing!
 
 >In addition to the `Debug` trait, Rust has provided a number of traits for us to use with the derive attribute that can add useful behavior to our custom types. Those traits and their behaviors are listed in Appendix C. We’ll cover how to implement these traits with custom behavior as well as how to create your own traits in Ch. 10.
+
+## Appendix C: Derivable Traits - `Debug` for Programmer Output
+
+>The `Debug` trait enables debug formatting in format strings, which you indicate by adding `:?` within `{}` placeholders.
+
+>The `Debug` trait allows you to print instances of a type for debugging purposes, so you and other programmers using your type can inspect an instance at a particular point in a program’s execution.
+
+><u>The `Debug` trait is required, for example, in the use of the `assert_eq!` macro.</u> This macro prints the values of instances given as arguments if the equality assertion fails so that programmers can see why the two instances weren’t equal.

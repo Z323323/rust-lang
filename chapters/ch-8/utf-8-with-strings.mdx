@@ -141,7 +141,7 @@ fn main() {
 
 >In many other programming languages, accessing individual characters in a string by referencing them by index is a valid and common operation. However, if you try to access parts of a `String` using indexing syntax in Rust, you’ll get an error (we saw this problem already in Ch. 4). Consider the invalid code in Code 8.2.9.
 
-```rust Code 8.2.10
+```rust Code 8.2.9
 fn main() {
     let s1 = String::from("hi");
     let h = s1[0]; // error
@@ -158,7 +158,7 @@ fn main() {
 
 >If you were asked how long the string is, you might say 12. In fact, Rust’s answer is 24: That’s the number of bytes it takes to encode `Здравствуйте` in UTF-8, because each Unicode scalar value in that string takes 2 bytes of storage. Therefore, an index into the string’s bytes will not always correlate to a valid Unicode scalar value. To demonstrate, consider this invalid Rust code:
 
-```rust Code 8.2.11
+```rust Code 8.2.10
 fn main() {
     // [This code does not compile!] 
     let hello = "Здравствуйте";
@@ -201,7 +201,7 @@ fn main() {
 
 >Rather than indexing using `[]` with a single number, you can use `[]` with a range to create a string slice containing particular bytes:
 
-```rust Code 8.2.12
+```rust Code 8.2.11
 fn main() {
     let hello = "Здравствуйте";
 
@@ -220,14 +220,14 @@ fn main() {
 <u>The best way to operate on pieces of strings is to be explicit about whether you want characters or bytes. For individual Unicode scalar values, use the `chars` method.</u> Calling `chars` on `Зд` separates out and returns two values of type `char`, and you can iterate over the result to access each element:
 
 <CodeGroup>
-```rust Code 8.2.13
+```rust Code 8.2.12
 fn main() {
     for c in "Зд".chars() {
         println!("{c}");
     }
 }
 ```
-```text E-Output 8.2.13
+```text E-Output 8.2.12
 З
 д
 ```
@@ -236,14 +236,14 @@ fn main() {
 >Alternatively, <u>the `bytes` method returns each raw byte</u>, which might be appropriate for your domain:
 
 <CodeGroup>
-```rust Code 8.2.14
+```rust Code 8.2.13
 fn main() {
     for b in "Зд".bytes() {
         println!("{b}");
     }
 }
 ```
-```text E-Output 8.2.14
+```text E-Output 8.2.13
 208
 151
 208
@@ -255,10 +255,10 @@ fn main() {
 
 ><p><u>Getting grapheme clusters from strings, as with the Devanagari script, is complex, so this functionality is not provided by the standard library. Crates are available on [[crates.io](https://crates.io)] if this is the functionality you need.</u></p>
 
-I have inserted a tool here to inspect string memory without using unsafe blocks. Code 8.2.15 outputs each character of any Unicode-encoded string to the terminal, detailing both the memory address of every character and its individual memory footprint.
+I have inserted a tool here to inspect string memory without using unsafe blocks. Code 8.2.14 outputs each character of any Unicode-encoded string to the terminal, detailing both the memory address of every character and its individual memory footprint.
 
 <CodeGroup>
-```rust 8.2.15
+```rust Code 8.2.14
 fn main() {
     let chaos = String::from("🦀дमत🦀नतв🦀");
 
@@ -286,7 +286,7 @@ fn string_analysis(string_ref: &String) {
     println!("Bytes occupation: {}", (*string_ref).len() - prev_index);
 }
 ```
-```text E-Output 8.2.15
+```text E-Output 8.2.14
    Compiling ch_8_lab v0.1.0 (/var/home/z561/rust_projects/ch_8_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
      Running `/var/home/z561/rust_projects/ch_8_lab/target/debug/ch_8_lab`
