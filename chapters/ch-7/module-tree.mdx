@@ -331,11 +331,90 @@ fn fix_incorrect_order() {
 
 >Success! We think the `back_of_house` module and the `deliver_order` function are likely to stay in the same relationship to each other and get moved together should we decide to reorganize the crate’s module tree. Therefore, we used `super` so that we’ll have fewer places to update code in the future if this code gets moved to a different module.
 
-## Making Enums Public
+## Clarifying Private Module and Type Visibility
 
-><u>If we make an enum public, all of its variants are then public.</u> We only need the `pub` before the `enum` keyword, as shown in Code 7.3.10.
+Up to this point, it has been correctly observed that only an element (a type or a module) that is a sibling of another element declared private (by omitting `pub`) can access the contents of the latter. While this is true, it encompasses an important detail that must be understood. <u>Because the inner scopes of these elements can 'see' their outer scopes, all inner scopes of the sibling element can navigate up the hierarchy and reference the other private element. Similarly, the inner scopes of a private module can also 'see' private items if they are defined in outer parent scopes.</u> Grasping these concepts is crucial for mastering Rust's module system.
+
+Rust's visibility rules are deeply tied to its lexical scoping. <u>A child module inherits the visibility context of its parent.</u> Therefore:
+
+- <p><u>If a parent can see a private sibling, any child inside that parent can also look up the tree (using `super`) and see that same sibling.</u></p>
+- <p><u>A child module can always look up the tree and access the private items defined in its parent or grandparent modules.</u></p>
+
+To solidify these concepts, let us look at two comprehensive examples that demonstrate how inner scopes interact with private items across the module tree.
+
+To keep this section concise, the upcoming examples will declare modules using explicit `{}` scopes within the same file.
+
+### Example 1: Accessing a Private Module from a Sibling's Inner Scope
+
+In this scenario, we have a private module (`secret_vault`) and a sibling module (`staff`). Even from deep within the `staff` module's inner scopes, we can access the private `secret_vault` because the parent `staff` module has sibling-level access to it.
 
 ```rust Code 7.3.10
+mod corporate {
+    // A private module (no `pub`). 
+    // It is only visible to siblings within `corporate`.
+    mod secret_vault {
+        // The function itself must be public to be accessed once the module is reached.
+        pub fn get_classified_data() -> &'static str {
+            "Project Rust"
+        }
+    }
+
+    // A sibling module to `secret_vault`.
+    pub mod staff {
+        // An inner scope within the sibling module.
+        pub mod intern {
+            pub fn do_research() {
+                // The `intern` module can look up to `staff` (its parent), 
+                // and from `staff`, it can see `secret_vault` (the parent's sibling).
+                // `super::super` goes up from `intern` -> `staff` -> `corporate`.
+                let data = super::super::secret_vault::get_classified_data();
+                println!("Intern found: {}", data);
+            }
+        }
+    }
+}
+
+fn main() {
+    corporate::staff::intern::do_research(); // 'Intern found: Project Rust'
+}
+```
+
+### Example 2: Accessing Outer Private Elements from an Inner Scope
+
+In this scenario, a private item is defined at the top level of a module. Any nested modules (inner scopes) can look outward and freely access that private item, regardless of how deeply nested they are.
+
+```rust Code 7.3.11
+mod facility {
+    // A private element defined in the outer scope.
+    fn master_keycard() -> i32 {
+        80085
+    }
+
+    // A nested module.
+    pub mod security_sector {
+        // An even deeper inner scope.
+        pub mod control_room {
+            pub fn open_doors() {
+                // The inner scope can "see" outward into the parent scopes.
+                // It walks up the tree using `super::super` to reach `facility`,
+                // where it accesses the private `master_keycard` function.
+                let key = super::super::master_keycard();
+                println!("Doors opened with key: {}", key);
+            }
+        }
+    }
+}
+
+fn main() {
+    facility::security_sector::control_room::open_doors(); // 'Doors opened with key: 80085'
+}
+```
+
+## Making Enums Public
+
+><u>If we make an enum public, all of its variants are then public.</u> We only need the `pub` before the `enum` keyword, as shown in Code 7.3.12.
+
+```rust Code 7.3.12
 pub enum Appetizer {
     Soup,
     Salad,

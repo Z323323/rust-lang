@@ -1,19 +1,29 @@
 ---
-title: "Adding Search Functionality to Your Rust CLI Program"
-sidebarTitle: "Search Logic"
-description: "Implement a search function in Rust using TDD. Write a failing test first, then implement search to find lines containing a query string in file contents."
+title: "Adding Functionality with Test-Driven Development"
+sidebarTitle: "12.4 - Adding Functionality with Test-Driven Development"
 mode: "wide"
 ---
 
-The heart of minigrep is searching: given a query string and a block of text, find every line that contains the query. We'll implement this using **test-driven development (TDD)** — writing a failing test first, then writing just enough code to make it pass. TDD works particularly well in Rust because the compiler enforces function signatures even before you have a body, giving you a tight feedback loop.
+>Now that we have the search logic in _src/lib.rs_ separate from the `main` function, it’s much easier to write tests for the core functionality of our code. We can call functions directly with various arguments and check return values without having to call our binary from the command line.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+>In this section, we’ll add the searching logic to the `minigrep` program using the test-driven development (TDD) process with the following steps:
 
-## Writing the Failing Test
+>1. Write a test that fails and run it to make sure it fails for the reason you expect.
+>2. Write or modify just enough code to make the new test pass.
+>3. Refactor the code you just added or changed and make sure the tests continue to pass.
+>4. Repeat from step 1.!
 
-Add a `tests` module to `src/lib.rs`:
+>Though it’s just one of many ways to write software, TDD can help drive code design. Writing the test before you write the code that makes the test pass helps maintain high test coverage throughout the process.
 
-```rust
+>We’ll test-drive the implementation of the functionality that will actually do the searching for the query string in the file contents and produce a list of lines that match the query. We’ll add this functionality in a function called `search`.
+
+## Writing a Failing Test
+
+>In _src/lib.rs_, we’ll add a `tests` module with a test function. <u>The test function specifies the behavior we want the `search` function to have: It will take a query and the text to search, and it will return only the lines from the text that contain the query.</u> Code 12.4.1 shows this test.
+
+```rust Code 12.4.1
+// --snip--
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -31,13 +41,66 @@ Pick three.";
 }
 ```
 
-Run `cargo test` — it fails because `search` doesn't exist yet. That red test is your guide.
+>This test searches for the string `duct`. The text we’re searching is three lines, only one of which contains `duct` (note that <u>the backslash after the opening double quote tells Rust not to put a newline character at the beginning of the contents of this string literal</u>). <u>We assert that the value returned from the `search` function contains only the line we expect.</u>
 
-## Implementing `search`
+>If we run this test, it will currently fail because the `unimplemented!` macro panics with the message `not implemented`. In accordance with TDD principles, we’ll take a small step of adding just enough code to get the test to not panic when calling the function by defining the `search` function to always return an empty vector, as shown in Code 12.4.2. Then, the test should compile and fail because an empty vector doesn’t match a vector containing the line `safe, fast, productive.`.
 
-The function signature must satisfy the test:
+```rust Code 12.4.2
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    vec![]
+}
+```
 
-```rust
+>Now let’s discuss why we need to define an explicit lifetime `'a` in the signature of `search` and use that lifetime with the `contents` argument and the return value. Recall in Ch. 10 that the lifetime parameters specify which argument lifetime is connected to the lifetime of the return value. In this case, <u>we indicate that the returned vector should contain string slices that reference slices of the argument `contents` (rather than the argument `query`)</u>.
+
+>In other words, we tell Rust that the data returned by the `search` function will live as long as the data passed into the `search` function in the `contents` argument. This is important! <u>The data referenced by a slice needs to be valid for the reference to be valid; if the compiler assumes we’re making string slices of `query` rather than `contents`, it will do its safety checking incorrectly.</u>
+
+>If we forget the lifetime annotations and try to compile this function, we’ll get Output 12.4.1 error:
+
+<CodeGroup>
+```bash Command 12.4.1
+cargo build
+```
+```text Output 12.4.1
+   Compiling minigrep v0.1.0 (file:///projects/minigrep)
+error[E0106]: missing lifetime specifier
+ --> src/lib.rs:1:51
+  |
+1 | pub fn search(query: &str, contents: &str) -> Vec<&str> {
+  |                      ----            ----         ^ expected named lifetime parameter
+  |
+  = help: this function's return type contains a borrowed value, but the signature does not say whether it is borrowed from `query` or `contents`
+help: consider introducing a named lifetime parameter
+  |
+1 | pub fn search<'a>(query: &'a str, contents: &'a str) -> Vec<&'a str> {
+  |              ++++         ++                 ++              ++
+
+For more information about this error, try `rustc --explain E0106`.
+error: could not compile `minigrep` (lib) due to 1 previous error
+```
+</CodeGroup>
+
+>Rust can’t know which of the two parameters we need for the output, so we need to tell it explicitly. Note that the help text suggests specifying the same lifetime parameter for all the parameters and the output type, which is incorrect! <u>Because `contents` is the parameter that contains all of our text and we want to return the parts of that text that match, we know contents is the only parameter that should be connected to the return value using the lifetime syntax.</u>
+
+## Writing Code to Pass the Test
+
+>Currently, our test is failing because we always return an empty vector. To fix that and implement `search`, our program needs to follow these steps:
+
+>1. Iterate through each line of the contents.
+>2. Check whether the line contains our query string.
+>3. If it does, add it to the list of values we’re returning.
+>4. If it doesn’t, do nothing.
+>5. Return the list of results that match.
+
+### Iterating Through Lines with the `lines` Method & Searching Each Line for the Query & Storing Matching Lines
+
+>Rust has a helpful method to handle line-by-line iteration of strings, conveniently named `lines`. <u>The `lines` method returns an iterator.</u> We use an iterator within a `for` loop to run some code on each item in a collection.
+
+>Next, we’ll check whether the current line contains our query string. Fortunately, strings have a helpful method named `contains` that does this for us!
+
+>To finish this function, we need a way to store the matching lines that we want to return. For that, we can make a mutable vector before the `for` loop and call the `push` method to store a line in the vector. After the `for` loop, we return the vector, as shown in Code 12.4.3.
+
+```rust Code 12.4.3
 pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     let mut results = Vec::new();
 
@@ -46,124 +109,88 @@ pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
             results.push(line);
         }
     }
-
+    
     results
 }
 ```
 
-### Lifetime Annotation `'a`
+>Now the `search` function should return only the lines that contain `query`, and our test should pass. Let’s run the test:
 
-Notice `'a` ties the return value's lifetime to `contents`, not `query`. The returned slices point into the `contents` string — they don't own data. Rust needs the lifetime annotation to verify those slices won't outlive `contents`. Without it the compiler will reject the function with a lifetime error.
-
-Run `cargo test` again — the test passes. ✅
-
-## How `lines()` Works
-
-`str::lines()` is an iterator that yields each line as a `&str` slice, stripping the newline character. It handles both `\n` (Unix) and `\r\n` (Windows) line endings transparently:
-
-```rust
-let text = "line one\nline two\r\nline three";
-for line in text.lines() {
-    println!("{line}");
-}
-// line one
-// line two
-// line three
+<CodeGroup>
+```bash Command 12.4.2
+cargo test
 ```
+```text Output 12.4.2
+   Compiling minigrep v0.1.0 (file:///projects/minigrep)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
+     Running unittests src/lib.rs (target/debug/deps/minigrep-9cd200e5fac0fc94)
 
-## Using `contains` for Matching
+running 1 test
+test tests::one_result ... ok
 
-`str::contains` checks whether a pattern appears anywhere in the string. It's case-sensitive by default:
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-```rust
-assert!("Productive".contains("duct"));   // true
-assert!(!"Productive".contains("DUCT"));  // true – 'DUCT' not found
+     Running unittests src/main.rs (target/debug/deps/minigrep-9cd200e5fac0fc94)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests minigrep
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+</CodeGroup>
 
-Case-insensitive search is covered in the next section on environment variables.
+>Our test passed, so we know it works!
 
-## Integrating `search` into `run`
+>At this point, we could consider opportunities for refactoring the implementation of the `search` function while keeping the tests passing to maintain the same functionality. The code in the `search` function isn’t too bad, but it doesn’t take advantage of some useful features of iterators. We’ll return to this example in Ch. 13, where we’ll explore iterators in detail, and look at how to improve it.
 
-Update the `run` function in `src/lib.rs` to call `search` and print each matching line:
+>Now the entire program should work! Let’s try it out, first with a word that should return exactly one line from the Emily Dickinson poem: `frog`.
 
-```rust
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(&config.file_path)?;
-
-    for line in search(&config.query, &contents) {
-        println!("{line}");
-    }
-
-    Ok(())
-}
+<CodeGroup>
+```bash Command 12.4.3
+cargo run -- frog poem.txt
 ```
-
-Now run minigrep against the poem:
-
-```bash
-cargo run -- nobody poem.txt
+```text Output 12.4.3
+   Compiling minigrep v0.1.0 (file:///projects/minigrep)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running `target/debug/minigrep frog poem.txt`
+How public, like a frog
 ```
+</CodeGroup>
 
-Expected output:
+>Cool! Now let’s try a word that will match multiple lines, like `body`:
 
+<CodeGroup>
+```bash Command 12.4.4
+cargo run -- body poem.txt
 ```
+```text Output 12.4.4
+   Compiling minigrep v0.1.0 (file:///projects/minigrep)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.0s
+     Running `target/debug/minigrep body poem.txt`
 I'm nobody! Who are you?
 Are you nobody, too?
+How dreary to be somebody!
 ```
+</CodeGroup>
 
-Both lines that contain "nobody" are printed, and nothing else.
+>And finally, let’s make sure that we don’t get any lines when we search for a word that isn’t anywhere in the poem, such as `monomorphization`:
 
-## Adding More Tests
-
-Good test coverage catches regressions. Add tests for edge cases:
-
-```rust
-#[test]
-fn no_results() {
-    let query = "monomorphization";
-    let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.";
-    assert_eq!(Vec::<&str>::new(), search(query, contents));
-}
-
-#[test]
-fn multiple_results() {
-    let query = "safe";
-    let contents = "\
-safe harbor
-not safe anymore
-just kidding, safe!";
-    assert_eq!(
-        vec!["safe harbor", "not safe anymore", "just kidding, safe!"],
-        search(query, contents)
-    );
-}
+<CodeGroup>
+```bash Command 12.4.5
+cargo run -- monomorphization poem.txt
 ```
-
-Running `cargo test` exercises all three cases:
-
+```text Output 12.4.5
+   Compiling minigrep v0.1.0 (file:///projects/minigrep)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.0s
+     Running `target/debug/minigrep monomorphization poem.txt`
 ```
-test tests::no_results ... ok
-test tests::one_result ... ok
-test tests::multiple_results ... ok
+</CodeGroup>
 
-test result: ok. 3 passed; 0 failed
-```
+>Excellent! We’ve built our own mini version of a classic tool and learned a lot about how to structure applications. We’ve also learned a bit about file input and output, lifetimes, testing, and command line parsing.
 
-## TDD Benefits in Rust
-
-1. **Compiler-driven design** — writing the test first forces you to define the function signature before worrying about the implementation.
-2. **Regression safety** — every future change is validated against the test suite automatically.
-3. **Documentation** — tests serve as executable examples of how the function is meant to be called.
-
-## Summary
-
-- `str::lines()` splits content into an iterator of line slices.
-- `str::contains(pattern)` tests for substring presence (case-sensitive).
-- Lifetime `'a` links returned slices to the `contents` input, not the `query`.
-- TDD: write the test, watch it fail, implement the minimum code, watch it pass.
-- Integrate `search` into `run` by iterating the returned `Vec<&str>` and printing each line.
-
-The minigrep core is now functional. Next we'll make search case-insensitive via an environment variable.
+>To round out this project, we’ll briefly demonstrate how to work with environment variables and how to print to standard error, both of which are useful when you’re writing command line programs.

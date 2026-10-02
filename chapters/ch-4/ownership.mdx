@@ -6,7 +6,7 @@ sidebarTitle: "4.1 - What Is Ownership"
 
 This section has been explicitly <span style={{ color: "#009B77" }}>expanded</span> to offer improved clarity over the original text.
 
->Ownership is a set of rules that govern how a Rust program manages memory. If any of the rules are violated, the program won’t compile. None of the features of ownership will slow down your program while it’s running.
+><p><u>Ownership is a set of rules that govern how a Rust program manages memory. If any of the rules are violated, the program won’t compile. None of the features of ownership will slow down your program while it’s running.</u></p>
 
 >In this chapter, you’ll learn ownership by working through some examples that focus on a very common data structure: strings.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
@@ -25,7 +25,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>All of the scalar types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, <u>they are stored directly on the stack</u> and inherently implement the `Copy` trait! Regarding the types discussed in section 3.3: 'Tuples implements `Copy` if they only contain types that also implement `Copy`. For example, `(i32, i32)` implements `Copy`, but `(i32, String)` does not'. Arrays can also contain elements that do not implement the `Copy` trait. In such cases, arrays exhibit the exact same behavior as tuples.</p>
+>      <p>All of the scalar types which we explored in section 3.3 have a known, fixed size at compile time. Because of this, <u>they are stored directly on the stack and inherently implement the `Copy` trait</u>! Regarding the types discussed in section 3.3: 'Tuples implements `Copy` if they only contain types that also implement `Copy`. For example, `(i32, i32)` implements `Copy`, but `(i32, String)` does not'. Arrays can also contain elements that do not implement the `Copy` trait. In such cases, arrays exhibit the exact same behavior as tuples.</p>
 >     </div>
 >   </div>
 
@@ -33,27 +33,19 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>Types that manage dynamically sized data (such as `String`) must allocate their underlying memory on the heap. Consequently, they cannot implement the `Copy` trait.</p>
+>      <p>Types that manage dynamically sized data (such as `String`) must allocate their underlying memory on the heap. Consequently, they cannot implement the `Copy` trait. As observed in the latter part of section 3.2: the address (along with the string's metadata) that gets moved when `=` is used without `&` is stored on the STACK. Specifically, this address stored on the STACK points to a specific region of the HEAP memory.</p>
 >     </div>
 >   </div>
 
 ><p><u>Pushing to the stack is faster than allocating on the heap because the allocator never has to search for a place to store new data; that location is always at the top of the stack. Comparatively, allocating space on the heap requires more work because the allocator must first find a big enough space to hold the data and then perform bookkeeping to prepare for the next allocation.</u></p>
->   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
->     <span>↘</span>
->     <div>
->      <p>Remember, main memory (RAM) access operations are slower than the processor's calculation speed—often taking up to 100 to 300 times longer than a single CPU cycle. If the data the CPU needs to process is grouped in contiguous memory chunks (as it is on the stack), the hardware's prefetcher can efficiently load this data into the extremely fast cache memories (L1, L2, and L3). This guarantees a massive performance boost, making data retrieval roughly 10 to 100 times faster by completely bypassing the RAM. To give you an idea of how critical this optimization is, consider that L1 caches are physically etched directly onto the silicon die, often positioned just fractions of a millimeter away from the execution cores and that the caches themselves must be physically tiny; an L1 cache block typically occupies a mere 0.1 to 0.2 square millimeters (mm²) of silicon, while a larger shared L3 cache spans roughly 15 to 20 mm². By contrast, RAM is located centimeters away on the motherboard, measuring roughly 13 by 3 centimeters. Because memory access speed is bound by (1) the overhead of loading values into CPU registers and (2) the physical speed of electrical signals inside semi-gated circuits, processors lose their performance advantage if they must constantly jump around RAM. Gathering scattered data creates a severe bottleneck—and this is in general what happens with data allocated on the heap mainly because of the bytes length of such allocations. Nevertheless, the underlying reality is nuanced, and it is not always true that operations on heap-allocated data are significantly slower than those on stack-allocated data. While this is generally a good rule of thumb, every scenario requires deeper analysis, taking into account the number of data structures being processed, their overall size and the frequency of the operations.</p>
->     <div style={{ display: 'flex', color: '#009B77', marginTop: '-1.25rem', marginLeft: '-0.75rem' }}>
->       <span>↗</span>
->     </div>
->     </div>
->   </div>
+
 ><p><u>Accessing data in the heap is generally slower than accessing data on the stack because you have to follow a pointer to get there. Contemporary processors are faster if they jump around less in memory. A processor can usually do its job better if it works on data that’s close to other data (as it is on the stack) rather than farther away (as it can be on the heap).</u></p>
 
 ><p><u>When your code calls a function, the values passed into the function (including, potentially, pointers to data on the heap) and the function’s local variables get pushed onto the stack. When the function is over, those values get popped off the stack.</u></p>
 >   <div style={{ display: 'flex', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↘</span>
 >     <div>
->      <p>The exact same principle actually applies to the all scopes examined in section 3.2. As an inner scope terminates, its local variables are popped from the stack and destroyed. It's all starting to make more sense now, isn't it? Note, however, that <u>the underlying heap data is not blindly deallocated</u>. Rust's memory model dictates that heap memory is tied exclusively to ownership; therefore, <u>the data is only dropped if the variable going out of scope was the owner, rather than just a borrowed reference</u>.</p>
+>      <p>The exact same principle actually applies to the all scopes examined in section 3.2. As an inner scope terminates, its local variables are popped from the stack and destroyed. It's all starting to make more sense now, isn't it? Note, however, that <u>the underlying heap data is not blindly deallocated</u>. <u>Rust's memory model dictates that heap memory is tied exclusively to ownership; therefore, the data is only dropped if the variable going out of scope was the owner, rather than just a borrowed reference</u>.</p>
 >     </div>
 >   </div>
 
@@ -68,14 +60,14 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, one major mechanism you truly need to worry about is <u>the `=` assignment for variables whose types do not implement `Copy`</u>. For example, the variable <u>on the RIGHT side of the equals sign</u> (specifically, the memory address it points to) is <u>moved</u> if we do not apply the `&` symbol to explicitly <u>copy</u> its address. When this happens, it permanently <u>loses ownership of both its stack data (the memory address pointing to the heap) and the underlying heap memory itself</u>. In these specific cases, <u>the LEFT variable gains ownership of the heap memory address and the data it points to</u>. If the LEFT variable were to be destroyed at the end of the scope in which it is defined, then the ownership would be permanently lost and the data destroyed (both the heap address on the stack, and the data on the heap). In any case, the <u>EXISTING data will always have an owner</u>. With this fundamental point clarified, it is important to note that <u>the ownership mechanism becomes more nuanced when the `=` assignment is combined with the reference operator (`&`)</u>. The following rule analyzes exactly what happens in this scenario in greater detail.
+>       While this fact is true, it can cause confusion if we do not immediately distinguish between variables of types that implement the `Copy` trait and those that do not. Generally speaking, the fact that every value has an owner is fairly obvious: from a programmer's perspective, practically every value must be bound to a variable (its owner), otherwise, that specific value would be unusable. However, starting to view the concept of ownership as counter-intuitive for every variable is, in my opinion, incorrect and leads to confusion due to how the `Copy` trait works. As noted in section 3.2, one major mechanism you truly need to worry about is <u>the `=` assignment for variables whose types do not implement `Copy`</u>. For example, the variable <u>on the RIGHT side of the equals sign</u> (specifically, the memory address it points to) is <u>moved</u> if we do not apply the `&` symbol to explicitly <u>copy</u> its address. When this happens, it permanently <u>loses ownership of both its stack data (the memory address pointing to the heap and some metadata) and the underlying heap memory itself</u>. In these specific cases, <u>the LEFT variable gains ownership of the heap memory address + metadata and the data it points to</u>. Once the LEFT variable is destroyed at the end of the scope in which it is defined, ownership is permanently lost and the data is destroyed (both the stack-bound heap address + metadata, and the heap data itself). In any case, the <u>EXISTING data will always have an owner</u>. With this fundamental point clarified, it is important to note that <u>the ownership mechanism becomes more nuanced when the `=` assignment is combined with the reference operator (`&`)</u>. The following rule analyzes exactly what happens in this scenario in greater detail.
 >     </div>
 >   </div>
 >- There can only be <u>one</u> owner at a time.<br />
 >   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
 >     <span>↳</span>
 >     <div>
->       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <u>TWO distinct copies of that value in memory, bound to TWO distinct variables (the owners)</u>. However, <u>this principle becomes more complex when the assigned value is a memory address (a reference)</u>. As we saw in section 3.2, the variable on the LEFT side of the assignment receives a copy of the address, taking ownership of the pointer (address) itself. The subtle but critical detail here is that <u>the underlying data the address points to is still owned by the original variable, which maintains full ownership over that data</u>. This means <u>you can use your copied reference to access the data, but when the original owner is dropped from memory, the underlying data is deallocated</u>. <u>At that point, the secondary reference becomes invalid, and the compiler will stop you from accessing it!</u> This is a crucial concept not previously observed in section 3.2, perfectly illustrated by Code 4.1.1 and Code 4.1.2 below. Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated.
+>       This concept aligns seamlessly with our previous observations and does not conflict with the underlying mechanics of types implementing the `Copy` trait. When a value belonging to one variable is copied to another, there must necessarily exist <u>TWO distinct copies of that value in memory, bound to TWO distinct variables (the owners)</u>. However, <u>this principle becomes more complex when the assigned value is a memory address (a reference)</u>. As we saw in section 3.2, the variable on the LEFT side of the assignment receives a COPY of the address of the RIGHT side variable, taking ownership of the COPY of the pointer (address) itself. The subtle but critical detail here is that <u>the underlying data the address points to is still owned by the original variable, which maintains full ownership over that data</u>. <u>The RIGHT side variable maintains full ownership of its own copy of the address as well</u> (this one is quite obvious). This means <u>you can use your copied reference to access the data, but when the original owner is dropped from memory, the underlying data is deallocated</u>. <u>At that point, the secondary reference becomes invalid, and the compiler will stop you from accessing it!</u> This is a crucial concept not previously observed in section 3.2, perfectly illustrated by Code 4.1.1 and Code 4.1.2 below. Furthermore, the restriction that a value may have only a single owner at any given time does not preclude the possibility of data losing its ownership entirely and being deallocated.
 >     </div>
 >   </div>
 >- When the owner goes out of scope, the value will be dropped.<br />
@@ -88,7 +80,7 @@ This section has been explicitly <span style={{ color: "#009B77" }}>expanded</sp
 
 ## Ownership Mechanics for References
 
-As mentioned above, ownership mechanics for the scalar types discussed in section 3.3 are rather trivial. However, they can be intentionally made more complex if one chooses to <u>copy the stack address where these types are stored</u> (i.e., by taking a reference). In such scenarios, the exact same logic applies as when copying the address of a `String` variable. The reasoning is entirely analogous because, as initially mentioned and as we will analyze in detail in the next section, <u>the pointer to a `String` is also stored on the stack</u>. Ultimately, in both cases—whether dealing with types that implement the `Copy` trait or those that do not—<u>copying an address creates a situation where the left-side variable takes ownership of the address itself, but not the underlying value it points to, regardless of whether that data resides on the stack or the heap</u> (Code 4.1.1 and Code 4.1.2 clear up this mystery once and for all).
+As mentioned above, ownership mechanics for the scalar types discussed in section 3.3 are rather trivial. However, they can be intentionally made more complex if one chooses to <u>copy the stack address where these typed variables are stored</u> (i.e., by taking a reference). In such scenarios, the exact same logic applies as when copying the address of a `String` variable (some crucial and related concepts are highlighted in the yellow-box of section 3.2), since <u>the address of a `String` typed variable is also stored on the stack</u>. Ultimately, in both cases—whether dealing with types that implement the `Copy` trait or those that do not—<u>copying an address creates a situation where the left-side variable takes ownership of the address itself, but not the underlying value it points to, regardless of whether that data resides on the stack or the heap</u> (Code 4.1.1 and Code 4.1.2 clear up this mystery once and for all).
 
 One might therefore wonder why the compiler's behavior differs between types that do not implement the `Copy` trait and those that do, in cases where the variable itself is assigned rather than its address. The answer is that the compiler is smart enough to know that, for scalar types, it is simply not worth the effort to move the ownership (invalidating the RIGHT side variable) instead of generate two distinct copies of data having two distinct owners. This is because copying the actual data is so cheap that it generates no meaningful computational or spatial overhead.
 
@@ -102,19 +94,19 @@ One might therefore wonder why the compiler's behavior differs between types tha
      
      let y = {
      
-         let x: u8 = 17; /* The 'x' value is
+         let x: u8 = 17; /* The `x` value is
          a scalar type stored on the stack,
          not the heap. */
      
-         &x /* The address of 'x' is COPIED
-         into 'y'. However, 'x' maintains
-         full ownership of the value '17'
+         &x /* We try to COPY the address of
+         `x` into `y`. However, `x` maintains
+         full ownership of the value `17`
          on the stack. */
                     
      }; /* The inner scope ends here,
-     and 'x' is dropped, deallocating
-     '17' from the stack. Consequently,
-     'y' holds the original 'x' address,
+     and `x` is dropped, deallocating
+     `17` from the stack. Consequently,
+     `y` holds the original `x` address,
      but it now points to freed memory,
      becoming a dangling pointer! */
  }
@@ -127,10 +119,10 @@ One might therefore wonder why the compiler's behavior differs between types tha
   3 |     let y = {
     |         - borrow later stored here
   4 |     
-  5 |         let x: u8 = 17; /* The 'x' value is
+  5 |         let x: u8 = 17; /* The `x` value is
     |             - binding `x` declared here
  ...
-  9 |         &x /* The address of 'x' is COPIED
+  9 |         &x /* We try to COPY the address of
     |         ^^ borrowed value does not live long enough
  ...
  14 |     }; /* The inner scope ends here,
@@ -144,21 +136,21 @@ One might therefore wonder why the compiler's behavior differs between types tha
  fn main() {
      let s1 = String::from("hello");
      
-     let s2 = &s1; /* The address of 's1' is
-     COPIED into 's2'. However, 's1' 
-     maintains full ownership of the 'hello'
+     let s2 = &s1; /* The address of `s1` is
+     COPIED into `s2`. However, `s1` 
+     maintains full ownership of the `hello`
      string on the heap and its own
      metadata on the stack. */
     
      {
          let s = s1; /* Ownership of the data
-         is MOVED from 's1' to 's'. 's' is
+         is MOVED from `s1` to `s`. `s` is
          now the sole owner of the heap data,
          and stack metadata. */
                         
-     } /* The inner scope ends here, and 's'
+     } /* The inner scope ends here, and `s`
      is dropped, deallocating the heap data
-     and stack metadata. Consequently, 's2'
+     and stack metadata. Consequently, `s2`
      still holds the original address, but
      it now points to freed memory,
      becoming a dangling pointer! */
@@ -177,7 +169,7 @@ One might therefore wonder why the compiler's behavior differs between types tha
  24 |     let s1 = String::from("hello");
     |         -- binding `s1` declared here
  25 |     
- 26 |     let s2 = &s1; /* The address of 's1' is
+ 26 |     let s2 = &s1; /* The address of `s1` is
     |              --- borrow of `s1` occurs here
  ...
  33 |         let s = s1; /* Ownership of the data
@@ -188,20 +180,22 @@ One might therefore wonder why the compiler's behavior differs between types tha
     |
  help: consider cloning the value if the performance cost is acceptable
     |
- 26 |     let s2 = &s1.clone(); /* The address of 's1' is
+ 26 |     let s2 = &s1.clone(); /* The address of `s1` is
     |                 ++++++++
  ```
  </CodeGroup>
  </Column>
 </Columns>
 
-These recent examples might cause some confusion. If so, it is highly recommended to review the concepts from section 3.2 and carefully compare them with this section to clear up any doubts. Although these scenarios would cause complex runtime errors in other languages, the Rust compiler is specifically designed to catch and flag them before deployment—right at compile time. In fact, <u>compiler errors should never be viewed as flaws in the language, but rather as its greatest strength</u>. They force you to resolve complex issues at the right moment, preventing catastrophic bugs in production!
+These recent examples might cause some confusion. If so, it is highly recommended to review the concepts from section 3.2 and carefully compare them with this section to clear up any doubts. Although these scenarios would cause complex <u>runtime</u> errors in other languages, the Rust compiler is specifically designed to catch and flag them before deployment—right at <u>compile time</u>. In fact, <u>compiler errors should never be viewed as flaws in the language, but rather as its greatest strength</u>. They force you to resolve complex issues at the right moment, preventing catastrophic bugs in production!
 
-The language itself makes it difficult for these issues to occur in the first place. For instance, once you understand Code 4.1.1, preventing the issue is simple: <u>just remember not to return a reference to a variable created in an inner scope back to the outer scope (functions follow this exact same logic, as seen in section 3.2)</u>. Similarly, preventing the error in Code 4.1.2 is simply a matter of remembering <u>not to move types that do not implement the `Copy` trait into an inner scope</u>. <u>The resolution strategies observed in section 3.2 should never be forgotten</u>; they are excellent programming patterns for avoiding complex errors like these.
+The language itself makes it difficult for these issues to occur in the first place. For instance, once you understand Code 4.1.1, preventing the issue is simple: <u>just remember not to return a reference to a variable created in an inner scope back to the outer scope (functions follow this exact same logic, as seen in section 3.2)</u>. Similarly, preventing the error in Code 4.1.2 is simply a matter of remembering <u>not to move types that do not implement the `Copy` trait into an inner scope (if an outer-scope-usage is required)</u>. <u>The resolution strategies observed in section 3.2 should never be forgotten</u>; they are excellent programming patterns for avoiding complex errors like these.
 
+<Callout icon="key" color="#12A0D7" iconType="regular">
 In fact, a standard programming pattern in Rust is to <u>define your core, non-temporary variables</u> (your main application state) <u>within the `main` function</u>, often <u>instantiating them from specific imported modules</u>. <u>If these variables need to be modified, you do so by passing them to functions. Within those function scopes, local variables (parameters) temporarily borrow the original data to read or mutate it safely.</u>
+</Callout>
 
-Regarding Code 4.1.1, a beginner might mistakenly assume that avoiding returning references from an inner scope is the ultimate solution. As we will see later, however, <u>returning references from inner scopes is entirely possible</u>! To allow this, Rust simply requires additional information to guarantee that the reference will not point to data that gets dropped at the end of the inner scope—or anytime before the reference's binding in the inner scope. Specifically, this information (which introduces the concept of **lifetimes**) is tied directly to function constructs rather than raw scopes. This makes sense because, as noted in section 3.2, <u>you will never use raw scopes instead of functions, except for the rapid deallocation of temporary variables</u>.
+Regarding Code 4.1.1, a beginner might mistakenly assume that avoiding returning references from an inner scope is the ultimate solution. As we will see later, however, <u>returning references from inner scopes is entirely possible</u>! To allow this, Rust simply requires additional information to guarantee that the reference will not point to data that gets dropped at the end of the inner scope—or anytime before the reference's binding in the inner scope (this means that particular referenced variables will need to be initialized in some outer scope). Specifically, this information (which introduces the concept of **lifetimes**) is tied directly to function constructs rather than raw scopes. This makes sense because, as noted in section 3.2, <u>you will never use raw scopes instead of functions, except for the rapid deallocation of temporary variables</u>.
 
 Despite this, it is also possible to return references from a bare scope. However, the rules governing this specific use case differ from those applied to functions. In fact, a bare scope can be thought of as the normal flow of instructions—as if the program didn't explicitly use one—with the only difference being the subsequent deallocation of memory allocated within it at its end. The compiler's rules follow this exact logic, meaning it will not be necessary to specify any explicit lifetimes.
 
@@ -221,7 +215,7 @@ fn main() {
         unsafe { (heap_ptr as *const u8).add(2) }
         
         /* We are returning a reference pointing to data that will not be 
-           deallocated once this scope ends. This works because 's' is 
+           deallocated once this scope ends. This works because `s` is 
            defined in the outer scope and is not moved (the reference 
            itself is simply copied)! */
     };
@@ -279,9 +273,9 @@ For the sake of completeness, and to return to our discussion on functions, we w
  fn main() {
      let s1 = String::from("hello");
  
-     let s2 = &s1; /* The address of 's1' is
-     COPIED into 's2'. However, 's1'
-     maintains full ownership of the 'hello'
+     let s2 = &s1; /* The address of `s1` is
+     COPIED into `s2`. However, `s1`
+     maintains full ownership of the `hello`
      string on the heap and its own
      metadata on the stack. */
  
@@ -300,7 +294,7 @@ For the sake of completeness, and to return to our discussion on functions, we w
  17 |     let s1 = String::from("hello");
     |         -- binding `s1` declared here
  18 |
- 19 |     let s2 = &s1; /* The address of 's1' is
+ 19 |     let s2 = &s1; /* The address of `s1` is
     |              --- borrow of `s1` occurs here
  ...
  25 |     takes_ownership_and_drop(s1);

@@ -4,4 +4,383 @@ sidebarTitle: "11.3 - Test Organization"
 mode: "wide"
 ---
 
+>The Rust community thinks about tests in terms of two main categories: **unit tests** and **integration tests**. <u>Unit tests are small and more focused, testing one module in isolation at a time, and can test private interfaces. Integration tests are entirely external to your library and use your code in the same way any other external code would, using only the public interface and potentially exercising multiple modules per test.</u>
 
+>Writing both kinds of tests is important to ensure that the pieces of your library are doing what you expect them to, separately and together.
+
+## Unit Tests
+
+>The purpose of unit tests is to test each unit of code in isolation from the rest of the code to quickly pinpoint where code is and isn’t working as expected. <u>You’ll put unit tests in the _src_ directory in each file with the code that they’re testing. The convention is to create a module named _tests_ in each file to contain the test functions and to annotate the module with `cfg(test)`.</u>
+
+### The `tests` Module and `#[cfg(test)]`
+
+><u>The `#[cfg(test)]` annotation on the tests module tells Rust to compile and run the test code only when you run `cargo test`, not when you run `cargo build`.</u> This saves compile time when you only want to build the library and saves space in the resultant compiled artifact because the tests are not included. You’ll see that <u>because integration tests go in a different directory, they don’t need the `#[cfg(test)]` annotation</u>. However, because unit tests go in the same files as the code, you’ll use `#[cfg(test)]` to specify that they shouldn’t be included in the compiled result.
+
+>When we generated the new `adder` project in the first section of this chapter, Cargo generated this code for us:
+
+```rust Code 11.3.1
+pub fn add(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+```
+
+>On the automatically generated tests module, the attribute `cfg` stands for 'configuration' and tells Rust that the following item should only be included given a certain configuration option. In this case, the configuration option is `test`, which is provided by Rust for compiling and running tests. By using the `cfg` attribute, Cargo compiles our test code only if we actively run the tests with `cargo test`. <u>This includes any helper functions that might be within this module, in addition to the functions annotated with `#[test]`.</u>
+
+### Private Function Tests
+
+>Rust’s privacy rules do allow you to test private functions. Consider Code 11.3.2 with the private function `internal_adder`.
+
+```rust Code 11.3.2
+pub fn add_two(a: u64) -> u64 {
+    internal_adder(a, 2)
+}
+
+fn internal_adder(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal() {
+        let result = internal_adder(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+```
+
+>Note that the `internal_adder` function is not marked as `pub`. Tests are just Rust code, and the tests module is just another module. <u>Items in child modules can use the items in their ancestor modules.</u> In this test, we bring all of the items belonging to the tests module’s parent into scope with `use super::*`, and then the test can call `internal_adder`.
+
+Code 11.3.3 achieves the exact same result as Code 11.3.2 but in a significantly clearer manner. The use of `super::internal_adder` (a relative path) explicitly shows that access to `internal_adder` is routed through `super`, which refers to the parent scope (in this case, the crate root).
+
+Furthermore, the fact that `super::internal_adder` is invoked from within the body of a test function (like `internal`) does not alter path resolution. This is because <u>functions do not introduce a new hierarchical level in the module tree</u>.
+
+```rust Code 11.3.3
+// --snip--
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn internal() {
+        let result = super::internal_adder(2, 2); // =--\
+        // let result = crate::internal_adder(2, 2); // =
+        assert_eq!(result, 4);
+    }
+}
+```
+
+## Clarifying Module Tree Depth
+
+<u>The Rust module tree</u>—the navigable hierarchy used for path resolution, visibility, and scoping (using `::`)—<u>is constructed exclusively by modules (`mod`)</u>. Functions are simply items (leaf nodes) living inside that tree. <u>When you are executing code inside a function's body, keywords like `super` bypass the function entirely and refer to the parent of the module that contains the function.</u>
+
+It is important to distinguish between a module and a namespace.
+
+- <u>Types like enum, struct, and trait do act as namespaces for their variants or associated items</u> (e.g., accessing an enum variant via `Option::Some` or an associated function via `String::new`).
+- However, <u>they do not create structural 'module depth'</u>. They are terminal items that encapsulate their own associated data or behavior, but <u>you cannot use `super` from inside a struct's method to refer to the struct itself as if it were a module</u>.
+
+Finally, while Rust does allow you to define structs, traits, or even sub-modules inside a function's body, those nested items are strictly confined to the function's local scope. They are completely opaque to the outside world and cannot be accessed via external paths, meaning they do not contribute to the overarching, navigable module tree of the crate.
+
+Here is the definitive example that proves beyond a shadow of a doubt that namespaces (like structs and `impl` blocks) do not contribute to the module tree depth.
+
+We will prove this by putting an `impl` block and a `mod` block side-by-side, and using the `super` keyword inside both of them to see where it resolves.
+
+```rust Code 11.3.4
+fn top_level_function() {
+    println!("I am at the root of the crate!");
+}
+
+mod my_module {
+    pub fn module_level_function() {
+        println!("I am inside my_module!");
+    }
+
+    // ---------------------------------------
+    // SCENARIO 1: A Namespace (Struct + Impl)
+    // ---------------------------------------
+    pub struct MyStruct;
+
+    impl MyStruct {
+        pub fn test_namespace_depth() {
+            // If `impl MyStruct` created a new level of depth in the module tree,
+            // `super` would point to `my_module`.
+            // But it does NOT. It points straight to the parent of `my_module`.
+            
+            super::top_level_function(); // ✅ COMPILES PERFECTLY
+            
+            // super::module_level_function(); // ❌ COMPILER ERROR!
+            // The compiler cannot find `module_level_function` in `super`, 
+            // because `super` here means the crate root, not `my_module`.
+        }
+    }
+
+    // ---------------------------------------
+    // SCENARIO 2: A Real Module Depth (`mod`)
+    // ---------------------------------------
+    pub mod nested_module {
+        pub fn test_module_depth() {
+            // Because `mod nested_module` DOES create a new level of depth,
+            // `super` now points exactly to `my_module`.
+            
+            super::module_level_function(); // ✅ COMPILES PERFECTLY
+            
+            // super::top_level_function(); // ❌ COMPILER ERROR!
+            // The compiler cannot find `top_level_function` in `super`,
+            // because to reach the root from here, you need `super::super::`.
+        }
+    }
+}
+
+fn main() {}
+```
+
+### The `::` Illusion: Modules vs. Namespaces
+
+A common point of confusion arises when <u>accessing associated items from the outside</u>. To call the method in our previous example <u>from the crate root</u>, you must write:
+
+- `my_module::MyStruct::test_namespace_depth()`
+
+Visually, this looks identical to navigating through nested modules (e.g., `my_module::nested_module::function`). Because of this, <u>it is easy to mistakenly assume that `MyStruct` has become a node in the module tree</u>.
+
+However, <u>this is an optical illusion caused by Rust overloading the path separator (`::`)</u>. <u>Rust uses `::` for two entirely different operations</u>:
+
+- Navigating the module tree (moving through the architectural hierarchy).
+- Accessing a terminal namespace (accessing variants, constants, or methods associated with a type).
+
+When you write `my_module::MyStruct::`, <u>the `my_module::` part navigates the module tree</u>. <u>But the moment you append `MyStruct::`, you have technically exited the module tree and entered the namespace of a specific data type.</u>
+
+The ultimate proof of this boundary is that <u>Rust strictly forbids defining a new module (`mod`) inside a struct or an `impl` block</u>. <u>Once you enter a type's namespace, the module tree can go no deeper.</u>
+
+### Associated Functions in Traits
+
+One language feature just mentioned that has not yet been examined is the use of associated functions within the context of traits. For this reason, we will now provide a comprehensive explanation of this concept.
+
+In Rust, a trait can contain not only methods (which take a `self` parameter) but also associated functions (which do not take `self`). <u>A common use case is requiring any type that implements the trait to provide a constructor or a specific utility function.</u>
+
+<CodeGroup>
+```rust Code 11.3.5
+trait Factory {
+    // This is an associated function (no 'self' parameter).
+    // It acts as a blueprint that implementors must follow.
+    fn build(name: &str) -> Self; 
+}
+
+#[derive(Debug)]
+struct Robot {
+    name: String,
+}
+
+impl Factory for Robot {
+    fn build(name: &str) -> Self {
+        Robot {
+            name: name.to_string(),
+        }
+    }
+}
+
+fn main() {
+    let robot = Robot::build("Lancelot");
+    
+    println!("{:#?}", robot);
+}
+```
+```text E-Output 11.3.5
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `/var/home/z561/rust_projects/ch_11_lab/target/debug/ch_11_lab`
+Robot {
+    name: "Lancelot",
+}
+```
+</CodeGroup>
+
+## Integration Tests
+
+><u>In Rust, integration tests are entirely external to your library. They use your library in the same way any other code would, which means they can only call functions that are part of your library’s public API.</u> Their purpose is to test whether many parts of your library work together correctly. Units of code that work correctly on their own could have problems when integrated, so test coverage of the integrated code is important as well. <u>To create integration tests, you first need a _tests_ directory.</u>
+
+### The _tests_ Directory
+
+>We create a _tests_ directory at the top level of our project directory, next to _src_. <u>Cargo knows to look for integration test files in this directory.</u> We can then make as many test files as we want, and Cargo will compile each of the files as an individual crate.
+
+>Let’s create an integration test. Make a _tests_ directory inside the `adder` crate, and create a new file named _tests/integration_test.rs_. Your directory structure should look like this:
+
+```text ~/rust_projects/adder (1)
+adder
+├── Cargo.lock
+├── Cargo.toml
+├── src
+│   └── lib.rs
+└── tests
+    └── integration_test.rs
+```
+
+>Enter Code 11.3.6 into the _tests/integration_test.rs_ file.
+
+```rust Code 11.3.6
+use adder::add_two;
+
+#[test]
+fn it_adds_two() {
+    let result = add_two(2);
+    assert_eq!(result, 4);
+}
+```
+
+><u>Each file in the _tests_ directory is a separate crate</u>, so we need to bring our library into each test crate’s scope (and we can't use the `crate` keyword). For that reason, we add `use adder::add_two` at the top of the code, which we didn’t need in the unit tests.
+
+>We don’t need to annotate any code in _tests/integration_test.rs_ with `#[cfg(test)]`. Cargo treats the _tests_ directory specially and compiles files in this directory only when we run `cargo test`. Run Command 11.3.1 now:
+
+<CodeGroup>
+```bash Command 11.3.1
+cargo test
+```
+```text Output 11.3.1
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.31s
+     Running unittests src/lib.rs (target/debug/deps/adder-1082c4b063a8fbe6)
+
+running 1 test
+test tests::internal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/integration_test.rs (target/debug/deps/integration_test-1082c4b063a8fbe6)
+
+running 1 test
+test it_adds_two ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests adder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+</CodeGroup>
+
+><u>The three sections of output include the unit tests, the integration test, and the doc tests.</u> Note that <u>if any test in a section fails, the following sections will not be run</u>. For example, if a unit test fails, there won’t be any output for integration and doc tests, because those tests will only be run if all unit tests are passing.
+
+>The first section for the unit tests is the same as we’ve been seeing: one line for each unit test (one named `internal` that we added previously) and then a summary line for the unit tests.
+
+>The integration tests section starts with the line `Running tests/integration_test.rs`. Next, there is a line for each test function in that integration test and a summary line for the results of the integration test just before the `Doc-tests adder` section starts.
+
+><u>Each integration test file has its own section</u>, so if we add more files in the tests directory, there will be more integration test sections.
+
+>We can still run a particular integration test function by specifying the test function’s name as an argument to `cargo test`. To run all the tests in a particular integration test file, use the `--` test argument of `cargo test` followed by <u>the name of the file</u>:
+
+<CodeGroup>
+```bash Command 11.3.2
+cargo test --test integration_test
+```
+```text Output 11.3.2
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.64s
+     Running tests/integration_test.rs (target/debug/deps/integration_test-82e7799c1bc62298)
+
+running 1 test
+test it_adds_two ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+</CodeGroup>
+
+>This command runs only the tests in the _tests/integration_test.rs_ file.
+
+## Submodules in Integration Tests
+
+>As you add more integration tests, you might want to make more files in the _tests_ directory to help organize them; for example, <u>you can group the test functions by the functionality they’re testing</u>. As mentioned earlier, each file in the _tests_ directory is compiled as its own separate crate, which is useful for creating separate scopes to more closely imitate the way end users will be using your crate. However, this means <u>files in the _tests_ directory don’t share the same behavior as files in _src_ do</u>, as you learned in Ch. 7 regarding how to separate code into modules and files.
+
+><u>The different behavior of _tests_ directory files is most noticeable when you have a set of helper functions to use in multiple integration test files, and you try to extract them into a common module.</u> For example, if we create _tests/common.rs_ and place a function named `setup` in it, we can add some code to setup that we want to call from multiple test functions in multiple test files:
+
+```rust ~/rust_projects/adder/tests/common.rs
+pub fn setup() {
+    // setup code specific to your library's tests would go here
+}
+```
+
+>When we run the tests again, we’ll see a new section in the test output for the _common.rs_ file, even though this file doesn’t contain any test functions nor did we call the `setup` function from anywhere:
+
+<CodeGroup>
+```bash Command 11.3.3
+cargo test
+```
+```text Output 11.3.3
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s
+     Running unittests src/lib.rs (target/debug/deps/adder-92948b65e88960b4)
+
+running 1 test
+test tests::internal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/common.rs (target/debug/deps/common-92948b65e88960b4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/integration_test.rs (target/debug/deps/integration_test-92948b65e88960b4)
+
+running 1 test
+test it_adds_two ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests adder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+</CodeGroup>
+
+>Having `common` appear in the test results with `running 0 tests` displayed for it is not what we wanted. We just wanted to share some code with the other integration test files. <u>To avoid having `common` appear in the test output, instead of creating _tests/common.rs_, we’ll create _tests/common/mod.rs_.</u> The project directory now looks like this:
+
+```text ~/rust_projects/adder (2)
+├── Cargo.lock
+├── Cargo.toml
+├── src
+│   └── lib.rs
+└── tests
+    ├── common
+    │   └── mod.rs
+    └── integration_test.rs
+```
+
+><u>Naming the file this way tells Rust not to treat the `common` module as an integration test file.</u> When we move the `setup` function code into _tests/common/mod.rs_ and delete the _tests/common.rs_ file, the section in the test output will no longer appear. <u>Files in subdirectories of the _tests_ directory don’t get compiled as separate crates or have sections in the test output.</u>
+
+><u>After we’ve created _tests/common/mod.rs_, we can use it from any of the integration test files as a module.</u> Here’s an example of calling the `setup` function from the `it_adds_two` test in _tests/integration_test.rs_:
+
+```rust ~/rust_projects/adder/tests/integration_test.rs
+use adder::add_two;
+
+mod common;
+
+#[test]
+fn it_adds_two() {
+    common::setup(); // 'setup' is declared 'pub'.
+
+    let result = add_two(2);
+    assert_eq!(result, 4);
+}
+```
+
+### Integration Tests for Binary Crates
+
+><u>If our project is a binary crate that only contains a _src/main.rs_ file and doesn’t have a _src/lib.rs_ file, we can’t create integration tests in the _tests_ directory and bring functions defined in the _src/main.rs_ file into scope with a `use` statement.</u> Only library crates expose functions that other crates can use; binary crates are meant to be run on their own.
+
+>This is one of the reasons Rust projects that provide a binary have a straightforward _src/main.rs_ file that calls logic that lives in the _src/lib.rs_ file. Using that structure, integration tests can test the library crate with `use` to make the important functionality available. <u>If the important functionality works, the small amount of code in the _src/main.rs_ file will work as well, and that small amount of code doesn’t need to be tested.</u>

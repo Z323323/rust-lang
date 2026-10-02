@@ -1,175 +1,97 @@
 ---
-title: "Writing Error Messages to stderr Instead of stdout in Rust"
-sidebarTitle: "stderr"
-description: "Direct Rust error messages to stderr using eprintln! instead of println!. Learn why separating error output from program output matters in CLI tools."
+title: "Redirecting Errors to Standard Error"
+sidebarTitle: "12.6 - Redirecting Errors to Standard Error"
 mode: "wide"
 ---
 
-Every Unix process inherits two output streams: **stdout** (standard output) for normal results and **stderr** (standard error) for diagnostic messages. Mixing errors into stdout breaks pipelines and makes log files noisy. Rust provides `eprintln!` as the error-output counterpart to `println!`, and using it consistently is a mark of a well-behaved CLI tool.
+>At the moment, we’re writing all of our output to the terminal using the `println!` macro. <u>In most terminals, there are two kinds of output: standard output (`stdout`) for general information and standard error (`stderr`) for error messages. This distinction enables users to choose to direct the successful output of a program to a file but still print error messages to the screen.</u>
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+><u>The `println!` macro is only capable of printing to standard output</u>, so we have to use something else to print to standard error.
 
-## `println!` vs `eprintln!`
+## Checking Where Errors Are Written
 
-The two macros are syntactically identical — same format string syntax, same argument interpolation — but they write to different streams:
+>First, let’s observe how the content printed by `minigrep` is currently being written to standard output, including any error messages we want to write to standard error instead. We’ll do that by redirecting the standard output stream to a file while intentionally causing an error. We won’t redirect the standard error stream, so any content sent to standard error will continue to display on the screen.
 
-```rust
+><u>Command line programs are expected to send error messages to the standard error stream so that we can still see error messages on the screen even if we redirect the standard output stream to a file.</u> <u>Our program is not currently well behaved</u>: We’re about to see that it saves the error message output to a file instead!
+
+>To demonstrate this behavior, we’ll run the program with `>` and the file path, _output.txt_, that we want to redirect the standard output stream to. We won’t pass any arguments, which should cause an error:
+
+<CodeGroup>
+```bash Command 12.6.1
+# Output 12.6.1.1
+cargo run > output.txt &&
+# Output 12.6.1.2
+cat output.txt
+```
+```text Output 12.6.1.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/minigrep`
+```
+```text Output 12.6.1.2
+Problem parsing arguments: not enough arguments
+```
+</CodeGroup>
+
+>The `>` syntax tells the shell to write the contents of standard output to _output.txt_ instead of the screen. We didn’t see the error message we were expecting printed to the screen, so that means it must have ended up in the file. Output 12.6.1.2 is what _output.txt_ contains.
+
+>Yup, <u>our error message is being printed to standard output</u>. <u>It’s much more useful for error messages like this to be printed to standard error so that only data from a successful run ends up in the file.</u> We’ll change that.
+
+## Printing Errors to Standard Error
+
+>We’ll use Code 12.6.1 to change how error messages are printed. Because of the refactoring we did earlier in this chapter, all the code that prints error messages is in one function, `main`. <u>The standard library provides the `eprintln!` macro that prints to the standard error stream</u>, so let’s change the two places we were calling `println!` to print errors to use `eprintln!` instead.
+
+```rust Code 12.6.1
 fn main() {
-    println!("This goes to stdout");
-    eprintln!("This goes to stderr");
-}
-```
-
-Compile and run with output redirection:
-
-```bash
-cargo run 2>/dev/null   # hides stderr, shows only stdout
-cargo run 1>/dev/null   # hides stdout, shows only stderr
-```
-
-`2>` redirects file descriptor 2 (stderr); `1>` redirects file descriptor 1 (stdout).
-
-## Why It Matters for minigrep
-
-Imagine running minigrep and redirecting its output to a file:
-
-```bash
-cargo run -- nobody poem.txt > results.txt
-```
-
-If the file doesn't exist and we used `println!` for the error:
-
-```
-Should have been able to read the file: ...
-```
-
-...that message ends up inside `results.txt` alongside (or instead of) the search results. The file is now corrupted from the perspective of any downstream tool reading it.
-
-With `eprintln!`, the error appears on the terminal while the file receives only actual results.
-
-## Updating minigrep to Use `eprintln!`
-
-Every error path in `main` should use `eprintln!`:
-
-```rust
-use std::env;
-use std::process;
-use minigrep::Config;
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let config = Config::build(&args).unwrap_or_else(|err| {
+    let config = Config::build(env::args().collect::<Vec<String>>()).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {err}");
         process::exit(1);
     });
 
-    if let Err(e) = minigrep::run(config) {
+    if let Err(e) = run(config) {
         eprintln!("Application error: {e}");
         process::exit(1);
     }
 }
 ```
 
-Normal search results printed inside `run` with `println!` go to stdout. Error messages printed in `main`'s error branches go to stderr.
+>Let’s now run the program again in the same way, without any arguments and redirecting standard output with `>`:
 
-## Demonstrating the Difference
-
-### With a valid file
-
-```bash
-cargo run -- nobody poem.txt > output.txt
+<CodeGroup>
+```bash Command 12.6.2
+# Output 12.6.2.1
+cargo run > output.txt &&
+# Output 12.6.2.2
 cat output.txt
 ```
-
-```
-I'm nobody! Who are you?
-Are you nobody, too?
-```
-
-`output.txt` contains only the matching lines. No noise.
-
-### With a missing file
-
-```bash
-cargo run -- nobody missing.txt > output.txt
-```
-
-Terminal output (stderr, not redirected):
-
-```
-Application error: No such file or directory (os error 2)
-```
-
-`output.txt` is empty. The error did not pollute the output file.
-
-### With too few arguments
-
-```bash
-cargo run > output.txt
-```
-
-Terminal output (stderr):
-
-```
+```text Output 12.6.2.1
+   Compiling minigrep v0.1.0 (/var/home/z561/rust_projects/minigrep)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/minigrep`
 Problem parsing arguments: not enough arguments
 ```
-
-`output.txt` is empty again.
-
-## Capturing Both Streams
-
-Sometimes you want to capture everything — for logging or testing:
-
-```bash
-cargo run -- nobody poem.txt > out.txt 2> err.txt
+```text Output 12.6.2.2
 ```
+</CodeGroup>
 
-Or merge them into one file:
+>Let’s run the program again with arguments that don’t cause an error but still redirect standard output to a file, like so:
 
-```bash
-cargo run -- nobody poem.txt > combined.txt 2>&1
+<CodeGroup>
+```bash Command 12.6.3
+# Output 12.6.3.1
+cargo run -- to poem.txt > output.txt &&
+# Output 12.6.3.2
+cat output.txt
 ```
-
-`2>&1` means "redirect fd 2 to wherever fd 1 currently points."
-
-## Using `stderr` Directly
-
-For more control, write to `stderr` without the macro using `std::io::Write`:
-
-```rust
-use std::io::{self, Write};
-
-fn main() {
-    let stderr = io::stderr();
-    writeln!(&mut stderr.lock(), "Error: something went wrong").unwrap();
-}
+```text Output 12.6.3.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/minigrep to poem.txt`
 ```
-
-This is rarely needed; `eprintln!` covers most cases.
-
-## `RUST_LOG` and Structured Logging
-
-For production tools, consider the [`log`](https://crates.io/crates/log) facade with a backend like [`env_logger`](https://crates.io/crates/env_logger). These write to stderr by default and let users control verbosity with `RUST_LOG=debug cargo run`.
-
-```rust
-// Cargo.toml: log = "0.4", env_logger = "0.11"
-fn main() {
-    env_logger::init();
-    log::error!("This is an error");
-    log::info!("This is informational");
-}
+```text Output 12.6.3.2
+Are you nobody, too?
+How dreary to be somebody!
 ```
+</CodeGroup>
 
-## Summary
+>We won’t see any output to the terminal, and _output.txt_ will contain our results: Output 12.6.3.2.
 
-| Macro | Stream | File descriptor | Use for |
-|-------|--------|-----------------|---------|
-| `println!` | stdout | 1 | Normal program output |
-| `eprintln!` | stderr | 2 | Error and diagnostic messages |
-
-- Redirect stdout with `>`, stderr with `2>`.
-- Using `eprintln!` for errors means redirecting stdout to a file won't capture error messages.
-- Apply `eprintln!` consistently in `main`'s error handling paths; keep `run`'s normal output on stdout.
-
-This completes the minigrep project. You now have a functional, well-structured CLI tool that reads arguments, reads files, searches content, respects environment variables, and routes output correctly between stdout and stderr.
+>This demonstrates that we’re now using standard output for successful output and standard error for error output as appropriate.

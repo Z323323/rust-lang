@@ -210,7 +210,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 >It does pass! Note the `use super::*;` line inside the `tests` module. The `tests` module is a regular module that follows the usual visibility rules we covered in Ch. 7. Because the `tests` module is an inner module, we need to bring the code under test in the outer module into the scope of the inner module. We use a glob (`*`) here, so anything we define in the outer module is available to this `tests` module.
 
 <Note>
-In Ch. 7, the use of the `mod` keyword was always associated with creating a new file to house the module's contents. Here, however, the module's contents are introduced using an inline scope and are defined directly within the same file where `mod` is invoked. The underlying behavior is identical.
+In Ch. 7, the use of the `mod` keyword was almost always associated with creating a new file to house the module's contents. Here, however, the module's contents are introduced using an inline scope and are defined directly within the same file where `mod` is invoked. The underlying behavior is identical.
 </Note>
 
 The reason Ch. 7 always paired `mod` with a new file comes down to idiomatic project organization and the scope of the book—following the official book's approach in that context would have required an unnecessary extra section. Generally speaking, <u>defining a new file improves modularity and organization, but it is not strictly mandatory</u>.

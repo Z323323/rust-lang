@@ -95,7 +95,7 @@ You can picture nested scopes like the layers of an onion:
 \dots\text{ }\rightarrow\text{ }\textcolor{green}{\{}\text{ 3rd }\textcolor{green}{\{}\text{ 2nd }\textcolor{green}{\{}\text{ 1st }\textcolor{red}{\}}\text{ 2nd }\textcolor{red}{\}}\text{ 3rd }\textcolor{red}{\}} \rightarrow\text{ }\dots
 ```
 
-The innermost scope (marked as $\text{1st}$) is the first to disappear when its block ends. Then the $\text{2nd}$ one disappears, followed by the $\text{3rd}$, and so on. This means that <u>the variables within each of the scopes shown will cease to exist in the exact same order</u>.
+The innermost scope (marked as $\text{1st}$) is the first to disappear when its block ends. Then the $\text{2nd}$ one disappears, followed by the $\text{3rd}$, and so on. This means that <u>the variables declared within each of the scopes shown will cease to exist in the exact same order</u>.
 
 As we saw earlier, <u>a simple inner scope can see variables from its outer scopes</u> (we had access to the variable `x` defined in the outer scope). This is partly because they are still 'alive'. However, the reverse is not true: <u>outer scopes cannot see inside inner scopes</u>.
 
@@ -275,7 +275,7 @@ There is a primary way (<u>one of two possible approaches</u>) to preserve the r
 
 ### Expressions
 
-<u>Distinguishing between an expression and a **statement** is crucial</u> in Rust. Given Code 3.2.11, `let x: u32 = 17;`, `let y: u32 = 1337;`, `let z = x + y;`, `let a = println!("{z}");`, and `println!("{:?}", a);` are statements, whereas <u>`17`, `1337`, `x + y`, `println!("{z}")`, and `println!("{:?}", a)` are expressions that evaluate to values</u>.
+<u>Distinguishing between an expression and a **statement** is crucial</u> in Rust. Given Code 3.2.11, `let x: u32 = 17;`, `let y: u32 = 1337;`, `let z = x + y;`, `let a = println!("{z}");`, and `println!("{:?}", a);` are statements, whereas <u>`17`, `1337`, `x + y`, `println!("{z}")`, and `println!("{:?}", a)` (note the absence of `;`!) are expressions that evaluate to values</u>.
 
 Expressions and functions will be analyzed in detail in section 3.4. For now, it is only important to distinguish <u>expressions</u> from <u>statements</u> and <u>values</u> (the latter distinction being significantly more subtle).
 
@@ -377,7 +377,7 @@ At first glance, this approach might seem sufficient for returning any value cal
 
 First, you must 'capture' the function's return value using `let`, which means you either have to define a brand-new variable, or overwrite an existing one (which must be explicitly declared as `mut`).
 
-The second issue—which is significantly more cumbersome—is that <u>if you want to keep using the variables you passed as arguments once you are back in the outer scope, you would have to return all of them</u> (it is possible to return multiple variables at once, as we will explore later).
+The second issue—which is significantly more cumbersome—is that if you want to keep using the variables you passed as arguments once you are back in the outer scope, you would have to return all of them (it is possible to return multiple variables at once, as we will explore later).
 
 <u>From a data flow perspective, this pattern is terrible.</u> As we observed earlier, <u>when a variable is passed as an argument to a function, it is bound as a new local variable within the function's scope</u>. <u>This means the data is copied from the outer scope to the inner scope.</u> Furthermore, once the function finishes its modifications, you would have to <u>copy that data back to the outer scope</u>.
 
@@ -429,13 +429,80 @@ help: consider cloning the value if the performance cost is acceptable
 ```
 </CodeGroup>
 
+<Tabs>
+<Tab title="The Issue">
 This issue occurs because, <u>whenever a value is assigned to a new variable, some data must be transferred</u>. <u>Because duplicating dynamic and potentially massive data structures (like `String`) is incredibly expensive in terms of memory allocation and execution time, the compiler outright refuses to implicitly copy the actual data the way it does for simple scalar types (like `u32`).</u>
 
-Instead, <u>the compiler simply transfers the memory address pointing to the data from one variable to the other</u>. <u>If the variable does not implement `Copy`, it does not duplicate the underlying data. Thanks to this process, the compiler avoids a heavy performance hit, transferring only a tiny, fixed-size pointer that references the data in memory.</u>
+Instead, <u>the compiler simply TRANSFERS the memory address pointing to the data FROM ONE VARIABLE TO THE OTHER</u>. <u>If the variable's type does not implement `Copy`, it does not duplicate the underlying data. Thanks to this process, the compiler avoids a heavy performance hit, transferring only a tiny, fixed-size pointer that references the data in memory.</u>
 
-The direct consequence of this process is that <u>the original variable is invalidated and no longer holds the reference (address) to that data</u> (we will explore exactly why in the next chapter).
+The direct consequence of this process is that <u>the original variable is invalidated and no longer holds the reference (address) to that data</u>.
 
 For this reason, when we try to access `s_x` in the outer scope after it has been **moved** into the inner scope, the compiler throws an error—<u>that address was moved into the `s_x` variable within the inner scope; consequently, when that scope terminated, the address was dropped forever</u>!
+
+A concrete demonstration of this explanation can be found in the 'PoC' tab. Even if the code seems daunting at this stage of your learning journey, it will make complete sense right after reading Ch. 4!
+</Tab>
+<Tab title="PoC">
+<CodeGroup>
+```rust PoC 3.2.1
+fn main() {
+    let s_x = String::from("17");
+    let s_x_ptr = &s_x as *const String as *const usize;
+    let s_y = String::from("1337");
+    let s_y_ptr = &s_y as *const String as *const usize;
+    println!("{:p}", unsafe { *s_x_ptr.add(1) as *const usize });
+    println!("{:p}", unsafe { *s_y_ptr.add(1) as *const usize });
+
+    let s_x = {
+        // s_x is MOVED!
+        let s_x = s_x;
+        let s_x_ptr = &s_x as *const String as *const usize;
+        println!("{:p}", unsafe { *s_x_ptr.add(1) as *const usize });
+        // s_y is MOVED!
+        let s_y = s_y;
+        let s_y_ptr = &s_y as *const String as *const usize;
+        println!("{:p}", unsafe { *s_y_ptr.add(1) as *const usize });
+        format!("{s_x}{s_y}")
+        // Note the ABSENCE of a ';'
+    }; /* s_x and s_y are DROPPED here, but s_x
+    is re-declared so that only s_y is no
+    longer accessible in the outer scope!
+    Note also that s_x is an entirely new
+    variable, pointing to a brand new
+    address on the HEAP. */
+
+    println!("{s_x}");
+    let s_x_ptr = &s_x as *const String as *const usize;
+    println!("{:p}", unsafe { *s_x_ptr.add(1) as *const usize });
+    print!("{}", unsafe { *(*s_x_ptr.add(1) as *const u8) as char });
+    print!("{}", unsafe {
+        *(*s_x_ptr.add(1) as *const u8).add(1) as char
+    });
+    print!("{}", unsafe {
+        *(*s_x_ptr.add(1) as *const u8).add(2) as char
+    });
+    print!("{}", unsafe {
+        *(*s_x_ptr.add(1) as *const u8).add(3) as char
+    });
+    print!("{}", unsafe {
+        *(*s_x_ptr.add(1) as *const u8).add(4) as char
+    });
+    println!("{}", unsafe {
+        *(*s_x_ptr.add(1) as *const u8).add(5) as char
+    });
+}
+```
+```text PoC 3.2.1 - Output
+0x557d413fad60
+0x557d413fad80
+0x557d413fad60
+0x557d413fad80
+171337
+0x557d413fada0
+171337
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Solving the Problem for Block Scopes
 
@@ -448,13 +515,13 @@ fn main() {
     
     {
     
-        let s_x = &s_x; /* Here, we shadow/re-assign s_x, exactly as we did in the example
+        let s_x = &s_x; /* Here, we shadow/re-assign `s_x`, exactly as we did in the example
                            at the beginning of the chapter and in several other instances.
-                           But this time, we explicitly copy the address of '17' in memory,
-                           and not the data '17' itself! */
-    } // Here, the inner scope terminates, and the inner s_x variable is dropped.
+                           But this time, we explicitly COPY the ADDRESS of the outer `s_x`
+                           in memory, and not the data `17` itself! */
+    } // Here, the inner scope terminates, and the inner `s_x` variable is dropped.
     
-    println!("{s_x}"); /* Here, we try to access the outer s_x, exactly as we did in
+    println!("{s_x}"); /* Here, we try to access the outer `s_x`, exactly as we did in
                           the example at the beginning of the chapter. */
 }
 ```
@@ -467,11 +534,84 @@ fn main() {
 
 The core concept you must understand is this: <u>copying a value (in this case, a memory address) effectively generates TWO completely separate instances of that value</u>.
 
-In fact, <u>memory addresses themselves have specific types in Rust, and these types implement the `Copy` trait! For this reason, assignment via the `=` operator generates TWO copies of the address</u>.
+In fact, memory addresses are represented by distinct types in Rust, and <u>immutable references (`&T`) implement the `Copy` trait</u>! For this reason, <u>assignment via the `=` operator</u> (e.g., `let new_ref = old_ref`) simply <u>duplicates the memory address, resulting in TWO independent variables that point to the exact same data</u>.
 
 <u>Moving a memory address</u>, on the other hand—which is what we attempted earlier—<u>does not create a second instance</u>. <u>It maintains a SINGLE instance and strictly transfers its ownership from one variable to another!</u>
 
 Because of this distinction, <u>when the inner scope terminates, the outer `s_x` variable still holds its own copy of the address, completely unaffected by the fact that the inner copy was dropped at the end of the inner scope</u>!
+
+<Info>
+In Rust, memory addresses are represented by references (`&T` or `&mut T`) and raw pointers (`*const T` or `*mut T`).
+
+- Immutable references (`&T`) and raw pointers DO implement `Copy`.
+- <u>Mutable references (`&mut T`) DO NOT implement `Copy`. They move.</u> If they copied, you would end up with two mutable pointers to the same data, which violates Rust's strict aliasing rules.
+
+  Here is a clear and simple example demonstrating that a mutable reference (`&mut u8`) is moved and not copied, making the original reference immediately unusable.
+
+  <CodeGroup>
+  ```rust PoC 3.2.2
+  fn main() {
+      let mut x: u8 = 10;
+
+      // 1. Create a mutable reference to `x`.
+      let ref1: &mut u8 = &mut x;
+    
+      // Printing `x` (NOT `ref1`) address in the STACK.
+      println!("{:p}", ref1 as *mut u8);
+
+      // 2. Assign `ref1` to a new variable: this is a MOVE, not a copy!
+      let ref2 = ref1;
+
+      // 3. Trying to use `ref1` again... THE COMPILER STOPS IT!
+      // *ref1 = 20; // ERROR: use of moved value: `ref1`
+    
+      // Printing `x` (NOT `ref2`) address in the STACK.
+      println!("{:p}", ref2 as *mut u8);
+      
+      // `ref2`, instead, works perfectly because it inherited exclusive ownership.
+      *ref2 = 20;
+
+      println!("x is now: {}", x); // Prints 'x is now: 20'.
+  }
+  ```
+  ```text Poc 3.2.2 - Output
+     Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+       Running `target/debug/ch_13_lab`
+  0x7ffd160b4ef7
+  0x7ffd160b4ef7
+  x is now: 20
+  ```
+  </CodeGroup>
+</Info>
+
+<Warning>
+There is one final concept needed to bring this discussion full circle. Although Code 3.2.15 actually moves the address of `s_x`'s data (`17`) into the inner scope, it is crucial to understand which address we are actually talking about.
+
+First, it must be emphasized that—unlike what we just observed in the info-box—the mechanism behind moving `s_x` has nothing to do with the specific rules for address types. The type of `s_x` is `String`; it is an owned data structure, not a reference.
+
+Second, as hinted earlier, it is necessary to understand which address exactly gets transferred. If the memory address of the outer `s_x` variable itself were moved, then the inner `s_x` should have the same address, but this does not happen! In fact, <u>`s_x` possesses an address that points to a structure in a memory zone called the STACK</u>. <u>This memory zone contains another address that points to a memory zone called the HEAP (which contains the string data of `s_x`, i.e., `17`), and it is exactly this latter address that is moved!</u>
+
+<p><u>Turning our attention to PoC 3.2.2, the address actually moved in this case is precisely that of the variable `x`! This occurs because `x`'s data resides on the STACK rather than the HEAP; consequently, `x` requires one less memory 'jump' to reach the underlying raw data, compared to what we saw in Code 3.2.15 for `s_x`.</u></p>
+
+To summarize and simplify, the initial layout of `x` in PoC 3.2.2, and `s_x` <u>in the outer scope</u> of Code 3.2.[15, 16], looks something like this:
+
+- [PoC 3.2.2] `addr_of(x) -> value_of(x)`.
+- [Code 3.2.15] `addr_of(outer_scope#s_x) -> addr_of(string) -> data`.
+- [Code 3.2.16] `addr_of(outer_scope#s_x) -> addr_of(string) -> data`.
+
+The addresses actually copied/moved are respectively:
+
+- [PoC 3.2.2] `addr_of(x)` (COPIED into `ref1` but MOVED from `ref1` to `ref2`).
+- [Code 3.2.15] `addr_of(string)` (MOVED).
+- [Code 3.2.16] `addr_of(outer_scope#s_x)` (COPIED).
+
+As for the complete structure of `ref1` or `ref2` in PoC 3.2.2, and `s_x` <u>in the inner scope</u> of Code 3.2.[15, 16], we observe the following:
+
+- [PoC 3.2.2] `addr_of(ref1 / ref2) -> addr_of(x) -> value_of(x)`.
+- [Code 3.2.15] `addr_of(inner_scope#s_x) -> addr_of(string) -> data`.
+- [Code 3.2.16] `addr_of(inner_scope#s_x) -> addr_of(outer_scope#s_x) -> addr_of(string) -> data`.
+</Warning>
 
 With this in mind, we can even repurpose Code 3.2.12 to see exactly <u>what type a memory address is under the hood</u>!
 
@@ -482,13 +622,15 @@ fn print_type<T>(_: &T) {
 
 fn main() {
     let s_x: String = String::from("17");
-    print_type(&(&s_x)); // Outputs '&alloc::string::String'
+    print_type(&(&s_x)); // Outputs '&alloc::string::String'.
 }
 ```
 
+Code 3.2.17 is of little overall importance. It is shown here simply to demonstrate that the further you explore Rust, the more you collide with intricate architectural details. This is one of those instances where looking too deep isn't worthwhile. From the viewpoint of a developer using Rust as a practical tool rather than working on the core language itself, it makes no practical difference whether you encounter `&String` or `&alloc::string::String`—they refer to the exact same thing. The latter is simply the full path of the type inside the language's internal libraries, which the compiler automatically abstracts away so you don't have to worry about specifying it.
+
 ### Extending the Concept to Function Scopes
 
-The following Code 3.2.18 demonstrates a closely related, non-trivial example that is able to trigger the exact same error we just observed. However, this time, we will rely on functions—and consequently, isolated function scopes. Try compiling and running Code 3.2.18 using `cargo run` just by copying and pasting it exactly as it is. For now, the code will execute perfectly without throwing any errors.
+The following Code 3.2.18 demonstrates a closely related, non-trivial example that is able to trigger the exact same error we just observed in Code 3.2.15. However, this time, we will rely on functions—and consequently, isolated function scopes. Try compiling and running Code 3.2.18 using `cargo run` just by copying and pasting it exactly as it is. For now, the code will execute perfectly without throwing any errors.
 
 ```rust Code 3.2.18 focus={1-4,8-11,13-15,20,21}
 fn drops_s_x_and_s_y(s_x: String, s_y: String) -> String {
@@ -575,12 +717,12 @@ To maintain the approach outlined throughout this section, <u>Code 3.2.20 recrea
       let s_y = String::from("1337");
   
       let s_z = {
-          // (&)s_x is MOVED here!
+          // s_x is MOVED!
           let s_x = s_x;
-          // (&)s_y is MOVED here!
+          // s_y is MOVED!
           let s_y = s_y;
           format!("{s_x} + {s_y}")
-          // Note the ABSENCE of a ';'
+          // Note the ABSENCE of a ';'.
       }; /* s_x and s_y are DROPPED here!
             They are no longer accessible
             in the outer scope! */
@@ -591,8 +733,9 @@ To maintain the approach outlined throughout this section, <u>Code 3.2.20 recrea
 
 ### Solving the Problem for Function Scopes
 
-Conversely, if we utilize `doesnt_drop_s_x_and_s_y` instead (by uncommenting the line `doesnt_drop_s_x_and_s_y(&s_x, &s_y, &mut s_z)`), you will see that we can also safely uncomment both `println!` macros. If you run Code 3.2.21 with `cargo run`, it will compile perfectly without throwing any errors.
+Conversely, if we utilize `doesnt_drop_s_x_and_s_y` (by uncommenting the line `doesnt_drop_s_x_and_s_y(&s_x, &s_y, &mut s_z);`), you will see that we can also safely uncomment both `println!` macros. If you run Code 3.2.21 with `cargo run`, it will compile perfectly without throwing any errors.
 
+<CodeGroup>
 ```rust Code 3.2.21 focus={5-12,16-21}
 fn drops_s_x_and_s_y(s_x: String, s_y: String) -> String {
     format!("{s_x} + {s_y}")
@@ -611,11 +754,12 @@ fn main() {
 
     doesnt_drop_s_x_and_s_y(&s_x, &s_y, &mut s_z);
 
-    println!("{s_x}"); // Outputs '17'.
-    println!("{s_y}"); // Outputs '1337'.
-    println!("{s_z}"); // Outputs '17 + 1337'.
+    println!("{s_x}"); // Outputs '17' successfully.
+    println!("{s_y}"); // Outputs '1337' successfully.
+    println!("{s_z}"); // Outputs '17 + 1337' successfully.
 }
 ```
+</CodeGroup>
 
 Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.21/3.2.22) alongside its corresponding block scope version (Code 3.2.23).
 
@@ -641,8 +785,12 @@ Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.
           &mut s_z,
       );
       
-      println!("{s_x}");
       // Outputs '17' successfully.
+      println!("{s_x}");
+      // Outputs '1337' successfully.
+      println!("{s_y}");
+      // Outputs '17 + 1337' successfully.
+      println!("{s_z}");
   }
   ```
   </Column>
@@ -654,24 +802,85 @@ Below is a comparison of the code utilizing `doesnt_drop_s_x_and_s_y` (Code 3.2.
       let mut s_z = String::new();
   
       {
-          // &s_x is COPIED here!
+          // &s_x is COPIED!
           let s_x = &s_x;
-          // &s_y is COPIED here!
+          // &s_y is COPIED!
           let s_y = &s_y;
-          // &s_z is COPIED here!
+          // &s_z is COPIED! #1
           let s_z = &mut s_z;
           *s_z = format!("{s_x} + {s_y}");
-          // Note the PRESENCE of a ';'
-      }; /* &s_x and &s_y are dropped here!
-            But they are still accessible
-            in the outer scope! */
-            
-      println!("{s_x}");
+          // Note the PRESENCE of a ';'.
+      } /* &s_x, &s_y, and &s_z are dropped!
+           But they are still accessible
+           in the outer scope! */
+      
       // Outputs '17' successfully.
+      println!("{s_x}");
+      // Outputs '1337' successfully.
+      println!("{s_y}");
+      // Outputs '17 + 1337' successfully.
+      println!("{s_z}");
   }
   ```
   </Column>
 </Columns>
+
+<ol className="list-comments">
+<li>
+At this point, the intricate mechanics of data transfer between variables in Rust should be almost completely clear, whether dealing with raw block scopes, function scopes, or standard linear execution. However, one final point deserves a detailed analysis: the `#1` marker highlighted in Code 3.2.23.
+
+As explained and proved in the info-box two paragraphs above, <u>mutable references DO NOT implement the `Copy` trait</u>. One might mistakenly assume that the line `let s_z = &mut s_z;` triggers a MOVE. <u>This does not happen because the right-hand side `&mut s_z` is NOT an already existing mutable reference variable being transferred.</u> Instead, it is an expression that generates a brand new mutable reference on the fly, which is then bound to the inner `s_z` for the very first time.
+
+A direct objection to this seemingly strange behavior might be the following: 'Why then does `let s_x = s_x` (and the same goes for `s_y`) cause a MOVE?'
+
+The answer here ties directly into Rust's core compiler rules. For complex reasons that we will explore later, <u>the compiler enforces a strict rule: only a single mutable reference to a piece of data can exist at any given time</u>! <u>This restriction does not apply to immutable references.</u>
+
+Furthermore, types that are not memory addresses (i.e., owned types) exhibit completely different behavior, as explained previously. This is precisely the case for `s_x` and `s_y`: they are initially owned `String` types, not references. Consequently, they interact differently with the `=` operator. Placing them directly on the right-hand side of an assignment generates a direct MOVE (exactly as we saw happen with already-bound mutable references).
+
+To conclude this section, let us analyze what happens if we attempt to create multiple mutable references to `s_z` at the same time. If we try to define additional variables, such as `s_i` and `s_j`, as mutable references to `s_z`—by writing `let s_i = &mut s_z;` and `let s_j = &mut s_z;`—we will encounter the following compilation error (C-Output 3.2.24).
+
+As emphasized earlier, the compiler strictly forbids keeping more than one mutable reference 'alive' <u>and active</u> at the same time. While it is technically possible to declare them in sequence (which does not immediately trigger an error on its own), <u>you cannot subsequently use them concurrently in overlapping expressions</u>, effectively rendering overlapping mutable borrows impossible.
+
+<CodeGroup>
+```rust Code 3.2.24
+// --snip--
+{
+    // --snip--
+    let s_i = &mut s_z;
+    let s_j = &mut s_z;
+    let s_z = &mut s_z;
+          
+    *s_z = format!("{s_i} + {s_j}");
+}
+// --snip--
+```
+```text C-Output 3.2.24
+error[E0499]: cannot borrow `s_z` as mutable more than once at a time
+  --> src/main.rs:13:21
+   |
+12 |           let s_i = &mut s_z;
+   |                     -------- first mutable borrow occurs here
+13 |           let s_j = &mut s_z;
+   |                     ^^^^^^^^ second mutable borrow occurs here
+...
+16 |           *s_z = format!("{s_i} + {s_j}");
+   |                            --- first borrow later used here
+
+error[E0499]: cannot borrow `s_z` as mutable more than once at a time
+  --> src/main.rs:14:21
+   |
+12 |           let s_i = &mut s_z;
+   |                     -------- first mutable borrow occurs here
+13 |           let s_j = &mut s_z;
+14 |           let s_z = &mut s_z;
+   |                     ^^^^^^^^ second mutable borrow occurs here
+15 |           
+16 |           *s_z = format!("{s_i} + {s_j}");
+   |                            --- first borrow later used here
+```
+</CodeGroup>
+</li>
+</ol>
 
 ## Q&A Pt. 3
 

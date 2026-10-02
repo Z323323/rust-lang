@@ -204,12 +204,12 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  ```rust Code 4.2.2
  fn main() {
      let x = 17;
-     let y = &x; // 'y' is a standard, safe reference to 'x'.
+     let y = &x; // `y` is a standard, safe reference to `x`.
 
-     // We can safely dereference 'y' using '*' without an 'unsafe' block!
+     // We can safely dereference `y` using `*` without an `unsafe` block!
      let z = *y; 
 
-     println!("{z}"); // Prints: '17'.
+     println!("{z}"); // Prints: `17`.
  }
  ```
  
@@ -316,7 +316,7 @@ There is one more caveat to add. In idiomatic Rust, `unsafe` should be scoped as
  <li>
  The line `println!("[Address of 'h' (on the HEAP)]: {:p}", ptr_to_heap as *const u8)` works exactly like the one we analyzed in `#10`. In fact, they are entirely equivalent and print the exact same value (see E-Output 4.2.1).
 
- The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding `x` via the `.add(x)` method will shift the pointer in memory by exactly `x` byte at a time</u> (as you can verify in E-Output 4.2.1).
+ The only difference from `#10` is that the pointer is now cast to the `*const u8` type. At this exact moment, the difference isn't visible in the `println!` output because we haven't performed any pointer arithmetic on `ptr_to_heap`. <u>In the following instructions, however, we will do exactly that. Because `*const u8` is a raw pointer pointing to a `u8` (an 8-bit unsigned integer), adding X via the `add(X)` method will shift the pointer in memory by exactly X byte at a time</u> (as you can verify in E-Output 4.2.1).
 
  This brings us back to section 3.3 and our discussion about the `char` type. As explained there, a standalone `char` in Rust always occupies 4 bytes. Because of this, you might mistakenly assume that each character in our string sits 4 memory addresses apart.
 
@@ -379,7 +379,7 @@ Len = 5, address: 0x7ffc64915ab0
 ```
 </CodeGroup>
 
-Code 4.2.3 corresponds directly to Figure 4.2.3, as demonstrated by the execution results in E-Output 4.2.3. The color gray in Figure 4.2.3 illustrates how <u>`s1` is no longer usable once the move has happened</u>. Note that the only difference from the examples in section 3.2 is that we did not place `s2` inside an inner scope. As a result, while `s1` is invalidated, the data remains intact in the outer scope because `s2` now holds the heap pointer and assumes full ownership. Note also that `drop` is not called on `s1`. If it were, the heap data (`hello`) would be deallocated, which clearly does not happen since `s2` has taken over as the valid owner. Instead, <u>`s1` simply becomes invalidated</u>. However, if we had placed the move inside an inner scope—as we did back in section 3.2—the `hello` string would have been wiped from the heap when that inner scope ended. Even in that scenario, <u>`s1` is never actually dropped</u>; because it resides in the outer scope in an invalidated state, <u>the compiler knows it no longer owns any data</u> and safely skips its destructor.
+Code 4.2.3 corresponds directly to Figure 4.2.3, as demonstrated by the execution results in E-Output 4.2.3. The color gray in Figure 4.2.3 illustrates how <u>`s1` is no longer usable once the move has happened</u>. Note that the only difference from the examples in section 3.2 is that we did not place `s2` inside an inner scope. As a result, while `s1` is invalidated, the data remains intact in the outer scope because `s2` now holds the heap pointer and assumes full ownership. Note also that `drop` is not called on `s1`. Instead, <u>`s1` simply becomes invalidated and is never actually dropped</u> (before the end of the `main` function scope): because it resides in the outer scope in an invalidated state, <u>the compiler knows it no longer owns any data</u> and safely skips its destructor.
 
 <div style={{ display: 'flex', justifyContent: 'center', margin: '2.5rem 0' }}>
   {/* The Unified Outer Box */}
@@ -915,7 +915,7 @@ Code 4.2.11 also proves that <u>the compiler does not care whether a specific pi
 
 Once again, <u>the solution to this problem is the complete removal of the lingering reference that remains active within the `main` function's scope</u>.
 
-You might also wonder about the reference variable a defined within the internal scope of the `mutate_array` function. Because it is defined inside the scope of `mutate_array`, it is destroyed (dropped) as soon as that scope ends, as we saw in section 3.2. Consequently, it does not pose a problem, and the code will compile and execute perfectly, as demonstrated by E-Output 4.2.12.
+You might also wonder about the reference variable `a` defined within the internal scope of the `mutate_array` function. Because it is defined inside the scope of `mutate_array`, it is destroyed (dropped) as soon as that scope ends, as we saw in section 3.2. Consequently, it does not pose a problem, and the code will compile and execute perfectly, as demonstrated by E-Output 4.2.12.
 
 <CodeGroup>
 ```rust Code 4.2.12

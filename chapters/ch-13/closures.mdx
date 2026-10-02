@@ -1,176 +1,404 @@
 ---
-title: "Closures in Rust: Fn, FnMut, FnOnce, and Capturing"
-sidebarTitle: "Closures"
-description: "Use Rust closures to write anonymous functions that capture enclosing variables. Learn Fn, FnMut, and FnOnce trait bounds with examples."
+title: "Closures"
+sidebarTitle: "13.1 - Closures"
 mode: "wide"
 ---
 
-Closures are anonymous functions that can capture variables from the scope in which they are defined. Unlike regular functions, closures have access to values from their enclosing environment, making them ideal for callbacks, iterator adapters, and deferred computation. Rust's closure system is both powerful and zero-cost — the compiler inlines small closures entirely, producing the same machine code as a hand-written loop.
+>Rust’s design has taken inspiration from many existing languages and techniques, and one significant influence is **functional programming**. Programming in a functional style often includes using functions as values by passing them in arguments, returning them from other functions, assigning them to variables for later execution, and so forth.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+><p><u>Rust’s closures are anonymous functions you can save in a variable or pass as arguments to other functions. You can create the closure in one place and then call the closure elsewhere to evaluate it in a different context. Unlike functions, closures can capture values from the scope in which they’re defined.</u></p>
 
-## Closure Syntax
+## Inferring and Annotating Closure Types
 
-A closure is written with pipes `|params|` followed by the body:
+>Closures don’t usually require you to annotate the types of the parameters or the return value like `fn` functions do. Type annotations are required on functions because the types are part of an explicit interface exposed to your users. Defining this interface rigidly is important for ensuring that everyone agrees on what types of values a function uses and returns. Closures, on the other hand, aren’t used in an exposed interface like this: They’re stored in variables, and they’re used without naming them and exposing them to users of our library.
 
-```rust
-let add_one = |x| x + 1;
-println!("{}", add_one(5)); // 6
+><u>Closures are typically short and relevant only within a narrow context rather than in any arbitrary scenario. Within these limited contexts, the compiler can infer the types of the parameters and the return type</u>, similar to how it’s able to infer the types of most variables (there are rare cases where the compiler needs closure type annotations too).
 
-// Multi-line closures use braces
-let add_two = |x| {
-    let result = x + 2;
-    result
-};
-println!("{}", add_two(5)); // 7
-```
+>As with variables, we can add type annotations if we want to increase explicitness and clarity at the cost of being more verbose than is strictly necessary. Annotating the types for a closure would look like the definitions shown in Code 13.1.1. In this example, <u>we’re defining a closure and storing it in a variable named `expensive_closure`, and we are defining another closure in the spot we pass it as an argument</u>.
 
-### Type Inference
+<CodeGroup>
+```rust Code 13.1.1
+use std::{thread, time::Duration};
 
-Closure parameter and return types are almost always inferred. You *can* annotate them explicitly, which looks similar to a function:
-
-```rust
-// Explicit annotations
-let add = |x: i32, y: i32| -> i32 { x + y };
-
-// Inferred — idiomatic for short closures
-let add = |x, y| x + y;
-```
-
-Once a closure is called with a specific type, that type is locked in:
-
-```rust
-let identity = |x| x;
-let _s = identity(String::from("hello")); // x is inferred as String
-// let _n = identity(5);                  // ERROR: expected String, found integer
-```
-
-## Capturing the Environment
-
-This is what makes closures different from functions. A closure can reference variables from the surrounding scope:
-
-```rust
-fn main() {
-    let threshold = 10;
-
-    let is_big = |n| n > threshold; // captures `threshold` by reference
-
-    println!("{}", is_big(15)); // true
-    println!("{}", is_big(5));  // false
+fn exec_expensive_closure_plus_two<F>(closure: F, arg: u32) -> u32
+where
+    F: FnOnce(u32) -> u32,
+{
+    let computed_val = closure(arg);
+    computed_val + 2
 }
-```
-
-The variable `threshold` is captured *by reference* automatically because that's the least restrictive option that works.
-
-### Capturing by Move
-
-Use the `move` keyword to force the closure to take ownership of captured values. This is essential when the closure outlives the current scope (e.g., when spawning a thread):
-
-```rust
-use std::thread;
 
 fn main() {
-    let name = String::from("Alice");
+    // Here we explicitly define a closure and store it
+    // into the function pointer 'expensive_closure'.
+    let expensive_closure = |num: u32| -> u32 {
+        println!("calculating slowly...");
+        thread::sleep(Duration::from_secs(2));
+        num
+    };
 
-    let greet = move || println!("Hello, {name}!");
-    // `name` is moved into the closure; we can no longer use it here
+    println!("{}", expensive_closure(17));
 
-    thread::spawn(greet).join().unwrap();
+    let result = exec_expensive_closure_plus_two(expensive_closure, 5);
+    println!("Result: {result}");
+
+    //                                            In spot definition.
+    let result = exec_expensive_closure_plus_two(|n: u32| -> u32 { n }, 561 - 2);
+    //                                   Same as |n: u32| { n } ...
+    //                                        Or |n| -> u32 n ...
+    //                                        Or |n| { n } ...
+    //                                        Or |n| n ...
+    println!("Result: {result}");
 }
 ```
+```text E-Output 13.1.1
+   Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/ch_13_lab`
+calculating slowly...
+17
+calculating slowly...
+Result: 7
+Result: 561
+```
+</CodeGroup>
 
-Without `move`, the thread closure would hold a reference to `name`, but `name` might be dropped before the thread runs — a lifetime error the compiler catches at compile time.
-
-## The `Fn`, `FnMut`, and `FnOnce` Traits
-
-Every closure automatically implements one or more of three traits depending on how it uses its captured variables:
-
-| Trait | Can call | What it does to captured values |
-|-------|----------|----------------------------------|
-| `FnOnce` | Once | Consumes (moves out of) captured values |
-| `FnMut` | Multiple times | Mutates captured values |
-| `Fn` | Multiple times | Only reads captured values |
-
-`Fn` implies `FnMut`, which implies `FnOnce` — every `Fn` is also an `FnMut` and `FnOnce`.
-
-### `FnOnce` Example
+><u>With type annotations added, the syntax of closures looks more similar to the syntax of functions.</u> Here, we define a function that adds 1 to its parameter and a closure that has the same behavior, for comparison. We’ve added some spaces to line up the relevant parts. This illustrates how closure syntax is similar to function syntax except for the use of pipes and the amount of syntax that is optional:
 
 ```rust
-fn call_once<F: FnOnce()>(f: F) {
-    f();
-    // f();  // ERROR: cannot call `f` again; it's been consumed
-}
-
-let name = String::from("Bob");
-let goodbye = move || println!("Goodbye, {name}!"); // moves name
-call_once(goodbye);
+fn  add_one_v1   (x: u32) -> u32 { x + 1 }
+let add_one_v2 = |x: u32| -> u32 { x + 1 }; // Clearest declaration.
+let add_one_v3 = |x|             { x + 1 };
+let add_one_v4 = |x|               x + 1  ;
 ```
 
-### `FnMut` Example
+<Tip>
+I highly recommend using the fully expanded syntax, which closely mirrors standard function definitions. <u>Although slightly more verbose, it is significantly clearer and preemptively satisfies any explicit type annotations the compiler might require.</u>
 
-```rust
-fn apply_twice<F: FnMut(i32) -> i32>(mut f: F, x: i32) -> i32 {
-    f(f(x))
-}
+Nevertheless, omitting type annotations can be preferable in specific scenarios where you want to maintain greater type inference flexibility for the variables the closure operates on (as detailed below). Even in those situations, I advise using the most structured block syntax possible—`|var, ...| { impl }`—for the exact same readability reasons outlined above.
+</Tip>
 
-let mut count = 0;
-let result = apply_twice(|x| { count += 1; x + 1 }, 5);
-println!("Result: {result}, count: {count}"); // Result: 7, count: 2
-```
+><u>The first line shows a function definition and the second line shows a fully annotated closure definition.</u> In the third line, we remove the type annotations from the closure definition. In the fourth line, we remove the brackets, which are optional because the closure body has only one expression. <u>These are all valid definitions that will produce the same behavior when they’re called. The `add_one_v3` and `add_one_v4` lines require the closures to be evaluated to be able to compile because the types will be inferred from their usage.</u> This is similar to `let v = Vec::new()` needing either type annotations or values of some type to be inserted into the `Vec` for Rust to be able to infer the type.
 
-### `Fn` Example
+>For closure definitions, the compiler will infer one concrete type for each of their parameters and for their return value. For instance, Code 13.1.2 shows the definition of a short closure that just returns the value it receives as a parameter. This closure isn’t very useful except for the purposes of this example. Note that we haven’t added any type annotations to the definition. <u>Because there are no type annotations, we can call the closure with any type, which we’ve done here with `String` the first time. If we then try to call `example_closure` with an integer, we’ll get an error (C-Output 13.1.2).</u>
 
-```rust
-fn apply<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 {
-    f(x)
-}
+<CodeGroup>
+```rust Code 13.1.2
+fn main() {
+    let example_closure = |x| x;
 
-let multiplier = 3;
-let triple = |x| x * multiplier; // only reads multiplier
-println!("{}", apply(triple, 7)); // 21
-```
-
-## Closures as Function Arguments
-
-Using trait bounds, functions can accept any closure that matches a signature:
-
-```rust
-fn transform(nums: Vec<i32>, f: impl Fn(i32) -> i32) -> Vec<i32> {
-    nums.into_iter().map(f).collect()
-}
-
-let doubled = transform(vec![1, 2, 3], |x| x * 2);
-println!("{:?}", doubled); // [2, 4, 6]
-```
-
-`impl Fn(i32) -> i32` is shorthand for a generic bound. Use `Box<dyn Fn(i32) -> i32>` when you need to store a closure in a struct field or return it from a function without generics.
-
-## Returning Closures
-
-Closures have anonymous types, so you must use `impl Trait` or `Box<dyn Trait>` to return them:
-
-```rust
-// impl Trait (preferred when the concrete type is statically known)
-fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
-    move |x| x + n
-}
-
-// Box<dyn Trait> (required when returning different closure types at runtime)
-fn make_op(add: bool) -> Box<dyn Fn(i32) -> i32> {
-    if add {
-        Box::new(|x| x + 1)
-    } else {
-        Box::new(|x| x - 1)
-    }
+    let s = example_closure(String::from("hello"));
+    let n = example_closure(5);
 }
 ```
+```text C-Output 13.1.2
+   Compiling closure-example v0.1.0 (file:///projects/closure-example)
+error[E0308]: mismatched types
+ --> src/main.rs:5:29
+  |
+5 |     let n = example_closure(5);
+  |             --------------- ^ expected `String`, found integer
+  |             |
+  |             arguments to this function are incorrect
+  |
+note: expected because the closure was earlier called with an argument of type `String`
+ --> src/main.rs:4:29
+  |
+4 |     let s = example_closure(String::from("hello"));
+  |             --------------- ^^^^^^^^^^^^^^^^^^^^^ expected because this argument is of type `String`
+  |             |
+  |             in this closure call
+note: closure parameter defined here
+ --> src/main.rs:2:28
+  |
+2 |     let example_closure = |x| x;
+  |                            ^
+help: try using a conversion method
+  |
+5 |     let n = example_closure(5.to_string());
+  |                              ++++++++++++
 
-## Summary
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `closure-example` (bin "closure-example") due to 1 previous error
+```
+</CodeGroup>
 
-- Closure syntax: `|params| expression` or `|params| { block }`.
-- Types are inferred; once determined by first use, they're fixed.
-- Closures capture variables by reference by default; use `move` to capture by value.
-- `FnOnce` — called once; `FnMut` — called repeatedly, mutates captures; `Fn` — called repeatedly, only reads.
-- Use `impl Fn(...)` in generic bounds and `Box<dyn Fn(...)>` when dynamic dispatch is needed.
+><p><u>The first time we call `example_closure` with the `String` value, the compiler infers the type of `x` and the return type of the closure to be `String`. Those types are then locked into the closure in `example_closure`, and we get a type error when we next try to use a different type with the same closure.</u></p>
 
-In the next section we explore iterators, where closures become especially powerful as adapters.
+## A Deep Dive into `unwrap_or_else` and Closure Mechanics
+
+Analyzing `unwrap_or_else` in Rust allows us to explore the closure system and its intricate mechanics.
+
+<u>Both `Option<T>` and `Result<T, E>` provide the `unwrap_or_else` method.</u> Unlike `unwrap_or` (which accepts a pre-computed fallback value), <u>`unwrap_or_else` takes a function or a closure that is executed only if the value is a `None` or an `Err`</u>.
+
+Here are the actual implementations from the Rust standard library (slightly simplified by removing internal unstable macros, but functionally identical).
+
+<Columns>
+<Column>
+- For `Option<T>`:
+
+  ```rust Code 13.1.3
+  impl<T> Option<T> {
+      #[inline]
+      pub fn unwrap_or_else<F>(self, f: F) -> T
+      where
+          F: FnOnce() -> T,
+      {
+          match self {
+              Some(x) => x,
+              None => f(),
+          }
+      }
+  }
+  ```
+
+  The implementation simply consumes the `Option` using a `match` statement.
+
+  - If it evaluates to `Some(x)`, it directly returns `x`. The closure `f` is completely ignored and never executed.
+  - If it evaluates to `None`, it invokes the closure via `f()`. <u>It is precisely in this exact branch that the compiler triggers the execution of the closure.</u>
+</Column>
+<Column>
+- For `Result<T, E>`:
+
+  ```rust Code 13.1.4
+  impl<T, E> Result<T, E> {
+      #[inline]
+      pub fn unwrap_or_else<F>(self, op: F) -> T
+      where
+          F: FnOnce(E) -> T,
+      {
+          match self {
+              Ok(t) => t,
+              Err(e) => op(e),
+          }
+      }
+  }
+  ```
+
+  The logic is almost identical, but with one crucial addition for error handling.
+
+  - If it evaluates to `Ok(t)`, it extracts the inner value `t` and returns it. The closure `op` is ignored.
+  - If it evaluates to `Err(e)`, <u>the `match` arm extracts the error payload `e`</u>. <u>It then invokes the closure, passing the error `e` as an argument: `op(e)`.</u> This is why, when you write a closure for `Result::unwrap_or_else`, you often write it as `|err| { ... }`. The standard library literally passes the internal error into your closure, allowing your fallback logic to inspect the error, print it, or use it to decide what default value to generate.
+</Column>
+</Columns>
+
+There is a multitude of concepts left to be clarified regarding the implementations just observed, which are common to both. Consequently, moving forward, we will address these concepts without making distinctions between the two different implementations of `unwrap_or_else` (whether for `Option<T>` or `Result<T, E>`).
+
+### Demystifying Generic Placeholders (`<T>`)
+
+In this section, we will definitively clarify the use of generic type placeholders (such as `<T>`). Because they appear in various syntactic positions throughout Rust code, their exact purpose can sometimes be a source of confusion.
+
+<Note>
+This section diverges slightly from the core topic of closures, but it has been positioned here strategically. This helps streamline other parts of the book while providing a definitive clarification—and a quick refresher—on generic type placeholders, directly tying into the mechanics of the `unwrap_or_else` implementations we just examined.
+</Note>
+
+We can break their usage down into four distinct categories:
+
+1. **Next to Type Definitions (Structs and Enums)**
+   
+   ```rust Code 13.1.5
+   struct Point<T> {
+       x: T,
+       y: T,
+   }
+   ```
+   
+   <u>In this position, the generic placeholders inside the angle brackets declare the abstract types that will be utilized within the body of the type definition.</u> They act as a blueprint, notifying the compiler that the data structure relies on an external, unspecified type that will only become concrete when an instance of the struct or enum is actually created.
+   
+2. **Next to the `impl` Keyword**
+
+   ```rust Code 13.1.6-1
+   // Focus on the first <T>.
+   impl<T> Point<T> {
+       // ...
+   }
+   ```
+   
+   <u>When placed directly adjacent to the `impl` keyword, the placeholder acts as the declaration space for the implementation block.</u> It explicitly tells the compiler: 'I am introducing a new, abstract generic parameter named `T` that will exist for the scope of this entire block'.
+
+   This is conceptually identical to declaring a variable in a function's parameter list before using it. If you need to restrict what types are allowed, this is also where you enforce trait bounds (e.g., `impl<T: Clone>`).
+   
+3. **Next to the Type Name Being Implemented**
+
+   ```rust Code 13.1.6-2
+   // Focus on the second <T>.
+   impl<T> Point<T> {
+       // ...
+   }
+   ```
+   
+   When placed next to the struct or enum name in an `impl` block, the placeholder represents the application of a type. <u>It tells the compiler which specific version of the struct is receiving the methods.</u>
+
+   Here, you are stating: <u>'I am implementing methods for the `Point` struct, specifically parameterized by the `T` that I just declared'</u>. This separation between declaration (2.) and application (3.) is what allows you to bypass generics entirely if you want to implement methods for a concrete type, such as writing `impl Point<String>` (notice the absence of `<>` immediately following the `impl` keyword—this demonstrates that the generic declaration space is not strictly mandatory; it is omitted entirely when you are implementing methods for a specific, concrete type).
+   
+   Rust enforces a strict rule: <u>any generic parameter declared at the `impl<T>` level MUST be used in the type being implemented (or in the trait being implemented)</u>. You cannot declare a 'floating' generic parameter on the `impl` block just to use it as a utility inside the methods.
+
+   If you need a generic type solely as a utility for a specific method while implementing a concrete type (like `Point<String>`), you are forced to use method-level generics (which corresponds exactly to 4. below).
+   
+   Looking at a block like `impl<T> Point<T>`, it feels completely redundant: <u>'If the second `T` already tells the struct what type to use, why on earth do I have to repeat `impl<T>` beforehand?'</u>.
+
+   The answer is that <u>they are not always identical, and the `impl<T>` block exists to do things that the underlying type cannot do on its own</u>. There are three fundamental reasons why this separation is necessary and not redundant at all:
+   
+   - You can apply trait bounds exclusively at the `impl` level—independent of any constraints defined at the trait declaration itself.
+   - You can implement methods for specialized or concrete variants:
+   
+      - `impl<T> Point<T> { ... }`
+      - `impl Point<f64> { ... }`
+      
+   - **Trait Implementations and Complex Type Relationships**
+   
+      ```rust Code 13.1.7
+      // Implementing the `From<Point<R>>` trait for `Point<T>` equips `Point<T>` 
+      // with the `from` method, which accepts a `Point<R>` as its argument. 
+      // This allows us to easily instantiate a `Point<T>` from an existing `Point<R>`.
+      // The constraint `T: From<R>` is strictly necessary to ensure the internal 
+      // coordinate values can actually be converted.
+      impl<T, R> From<Point<R>> for Point<T> 
+      where
+          T: From<R>
+      {
+          fn from(other: Point<R>) -> Self {
+              Point {
+                  x: T::from(other.x), // `other.x` is of type `R`, hence `T: From<R>`.
+                  y: T::from(other.y), // `other.y` is of type `R`, hence `T: From<R>`.
+              }
+          }
+      }
+      ```
+   
+      When implementing a trait, <u>the generic parameters declared immediately after the `impl` keyword do not need to mirror the struct's definition</u>. <u>Instead, they act as the complete set of type variables required by the implementation contract.</u>
+
+      In this example, the block introduces two independent type parameters (`<T, R>`), even though the destination struct (`Point<T>`) only knows about one. This syntax allows you to bridge entirely different type worlds—such as defining a conversion where a `Point` containing a type `R` can be transformed into a `Point` containing a type `T`.
+      
+      This configuration demonstrates why block-level generic declarations are fundamentally distinct from struct definitions. While this pattern is most frequently seen when implementing traits, it highlights how the `impl` block serves as an independent context where you can declare relationships, constraints, and multi-type interactions that go far beyond the base data structure.
+   
+4. **Next to Function or Method Names**
+
+   ```rust Code 13.1.8
+   impl<T> Point<T> {
+       // Focus on <U>.
+       fn mixup<U>(self, other: Point<U>) -> Point<T> {
+           // ...
+       }
+   }
+   ```
+   
+   When placed next to a function or method name, the placeholder introduces a method-level generic. This declares a completely new generic type (like `U`) that is scoped exclusively to that single function, entirely independent from the overarching struct's generics (like `T`).
+   
+   <u>This is incredibly powerful because it allows a specific method to be highly flexible without forcing the entire struct to adopt additional generic parameters.</u> In the example above, the `Point` struct only cares about `T`, but the `mixup` method needs to interact with a completely different `Point` containing a different type `U`. By declaring `U` at the method level, the struct remains clean, but the method gains the exact flexibility it needs right when it is called.
+
+### Lazy vs. Eager Evaluation
+
+Rust utilizes a strict evaluation strategy known as **eager evaluation**, meaning <u>all function (or method) arguments are computed before the function is called</u>. <u>To achieve **lazy evaluation** (deferring computation until it is actually needed), Rust relies on passing callable abstractions—such as closures or function pointers—that are only invoked conditionally.</u>
+
+Observe the signature of `unwrap_or` (a method that relies on standard eager evaluation):
+
+- `pub fn unwrap_or(self, default: T) -> T`
+
+The `default` parameter is of type `T` (an already computed value), not a callable type. Consider this code:
+
+<CodeGroup>
+```rust Code 13.1.9
+fn heavy_computation() -> i32 {
+    println!("Doing a very long computation...");
+    42
+}
+
+fn main() {
+    let value = Some(10);
+    
+    // Watch out here!
+    let result = value.unwrap_or(heavy_computation());
+    
+    println!("{result}");
+}
+```
+```text E-Output 13.1.9
+   Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/ch_13_lab`
+Doing a very long computation...
+10
+```
+</CodeGroup>
+
+Even though `value` is `Some(10)` (meaning the fallback is theoretically unnecessary), you will still see `Doing a very long computation...` printed to the console. Why? Because <u>in order to call the `unwrap_or` method, the compiler must pass it the `default` argument. And to pass that argument, it must first execute `heavy_computation`</u>. Only after obtaining the result `42` does it invoke `unwrap_or(42)`. <u>Internally, the `unwrap_or` method matches on `Some(10)`, discards the `42` it was just handed, and returns `10`. You have wasted CPU cycles and memory calculating a value that was immediately thrown away.</u>
+
+Now, look at `unwrap_or_else`. If you write Code 13.1.10, the argument that is evaluated and passed to the method is NOT the integer `42`. It is the callable type `F` (the anonymous struct representing the closure, or the function pointer). <u>The instruction `heavy_computation` is not executed before entering the method. It will only be executed if the internal `match` statement inside `unwrap_or_else` decides to explicitly invoke `f()`.</u>
+
+<CodeGroup>
+```rust Code 13.1.10
+fn heavy_computation() -> i32 {
+    println!("Doing a very long computation...");
+    42
+}
+
+fn main() {
+    let value = Some(10);
+    
+    // Watch out here!
+    let result = value.unwrap_or_else(|| heavy_computation());
+    
+    println!("{result}");
+}
+```
+```text E-Output 13.1.10
+   Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running `target/debug/ch_13_lab`
+10
+```
+</CodeGroup>
+
+### Environment Capture
+
+The real magic of unwrap_or_else lies in the trait bound imposed on the generic parameter F:
+
+    For Option, F must implement FnOnce() -> T.
+
+    For Result, F must implement FnOnce(E) -> T (note that it accepts the error E contained in the Err as an input argument).
+
+The FnOnce trait indicates that the closure can be executed at most once. This characteristic is fundamental because it allows the closure to capture variables from the surrounding environment (the scope in which it is defined) by value, by mutable reference, or by immutable reference.
+
+Under the hood, the Rust compiler transforms every closure into a compiler-generated anonymous struct.
+
+    If the closure accesses an external variable (e.g., a local variable in main), the fields of this anonymous struct store that variable (or a reference to it).
+
+    When you pass the closure to unwrap_or_else, you are actually passing an instance of this struct.
+
+    When the internal match statement inside unwrap_or_else encounters a None or an Err, it invokes the closure's method (which corresponds to the FnOnce trait), using or consuming the data stored in the struct's fields.
+    
+    consider the following code:
+    
+```rust Code 13.1.11
+use std::env::{self, VarError};
+
+fn print_err(e: VarError) -> String {
+    format!("Operation failed with error: {e}")
+    // Adding {custom_prefix} here would trivially result
+    // in a compilation error.
+}
+
+fn main() {
+    let custom_prefix = String::from("PREFIX_");
+
+    let val = env::var("ENV_VAR").unwrap_or_else(print_err);
+    
+    println!("{val}");
+
+    let val = env::var("ENV_VAR").unwrap_or_else(|_| {
+        format!("{custom_prefix}default_value")
+        // Captures `custom_prefix` from the outer scope!
+    });
+    
+    println!("{val}");
+}
+```
+
+**The Fundamental Difference**
+
+    Standard functions (fn) are "sterile" and global entities. They have their own name, their own isolated scope, and they cannot capture anything from the environment where they are called. If a function needs external data to operate, that data must be passed explicitly as arguments through the function's parameters.
+
+    Closures are "stateful functions". They can look outside their code block, implicitly "capture" local variables from the surrounding scope without requiring you to declare them in the parameters, and carry that state with them.
+
+It is precisely this ability to bind to the surrounding context that makes unwrap_or_else extremely flexible. The closure does not merely compute a static fallback value; it can interact directly with the program's local state exactly at the point where it was written.
