@@ -184,6 +184,60 @@ Here are the actual implementations from the Rust standard library (slightly sim
 
 There is a multitude of concepts left to be clarified regarding the implementations just observed, which are common to both. Consequently, moving forward, we will address these concepts without making distinctions between the two different implementations of `unwrap_or_else` (whether for `Option<T>` or `Result<T, E>`).
 
+One of the first mysteries an attentive reader might have noticed is that <u>both of the shown implementations of `unwrap_or_else` are required to return a value of type `T`</u>. Despite this, an earlier, perfectly working example was shown where `panic!()` was the final instruction inside the closure passed as an argument to `unwrap_or_else`. The catch, however, is that <u>`panic!` is an expression that returns the **never type** `!`</u>. <u>This type never matches the type contained inside `Some` or `Result`.</u> Therefore, we now want to clarify this matter exhaustively.
+
+If you see a closure inside `unwrap_or_else` that just prints something to the screen and doesn't seem to return a standard value, it is because one of two very specific mechanical rules is at play: the **unit type match**, or the **never type coercion**.
+
+Here is the breakdown of how Rust handles this.
+
+### The `unwrap_or_else` Mechanic and the Return Type Constraint
+
+When using methods like `unwrap_or_else` on an `Option<T>` or `Result<T, E>`, <u>the compiler demands that the closure provided returns the exact same type `T` as the success case</u>. You cannot arbitrarily replace the return value with a print statement. If `T` is a `String`, the closure must yield a `String`.
+
+However, developers frequently use closures in `unwrap_or_else` to print error messages or log information without seemingly returning the expected `T`. This is possible due to three distinct scenarios in Rust's type system.
+
+**Scenario 1: Side Effects Before Returning**
+
+A closure is just an anonymous function block. You are completely free to execute side effects—like calling `println!` to log an error—as long as the final expression in the block evaluates to `T`.
+
+```rust Code 13.1.5
+let default_string = some_result.unwrap_or_else(|err| {
+    println!("An error occurred: {}", err); // Side effect
+    String::from("Default Fallback")        // Strictly returning `T`.
+});
+```
+
+**Scenario 2: When `T` is the Unit Type `()`**
+
+Sometimes, the success type `T` of a `Result` is the unit type `()` (often seen in functions executed purely for their side effects).
+
+In Rust, the `println!` macro is an expression (or a statement, depending on whether a `;` is used) that in all cases returns the unit value `()` of type `()`. Therefore, if `unwrap_or_else` is expecting a `T` of `()`, placing `println!` as the final statement perfectly satisfies the compiler. It looks like you are 'just printing instead of returning', but mechanically, you are returning `()`, which perfectly matches `T`.
+
+```rust Code 13.1.6
+// Here, `some_operation` returns `Result<(), Error>`.
+some_operation().unwrap_or_else(|err| {
+    // The next statement returns `()`, which perfectly matches the expected `T`.
+    println!("Operation failed with: {}", err); 
+});
+```
+
+**Scenario 3: The Never Type (`!`) and Diverging Closures**
+
+<p><u>What happens if `T` is a `String`, but you want to log the error and crash the program instead of returning a default string?</u></p>
+
+```rust Code 13.1.7
+let required_string = some_result.unwrap_or_else(|err| {
+    println!("Fatal error: {}", err);
+    std::process::exit(1); // Or panic!("Fatal!")
+});
+```
+
+<u>This compiles perfectly</u>, but how? The method requires `T` (a `String`), but `std::process::exit(1)` and `panic!` do not return a `String`.
+
+<u>This works because functions that crash or terminate the program have a special return type in Rust called the 'never type', represented by an exclamation mark (`!`).</u> The `!` type tells the compiler: 'This code will never finish executing, and control flow will never return to the caller'.
+
+<u>Because the program guarantees it will terminate before the `unwrap_or_else` assignment is ever completed, the compiler applies a special rule: The never type (`!`) can be magically coerced into any type `T`.</u> The compiler accepts the missing `String` because it mathematically proves that the `String` will never actually be needed.
+
 ### Demystifying Generic Placeholders (`<T>`)
 
 In this section, we will definitively clarify the use of generic type placeholders (such as `<T>`). Because they appear in various syntactic positions throughout Rust code, their exact purpose can sometimes be a source of confusion.
@@ -196,7 +250,7 @@ We can break their usage down into four distinct categories:
 
 1. **Next to Type Definitions (Structs and Enums)**
    
-   ```rust Code 13.1.5
+   ```rust Code 13.1.8
    struct Point<T> {
        x: T,
        y: T,
@@ -207,7 +261,7 @@ We can break their usage down into four distinct categories:
    
 2. **Next to the `impl` Keyword**
 
-   ```rust Code 13.1.6-1
+   ```rust Code 13.1.9-1
    // Focus on the first <T>.
    impl<T> Point<T> {
        // ...
@@ -220,7 +274,7 @@ We can break their usage down into four distinct categories:
    
 3. **Next to the Type Name Being Implemented**
 
-   ```rust Code 13.1.6-2
+   ```rust Code 13.1.9-2
    // Focus on the second <T>.
    impl<T> Point<T> {
        // ...
@@ -247,7 +301,7 @@ We can break their usage down into four distinct categories:
       
    - **Trait Implementations and Complex Type Relationships**
    
-      ```rust Code 13.1.7
+      ```rust Code 13.1.10
       // Implementing the `From<Point<R>>` trait for `Point<T>` equips `Point<T>` 
       // with the `from` method, which accepts a `Point<R>` as its argument. 
       // This allows us to easily instantiate a `Point<T>` from an existing `Point<R>`.
@@ -274,7 +328,7 @@ We can break their usage down into four distinct categories:
    
 4. **Next to Function or Method Names**
 
-   ```rust Code 13.1.8
+   ```rust Code 13.1.11
    impl<T> Point<T> {
        // Focus on <U>.
        fn mixup<U>(self, other: Point<U>) -> Point<T> {
@@ -298,7 +352,7 @@ Observe the signature of `unwrap_or` (a method that relies on standard eager eva
 The `default` parameter is of type `T` (an already computed value), not a callable type. Consider this code:
 
 <CodeGroup>
-```rust Code 13.1.9
+```rust Code 13.1.12
 fn heavy_computation() -> i32 {
     println!("Doing a very long computation...");
     42
@@ -313,7 +367,7 @@ fn main() {
     println!("{result}");
 }
 ```
-```text E-Output 13.1.9
+```text E-Output 13.1.12
    Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
      Running `target/debug/ch_13_lab`
@@ -324,10 +378,10 @@ Doing a very long computation...
 
 Even though `value` is `Some(10)` (meaning the fallback is theoretically unnecessary), you will still see `Doing a very long computation...` printed to the console. Why? Because <u>in order to call the `unwrap_or` method, the compiler must pass it the `default` argument. And to pass that argument, it must first execute `heavy_computation`</u>. Only after obtaining the result `42` does it invoke `unwrap_or(42)`. <u>Internally, the `unwrap_or` method matches on `Some(10)`, discards the `42` it was just handed, and returns `10`. You have wasted CPU cycles and memory calculating a value that was immediately thrown away.</u>
 
-Now, look at `unwrap_or_else`. If you write Code 13.1.10, the argument that is evaluated and passed to the method is NOT the integer `42`. It is the callable type `F` (the anonymous struct representing the closure, or the function pointer). <u>The instruction `heavy_computation` is not executed before entering the method. It will only be executed if the internal `match` statement inside `unwrap_or_else` decides to explicitly invoke `f()`.</u>
+Now, look at `unwrap_or_else`. If you write Code 13.1.13, the argument that is evaluated and passed to the method is NOT the integer `42`. It is the callable type `F` (the anonymous struct representing the closure, or the function pointer). <u>The instruction `heavy_computation` is not executed before entering the method. It will only be executed if the internal `match` statement inside `unwrap_or_else` decides to explicitly invoke `f()`.</u>
 
 <CodeGroup>
-```rust Code 13.1.10
+```rust Code 13.1.13
 fn heavy_computation() -> i32 {
     println!("Doing a very long computation...");
     42
@@ -342,7 +396,7 @@ fn main() {
     println!("{result}");
 }
 ```
-```text E-Output 13.1.10
+```text E-Output 13.1.13
    Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
      Running `target/debug/ch_13_lab`
@@ -350,28 +404,216 @@ fn main() {
 ```
 </CodeGroup>
 
-### Environment Capture
+## Environment Capture
 
-The real magic of unwrap_or_else lies in the trait bound imposed on the generic parameter F:
+Standard functions are 'sterile' and global entities. They have their own name, their own isolated scope, and <u>they cannot capture anything from the environment where they are called</u>. If a function needs external data to operate, that data must be passed explicitly as arguments through the function's parameters.
 
-    For Option, F must implement FnOnce() -> T.
+Closures are 'stateful functions'. <u>They can look outside their code block, implicitly 'capture' local variables from the surrounding scope/s without requiring you to declare them in the parameters, and carry that state with them.</u>
 
-    For Result, F must implement FnOnce(E) -> T (note that it accepts the error E contained in the Err as an input argument).
+It is precisely this ability to bind to the surrounding context that makes closures extremely flexible. Closures do not merely compute a static fallback value; it can interact directly with the program's local state exactly at the point where it was written.
 
-The FnOnce trait indicates that the closure can be executed at most once. This characteristic is fundamental because it allows the closure to capture variables from the surrounding environment (the scope in which it is defined) by value, by mutable reference, or by immutable reference.
+><u>Closures can capture values from their environment in three ways, which directly map to the three ways a function can take a parameter: borrowing immutably, borrowing mutably, and taking ownership.</u> The closure will decide which of these to use based on what the body of the function does with the captured values.
 
-Under the hood, the Rust compiler transforms every closure into a compiler-generated anonymous struct.
+### Capturing References or Moving Ownership
 
-    If the closure accesses an external variable (e.g., a local variable in main), the fields of this anonymous struct store that variable (or a reference to it).
+>In Code 13.1.14, we define a closure that captures an immutable reference to the vector named `list` because <u>it only needs an immutable reference to print the value</u>.
 
-    When you pass the closure to unwrap_or_else, you are actually passing an instance of this struct.
+<CodeGroup>
+```rust Code 13.1.14
+fn main() {
+    let list = vec![1, 2, 3];
+    println!("Before defining closure: {list:?}");
 
-    When the internal match statement inside unwrap_or_else encounters a None or an Err, it invokes the closure's method (which corresponds to the FnOnce trait), using or consuming the data stored in the struct's fields.
-    
-    consider the following code:
-    
-```rust Code 13.1.11
+    let only_borrows = || println!("From closure: {list:?}");
+    //                 || { println!("From closure: {list:?}"); };
+
+    println!("Before calling closure: {list:?}");
+    only_borrows();
+    println!("After calling closure: {list:?}");
+}
+```
+```text E-Output 13.1.14
+Before defining closure: [1, 2, 3]
+Before calling closure: [1, 2, 3]
+From closure: [1, 2, 3]
+After calling closure: [1, 2, 3]
+```
+</CodeGroup>
+
+>Next, in Code 13.1.15, we change the closure body so that it adds an element to the `list` vector. <u>The closure now captures a mutable reference.</u>
+
+<CodeGroup>
+```rust Code 13.1.15
+fn main() {
+    let mut list = vec![1, 2, 3];
+    println!("Before defining closure: {list:?}");
+
+    let mut borrows_mutably = || list.push(7);
+    //                        || { list.push(7); };
+    // println!("{:?}", list); // ERROR!
+    borrows_mutably();
+    println!("After calling closure: {list:?}");
+}
+```
+```text E-Output 13.1.15
+Before defining closure: [1, 2, 3]
+After calling closure: [1, 2, 3, 7]
+```
+</CodeGroup>
+
+>Note that there’s no longer a `println!` between the definition and the call of the `borrows_mutably` closure: <u>When `borrows_mutably` is defined, it captures a mutable reference to `list`</u>. We don’t use the closure again after the closure is called, so the mutable borrow ends. <u>Between the closure definition and the closure call, an immutable borrow to print isn’t allowed, because no other borrows are allowed when there’s a mutable borrow.</u> Try adding a `println!` there to see what error message you get!
+
+The error just mentioned by the official book is the following:
+
+```text C-Output 13.1.15
+   Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+error[E0502]: cannot borrow `list` as immutable because it is also borrowed as mutable
+ --> src/main.rs:7:22
+  |
+5 |     let mut borrows_mutably = || list.push(7);
+  |                               -- ---- first borrow occurs due to use of `list` in closure
+  |                               |
+  |                               mutable borrow occurs here
+6 |     //                        || { list.push(7); };
+7 |     println!("{:?}", list); // ERROR!
+  |                      ^^^^ immutable borrow occurs here
+8 |     borrows_mutably();
+  |     --------------- mutable borrow later used here
+
+For more information about this error, try `rustc --explain E0502`.
+```
+
+The error `cannot borrow `list` as immutable because it is also borrowed as mutable` stems from a mechanism we already partially observed in Ch. 4. <u>The compiler does not allow keeping a mutable reference to a variable active while simultaneously reading the contents of that same variable, unless the mutable reference has been dropped first.</u> This restriction exists to prevent programming errors in more complex scenarios, where mutating code might be introduced at certain points, and reading the underlying data could lead to unexpected bugs.
+
+In Ch. 4, we analyzed the following error pattern: (1) defining a reference (whether mutable or immutable) to a variable `var`, (2) modifying the referenced data either through `var` or through the reference, and then subsequently reading the data through the reference or `var`, respectively. Even in those cases, while the pattern itself might not immediately cause a direct fault upon execution, it represents a poor programming practice that the compiler strictly blocks.
+
+Therefore, if we consider the general rule that the compiler allows only a single active mutable reference at a time, <u>the best programming pattern in Rust</u>—keeping in mind the errors already observed in Ch. 4—<u>is to use a mutable reference immediately upon creation and let it drop right after</u>. In truth, the same approach should be applied to any immutable reference, because, as previously noted, keeping immutable references active for unnecessarily long periods frequently leads to compilation errors as well.
+
+At this point, an exceptionally attentive reader might wonder: <span style={{ color: "#964B00" }}><u>where exactly is the mutable reference being defined in Code 13.1.15</u>?</span>
+
+<span style={{ color: "#008080" }}>The syntax is lying to you. When you look at `|| list.push(7)`, you do not see an `&` or an `&mut`. It looks like it is just using the variable `list` directly. But in Rust, <u>closures are syntax sugar for anonymous structs</u>. They do not actually exist as a unique language feature at the machine level; they are converted into standard structs and traits by the compiler.</span><br /><br />
+
+<span style={{ color: "#008080" }}>Here is exactly what happens under the hood when the compiler sees your code.</span><br /><br />
+
+<span style={{ color: "#008080" }}><b>Step 1: Analyzing the Usage</b></span><br /><br />
+
+<span style={{ color: "#008080" }}><u>The compiler looks inside your closure body: `list.push(7)`.</u> It knows that the `push` method on a `Vec` has the signature `fn push(&mut self, value: T)`. Therefore, it deduces: <u>'To execute this code, the closure must hold a mutable reference to list'</u>.</span><br /><br />
+
+<span style={{ color: "#008080" }}><b>Step 2: Generating the Anonymous Struct</b></span><br /><br />
+
+<span style={{ color: "#008080" }}>Because the closure needs to 'capture' `list` from the surrounding environment, the compiler silently generates a brand new, invisible struct to hold that captured data. It looks conceptually like this:</span><br />
+
+```rust Code 13.1.16
+// The compiler generates a unique struct for your specific closure.
+struct InvisibleClosureStruct<'a> {
+    // It creates a field specifically to hold a mutable reference to `list`.
+    list_reference: &'a mut Vec<i32>, 
+}
+```
+
+<span style={{ color: "#008080" }}><b>Step 3: Implementing the Trait</b></span><br /><br />
+
+<span style={{ color: "#008080" }}>Next, the compiler implements the `FnMut` trait for this struct so it can be 'called' like a function:</span><br />
+
+```rust Code 13.1.17
+impl<'a> FnMut() for InvisibleClosureStruct<'a> {
+    fn call_mut(&mut self) {
+        // Here is where `list.push(7)` actually lives!
+        self.list_reference.push(7);
+    }
+}
+```
+
+<span style={{ color: "#008080" }}><b>Step 4: The Invisible Borrow (The 'Aha!' Moment)</b></span><br /><br />
+
+<span style={{ color: "#008080" }}>Now, look at what happens when you actually <u>define</u> the closure in your code. When you write this:</span><br />
+
+- `let mut borrows_mutably = || list.push(7);`
+
+<span style={{ color: "#008080" }}>The compiler silently translates it into this instantiation:</span><br />
+
+```rust Code 13.1.18
+let mut borrows_mutably = InvisibleClosureStruct {
+    list_reference: &mut list, // <--- THERE IS THE INVISIBLE BORROW!
+};
+```
+
+<span style={{ color: "#008080" }}>Once you strip away the syntax sugar and see the generated struct, the compiler's behavior is completely logical. <u>When you write `let mut borrows_mutably = || ...`, you are literally creating a struct instance that contains `&mut list` inside it. As long as `borrows_mutably` is alive and waiting to be called, that `&mut list` is sitting inside its field, actively holding the exclusive lock on your vector.</u> That is why trying to read `list` triggers the borrow checker: the invisible struct already owns the mutable borrow!</span><br /><br />
+
+<span style={{ color: "#008080" }}><b>Step 5: The Actual Call (Executing the Closure)</b></span><br /><br />
+
+<span style={{ color: "#008080" }}>We established that defining the closure `let mut borrows_mutably = || ...` translates into instantiating the anonymous struct `InvisibleClosureStruct`. But what happens when you actually invoke the closure by writing `borrows_mutably();`? <u>Because the compiler implemented the `FnMut` trait for our invisible struct in Step 3, it translates your function call syntax `()` into a direct method call on that trait.</u> Under the hood, `borrows_mutably();` is rewritten as:</span><br />
+
+```rust Code 13.1.19
+// The compiler translates borrows_mutably() into:
+FnMut::call_mut(&mut borrows_mutably);
+```
+
+<span style={{ color: "#008080" }}>Notice the `&mut borrows_mutably`. This explains why the closure variable itself had to be declared as `let mut`! To execute the body of the closure, the `call_mut` method requires an exclusive, mutable reference to the `InvisibleClosureStruct` instance so it can access and utilize the `&mut list` stored inside it.</span><br /><br />
+
+<span style={{ color: "#008080" }}><u>What if we don't bind the closure to a variable like `borrows_mutably`, but instead define and execute it immediately on the spot?</u></span><br />
+
+```rust Code 13.1.20
+let mut list = vec![1, 2, 3];
+
+// Defined and immediately invoked in-place!
+(|| list.push(7))(); 
+
+println!("{:?}", list); // This will compile and work perfectly!
+```
+
+<span style={{ color: "#008080" }}>The compiler's generation of the anonymous struct (`InvisibleClosureStruct`) and the trait implementation (`FnMut`) happens exactly the same way. The difference lies entirely in how long the struct lives (its lifetime). When you write `(|| list.push(7))();`, the compiler translates it roughly to this:</span><br />
+
+```rust Code 13.1.21
+// 1. Instantiate the struct (creating the mutable borrow).
+// 2. Immediately call the method on it.
+// 3. Destroy the struct instantly.
+FnMut::call_mut( &mut InvisibleClosureStruct { list_reference: &mut list } );
+```
+
+<span style={{ color: "#008080" }}><u>Because the anonymous struct is never bound to a variable (there is no `let`), it is treated as a temporary value. In Rust, temporary values are dropped at the exact end of the statement</u> (the semicolon `;`). Here is the timeline for the in-place closure:</span><br />
+
+1. <span style={{ color: "#008080" }}>The invisible struct is created, taking the `&mut list` lock.</span>
+2. <span style={{ color: "#008080" }}>The `call_mut()` method executes `list.push(7)`.</span>
+3. <span style={{ color: "#008080" }}>The statement ends (`;`), and the invisible struct is immediately destroyed.</span>
+4. <span style={{ color: "#008080" }}>The `&mut list` lock is released.</span>
+
+<span style={{ color: "#008080" }}>By the time the compiler reaches `println!("{:?}", list);` on the very next line, the mutable borrow is long gone. The compiler sees no conflict, and the code compiles perfectly. This perfectly illustrates the 'best programming pattern' mentioned earlier: create the borrow, use it immediately, and let it drop.</span><br />
+
+><p><u>If you want to force the closure to take ownership of the values it uses in the environment even though the body of the closure doesn’t strictly need ownership, you can use the `move` keyword before the parameter list.</u></p>
+
+><u>This technique is mostly useful when passing a closure to a new thread to move the data so that it’s owned by the new thread.</u> We’ll discuss threads and why you would want to use them in detail in Ch. 16 when we talk about concurrency, but for now, let’s briefly explore spawning a new thread using a closure that needs the `move` keyword. Code 13.1.22 shows Code 13.1.14 modified to print the vector in a new thread rather than in the `main` thread.
+
+```rust Code 13.1.22
+use std::thread;
+
+fn main() {
+    let list = vec![1, 2, 3];
+    println!("Before defining closure: {list:?}");
+
+    thread::spawn(move || println!("From thread: {list:?}"))
+        .join()
+        .unwrap();
+}
+```
+
+<Callout icon="key" color="#12A0D7" iconType="regular">
+>We spawn a new thread, giving the thread a closure to run as an argument. The closure body prints out the list. <u>In Code 13.1.14, the closure only captured `list` using an immutable reference because that’s the least amount of access to list needed to print it. In this example, even though the closure body still only needs an immutable reference, we need to specify that list should be moved into the closure by putting the `move` keyword at the beginning of the closure definition. If the `main` thread performed more operations before calling `join` on the new thread, the new thread might finish before the rest of the `main` thread finishes, or the `main` thread might finish first. If the `main` thread maintained ownership of `list` but ended before the new thread and drops `list`, the immutable reference in the thread would be invalid. Therefore, the compiler requires that `list` be moved into the closure given to the new thread so that the reference will be valid.</u> Try removing the `move` keyword or using `list` in the `main` thread after the closure is defined to see what compiler errors you get!
+</Callout>
+
+The preceding paragraph was enclosed in a key-block because it is fundamentally important for understanding how closures capture variables from their environment. Furthermore, it sheds light on exactly why the `move` keyword is necessary when using `thread::spawn`.
+
+Next, additional code is provided to demonstrate the radical difference between standard functions and closures when it comes to environment capturing. Specifically, Code 13.1.23 illustrates that a standard function (`print_err`) can be passed as an argument to `unwrap_or_else` in place of a closure. Code 13.1.23 is also crucial for highlighting a truly important characteristic regarding how closures capture variables from their surrounding environment. Specifically, <u>Code 13.1.23 clearly demonstrates that a variable can be captured via a move without requiring the `move` keyword itself.</u>
+
+E-Output 13.1.23.1 displays the output of Code 13.1.23 when executed with the `cargo run` command, whereas E-Output 13.1.23.2 shows the result of running `ENV_VAR=false cargo run`.
+
+<CodeGroup>
+```rust Code 13.1.23
 use std::env::{self, VarError};
+
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
 
 fn print_err(e: VarError) -> String {
     format!("Operation failed with error: {e}")
@@ -383,22 +625,635 @@ fn main() {
     let custom_prefix = String::from("PREFIX_");
 
     let val = env::var("ENV_VAR").unwrap_or_else(print_err);
-    
+
     println!("{val}");
 
-    let val = env::var("ENV_VAR").unwrap_or_else(|_| {
-        format!("{custom_prefix}default_value")
-        // Captures `custom_prefix` from the outer scope!
+    let s = env::var("ENV_VAR").unwrap_or_else(|_| {
+        // Captures `custom_prefix` from the outer scope by BORROWING it!
+        let s = format!("{custom_prefix}ENV_VAR_STRING");
+        // Captures `custom_prefix` from the outer scope by MOVING it!
+        let mut custom_prefix = custom_prefix;
+        
+        print_type_of(&custom_prefix); // alloc::string::String and NOT &alloc::string::String
+
+        custom_prefix.push_str(&s);
+
+        custom_prefix
     });
     
-    println!("{val}");
+    // println!("{custom_prefix}"); ERROR: value borrowed here after move
+    println!("{s}");
+}
+```
+```text E-Output 13.1.23.1
+   Compiling ch_13_lab v0.1.0 (/var/home/z561/rust_projects/ch_13_lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ch_13_lab`
+Operation failed with error: environment variable not found
+alloc::string::String
+PREFIX_PREFIX_ENV_VAR_STRING
+```
+```text E-Output 13.1.23.2
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/ch_13_lab`
+false
+false
+```
+</CodeGroup>
+
+The truth is that <u>the Rust compiler decides entirely on its own whether to take an immutable borrow (`&`), a mutable borrow (`&mut`), or full ownership (a move) of a variable, based exclusively on what you do with that variable inside the closure's body</u>.
+
+Here is exactly how the compiler's decision-making process (inference) works, and what the `move` keyword is actually used for.
+
+**1. The Rule of Inference - How the Compiler Decides**
+
+<p><u>When you define a closure without the `move` keyword, the compiler analyzes your internal code and applies the least restrictive capture method necessary to make it work:</u></p>
+
+- **Borrow (`&T`)**: If you only read the `String` inside the closure (e.g., `println!("{}", s)`), the compiler creates an immutable reference. The original variable in the environment remains intact.
+- **Mutable Borrow (`&mut T`)**: If you modify the `String` (e.g., `s.push_str("!")`), the compiler creates a mutable reference.
+- **Implicit Move (Ownership)**: If you perform an operation inside the closure that consumes the `String` (takes ownership of it), the compiler is forced to move it from the environment into the closure. No keyword is needed.
+
+**2. Why Was `s` Moved Without the Keyword?**
+
+If you noticed that your `String` was moved, it means that inside the body of your closure, you did something that requires a transfer of ownership. For example:
+
+```rust Code 13.1.24
+let s = String::from("Hello");
+
+let closure = || {
+    // We pass `s` to a function that takes a value (not a reference).
+    // Or we return it, or we assign it to another variable/struct.
+    let another_variable = s; 
+};
+
+// `s` no longer exists here! It was moved inside the closure.
+// println!("{}", s); // ERROR!
+```
+
+In this case, because `another_variable = s` requires a transfer of ownership (a MOVE, since `String` does not implement `Copy`), the compiler automatically deduces: 'In order to execute this block of code, the closure itself MUST steal ownership of `s` from the environment'.
+
+This is an implicit move. The closure will automatically implement the `FnOnce` trait (meaning <u>it can only be called once, because executing it destroys the captured data</u>).
+
+**3. What is the `move` keyword for, then?**
+
+If the compiler already knows how to perform 'implicit moves' when needed, why does the `move` keyword even exist? <u>The `move` keyword is used to FORCE a move when the compiler, by default, would choose a borrow.</u>
+
+Imagine you have a thread, and you only want to read a string inside that thread:
+
+```rust Code 13.1.25
+let greeting = String::from("Hello");
+
+// Without `move`, the compiler deduces that a borrow (`&greeting`) is enough
+// because we are only printing it.
+std::thread::spawn(|| {
+    println!("{}", greeting); 
+});
+```
+
+<u>This code will not compile!</u> The compiler will tell you: 'Hey, <u>you are trying to pass a reference `&greeting` to a thread that might outlive the current function</u>. <u>If the function ends, the thread will point to deallocated memory!'</u>
+
+This is where the `move` keyword comes into play. You are telling the compiler: 'I do not care if I am only reading the data inside the closure. <u>Stop inferring a borrow and FORCE the transfer of ownership of the variable into the closure</u>'.
+
+```rust Code 13.1.26
+let greeting = String::from("Hello");
+
+std::thread::spawn(move || {
+    // Now the thread physically owns the data of `greeting`.
+    println!("{}", greeting); 
+});
+```
+
+**4. Under the Hood - The Famous Anonymous Struct**
+
+Going back to what happens at compile time (the invisible struct), the three situations translate like this:
+
+1. **Read-only (Automatic Borrow)**
+
+```rust Code 13.1.27
+// let closure = || println!("{}", s);
+struct InvisibleClosure<'a> {
+    s: &'a String, // Captures a reference.
 }
 ```
 
-**The Fundamental Difference**
+2. **Internal Consumption - Automatic Move**
 
-    Standard functions (fn) are "sterile" and global entities. They have their own name, their own isolated scope, and they cannot capture anything from the environment where they are called. If a function needs external data to operate, that data must be passed explicitly as arguments through the function's parameters.
+```rust Code 13.1.28
+// let closure = || drop(s);
+struct InvisibleClosure {
+    s: String, // Captures the ACTUAL VALUE, not a reference!
+}
+```
 
-    Closures are "stateful functions". They can look outside their code block, implicitly "capture" local variables from the surrounding scope without requiring you to declare them in the parameters, and carry that state with them.
+3. **The `move` Keyword - Forced Move**
 
-It is precisely this ability to bind to the surrounding context that makes unwrap_or_else extremely flexible. The closure does not merely compute a static fallback value; it can interact directly with the program's local state exactly at the point where it was written.
+```rust Code 13.1.29
+// let closure = move || println!("{}", s);
+struct InvisibleClosure {
+    s: String, // Captures the ACTUAL VALUE, even though it's only used for printing.
+}
+```
+
+### Moving Captured Values Out of Closures
+
+>Once a closure has captured a reference or captured ownership of a value from the environment where the closure is defined (thus affecting what, if anything, is moved into the closure), the code in the body of the closure defines what happens to the references or values when the closure is evaluated later (thus affecting what, if anything, is moved out of the closure).
+
+>A closure body can do any of the following:
+
+>- Move a captured value out of the closure.
+>- Mutate the captured value.
+>- Neither move nor mutate the value.
+>- Capture nothing from the environment to begin with.
+
+><u>The way a closure captures and handles values from the environment affects which traits the closure implements</u>, and traits are how functions and structs can specify what kinds of closures they can use. <u>Closures will automatically implement one, two, or all three of these `Fn` traits, in an additive fashion, depending on how the closure’s body handles the values:</u>
+
+>- `FnOnce` applies to closures that can be called once. <u>All closures implement at least this trait because all closures can be called. A closure that moves captured values out of its body will only implement `FnOnce` and none of the other `Fn` traits because it can only be called once.</u>
+>
+>  <div className="flex gap-3 ml-1 text-[#009B77]">
+>    <span>↳</span>
+>    <div>
+>    As we established, a closure is just an anonymous struct generated by the compiler. The traits determine the signature of the call method implemented for that struct:
+>
+>    - `Fn` methods take `&self` (borrows the closure struct).
+>    - `FnMut` methods take `&mut self` (mutably borrows the closure struct).
+>    - `FnOnce` methods take `self` (takes ownership of the closure struct itself by value).
+>
+>    The official Rust documentation states that a closure which 'moves captured values out of its body' will only implement `FnOnce`. This phrasing can be confusing because it actually encompasses two different mechanical scenarios. <u>A closure becomes strictly `FnOnce` if it transfers ownership of its captured data to anywhere else.</u> This happens in two ways:
+>
+>    - <b>Consuming internally</b>: The closure moves the data from its captured state into a local variable inside its own body (where it is then dropped or consumed).
+>    - <b>Returning externally</b>: The closure literally moves the data out of its body by returning it to the caller.
+>
+>    To prove how Rust enforces these rules, let's first define three helper functions. Each function strictly requires a specific closure trait:
+>    
+>    ```rust Code 13.1.30
+>    fn requires_fn<F: Fn()>(f: F) { f(); }
+>    fn requires_fn_mut<F: FnMut()>(mut f: F) { f(); }
+>    fn requires_fn_once<F: FnOnce()>(f: F) { f(); }
+>    ```
+>
+>    <b>Scenario 1: Consuming the Value Internally</b><br /><br />
+>    
+>    In this scenario, <u>the closure takes ownership of a string from the environment</u>, and then moves that string into a local variable inside the closure's body.
+>    
+>    ```rust Code 13.1.31
+>    let s = String::from("Rust");
+>    
+>    let consume_internally = || {
+>        // We move `s` out of the closure's hidden struct 
+>        // and into the local scope of the closure body.
+>        let leaked_string = s; 
+>        println!("{}", leaked_string);
+>    };
+>    
+>    // This compiles perfectly:
+>    requires_fn_once(consume_internally);
+>    
+>    // THIS FAILS TO COMPILE: error[E0525]: expected a closure that implements
+>    // the `FnMut` trait, but this closure only implements `FnOnce`
+>    // requires_fn_mut(consume_internally);
+>    ```
+>
+>    <b>Phase 1: Definition (The Capture)</b><br /><br />
+>    
+>    <u>When the closure is defined, the compiler generates an anonymous struct to hold the captured environment.</u> Because the closure captures `s` by value, the generated struct has exactly one field: `s`. Note that <u>`leaked_string` is not a field of this struct</u>; it is strictly a local variable inside the function body. At this exact moment, <u>ownership of the string is moved from the external environment into the closure's internal struct</u>.<br /><br />
+>    
+>    <b>Phase 2: Execution (Internal Consumption)</b><br /><br />
+>    
+>    When the closure is executed, the statement `let leaked_string = s;` is evaluated. Under the hood, the closure is actually accessing its own internal state, so <u>this statement is treated as `let leaked_string = self.s;`</u>. Because `s` does not implement the `Copy` trait, this assignment acts as a move. <u>Ownership of `s` is physically transferred out of the closure's internal struct field (`self.s`) and moved into the local stack variable `leaked_string`.</u><br /><br />
+>
+>    <b>Phase 3: The Trait Restriction</b><br /><br />
+>
+>    <u>This mechanical transfer is exactly why the closure can never be called a second time.</u> During Phase 2, the assignment `leaked_string = self.s;` completely emptied the `self.s` field. <u>If the compiler allowed you to call the closure again, it would attempt to execute that exact same assignment. However, `self.s` no longer holds a value to move!</u><br /><br />
+>
+>    <u>To prevent this impossible 'double-move', the compiler dictates that the closure must implement `FnOnce`.</u> Because the `FnOnce` trait method takes `self` by value rather than by reference, the entire closure struct is consumed and destroyed upon its very first execution, making a second call physically impossible.<br /><br />
+>
+>    <b>Scenario 2: Moving the Value Out to the Caller</b><br /><br />
+>
+>    In this scenario, we see the literal interpretation of the official book's phrasing. The closure takes ownership of the data <u>and moves it completely out of its body by returning it to the function caller</u>. Let's adjust our tester function to accept a closure that returns a string:
+>
+>    ```rust Code 13.1.32
+>    fn returns_via_fn_once<F: FnOnce() -> String>(f: F) -> String { f() }
+>    fn returns_via_fn_mut<F: FnMut() -> String>(mut f: F) -> String { f() }
+>    ```
+>
+>    Now, let's define a closure that returns its captured variable:
+>
+>    ```rust Code 13.1.33
+>    let s = String::from("Rust");
+>    
+>    let return_externally = || {
+>        s // We move `s` completely OUT of the closure's body
+>    };
+>    
+>    // This compiles perfectly:
+>    let retrieved_string = returns_via_fn_once(return_externally);
+>    
+>    // THIS FAILS TO COMPILE:
+>    // let retrieved_string = returns_via_fn_mut(return_externally);
+>    ```
+>
+>    <b>Phase 1: Definition (The Capture)</b><br /><br />
+>
+>    When the closure is defined, the compiler generates an anonymous struct to hold the captured environment. Just like the previous scenario, this struct has exactly one field: `s`. At this moment, ownership of the string is moved from the external environment directly into the closure's internal struct field. The closure now owns the string.<br /><br />
+>
+>    <b>Phase 2: Execution (Returning Externally)</b><br /><br />
+>
+>    When the closure executes, its body consists of a single expression: `s`. Under the hood, the closure is accessing its own state, meaning this is evaluated as returning `self.s`. Because `s` does not implement the `Copy` trait, <u>returning this value acts as a move</u>. Ownership of the data is physically transferred out of the closure's internal struct field (`self.s`) and handed over to `return_externally`.<br /><br />
+>
+>    <b>Phase 3: The Trait Restriction</b><br /><br />
+>
+>    This mechanical transfer is exactly why the closure is permanently restricted to `FnOnce`. During Phase 2, <u>the implicit return `self.s` completely emptied the `self.s` field</u>. <u>If the compiler allowed you to call this closure a second time, it would attempt to execute return `self.s` again. However, that internal field is now a hollow shell containing no valid data to return.</u>
+>
+>    <u>To prevent this impossible 'double-return' of a moved value, the compiler dictates that the closure must implement `FnOnce`.</u> Because the `FnOnce` trait method takes `self` by value, the entire closure struct is consumed and destroyed the moment it gives its data away, guaranteeing that the empty field can never be accessed again.<br /><br />
+>
+>    <b>Scenario 3: When the `move` Keyword Doesn't Force `FnOnce`</b><br /><br />
+>
+>    A common misconception is that using the `move` keyword to force a closure to take ownership of a variable, automatically restricts it to `FnOnce`. However, as we have established, the trait restriction depends entirely on what the closure does with the data inside its body, not how it captured it. To prove this, let's look at a closure that explicitly owns a string <u>but only reads it</u>:
+>
+>    ```rust Code 13.1.34
+>    fn requires_fn<F: Fn()>(f: F) { 
+>        f(); 
+>        f(); // The closure is called multiple times right here!
+>    }
+>
+>    fn main() {
+>        let s = String::from("Rust");
+>
+>        // We use the `move` keyword to FORCE the closure struct 
+>        // to take full ownership of `s`.
+>        let owns_string = move || {
+>            // We only read it. We do NOT move it out of the struct.
+>            println!("{}", s); 
+>        };
+>
+>        // This compiles perfectly! The closure implements `Fn`.
+>        requires_fn(owns_string); 
+>    }
+>    ```
+>
+>    <b>Phase 1: Definition (The Capture)</b><br /><br />
+>
+>    Because of the `move` keyword, the closure is forced to capture its environment by value. The compiler generates the anonymous struct and physically moves the string from the external environment into the struct's internal s field. The closure now possesses absolute ownership of the string.<br /><br />
+>
+>    <b>Phase 2: Execution (Reading Without Moving Out)</b><br /><br />
+>
+>    When the closure executes, it evaluates `println!("{}", s)`. Under the hood, the `println!` macro only requires an immutable reference to the data. Therefore, <u>the compiler translates this operation as taking a borrow of the internal field: `&self.s`</u>. Crucially, <u>because the value is only being borrowed for the print statement, no ownership is transferred</u>. <u>The string is not moved into a local variable, nor is it returned. It remains safely nested inside the closure's internal struct field.</u><br /><br />
+>
+>    <b>Phase 3: The Trait Resolution</b><br /><br />
+>
+>    Because the closure only borrowed `self.s` during Phase 2, <u>the internal struct field is never emptied or invalidated</u>. <u>When the execution finishes, the closure's physical state is completely intact. If you call the closure a second, third, or hundredth time, the string will still be sitting in that field, ready to be borrowed and printed again.</u><br /><br />
+>
+>    <u>Since the struct does not need to be destroyed to preserve memory safety, the compiler allows it to implement the `Fn` trait.</u> The `Fn` trait's call method only requires an immutable reference (`&self`) to the closure struct, allowing the closure to be executed repeatedly without consuming the struct itself.
+>    </div>
+>  </div>
+>- `FnMut` applies to closures that don’t move captured values out of their body but might mutate the captured values. These closures can be called more than once.
+>  <div className="flex gap-3 ml-1 text-[#009B77]">
+>    <span>↳</span>
+>    <div>
+>    <u>The defining characteristic of `FnMut` (and `Fn`) is that the closure’s internal struct is never emptied, and the closure's code can be called multiple times without generating inconsistencies.</u> If the closure modifies its captured data, it alters its internal state (requiring `&mut self`), which strictly makes it `FnMut`. However, because the data is never moved out of the struct, the struct remains perfectly valid and can be safely executed multiple times.<br /><br />
+>
+>     The critical boundary between `FnMut` and `FnOnce` often comes down to how you return data:
+>
+>     - <b>Returning by Value (The Move)</b>: If you return a captured variable directly (e.g., `s`), you physically move it out of the internal struct field. The struct is emptied, destroying the closure and forcing `FnOnce`.
+>     - <b>Returning a Reference (The Borrow)</b>: If you <u>return a reference</u> to the captured variable (e.g., `&s` or `&mut s`), you are merely lending the data to the caller. <u>No ownership is transferred, the internal struct field remains full, and the closure happily remains `FnMut` (or `Fn`).</u>
+>
+>     <b>The `move` Keyword Illusion</b><br /><br />
+>
+>     Do not confuse the `move` keyword with moving data out of the body. The `move` keyword only dictates how the closure captures the data (moving it into the internal struct). <u>If a closure uses `move` to take full ownership of a variable, mutates it, and never moves it out of the body by value, it perfectly implements `FnMut`.</u> The trait always depends on the final destination of the ownership, not the origin.
+>    </div>
+>  </div>
+>- `Fn` applies to closures that don’t move captured values out of their body and don’t mutate captured values, as well as closures that capture nothing from their environment. These closures can be called more than once without mutating their environment, which is important in cases such as calling a closure multiple times concurrently.
+>  <div className="flex gap-3 ml-1 text-[#009B77]">
+>    <span>↳</span>
+>    <div>
+>    <u>For a closure to implement `Fn`, its body must only ever read the captured variables.</u> Mechanically, this means the internal closure struct is neither emptied (no moving out) nor altered (no mutation). Because the internal state remains perfectly static, the trait's execution method only requires a shared, immutable reference (`&self`). This creates three unique characteristics:
+>
+>    - <b>Infinite Reusability</b>: Just like `FnMut`, the internal struct is never depleted, meaning the closure can be called multiple times without generating inconsistencies.
+>
+>    - <b>Zero-Capture Closures</b>: If a closure captures absolutely nothing from its environment, the compiler generates a completely empty struct. Since there are no fields to mutate or move, it inherently defaults to implementing `Fn`.
+>
+>    - <b>The Concurrency Superpower</b>: <u>The restriction against mutation is what unlocks concurrent execution.</u> Under Rust's borrowing rules, <u>you can have infinite simultaneous immutable references (`&`) to the same data</u>. <u>Because calling an `Fn` closure only requires `&self`, you can safely share the exact same closure struct across multiple threads. They can all execute the closure at the exact same time without risking data races, because none of them are capable of altering the struct's internal state.</u><br /><br />
+>
+>    <b>The `move` and Borrowing Compatibility</b><br /><br />
+>
+>    <u>It is completely possible to use the `move` keyword with an `Fn` closure. If the closure uses move to take absolute ownership of a variable (moving it into the internal struct), but only ever reads it inside the body, it perfectly implements `Fn`.</u> Furthermore, <u>returning an immutable reference (e.g., `&s`) to the external scope does not break this trait</u>. <u>Because you are merely lending the data to the caller rather than transferring ownership out of the struct, the internal field remains full and unmodified, completely preserving the `Fn` trait.</u>
+>    </div>
+>  </div>
+
+## Standard Functions vs. Closures: The State vs. The Stack
+
+Now that we have thoroughly analyzed closures, a natural question arises: how do standard functions (defined with the `fn` keyword) fit into these trait rules? Standard functions behave differently because they lack the defining feature of a closure: <u>they do not capture an environment</u>.
+
+To understand why this matters, we must draw a strict mechanical line between capturing a variable and passing a parameter.
+
+### The Absence of Capture (Persistent Struct vs. Call Stack)
+
+<u>When you define a closure</u>, the compiler immediately generates a <u>persistent</u>, hidden struct to hold the variables it captures from the surrounding scope. <u>This struct is created at definition time.</u> When the closure executes, it reaches into this persistent struct to access its data. If the closure moves data out of this struct, the struct is permanently emptied, preventing future calls.
+
+<u>Standard functions do not have this hidden struct. They do not have a 'definition-time' state. Instead, they rely entirely on the activation stack (the call stack) at execution time.</u>
+When you pass parameters to a standard function, those parameters are not saved inside a persistent wrapper. Instead, the moment the function is called, the compiler pushes a fresh frame onto the call stack and <u>places the parameters there</u>. <u>When the function finishes, that specific stack frame is destroyed.</u>
+
+Because standard functions do not have a <u>persistent</u> internal struct to <u>maintain across multiple calls</u>, there is no 'internal state' that can ever be emptied or mutated. <u>Every single time you call a standard function, it receives a brand-new set of parameters on a brand-new stack frame. Consequently, a standard function can be called an infinite number of times, regardless of whether its parameters take ownership, borrow immutably, or borrow mutably.</u>
+
+### What Traits Do Standard Functions Implement?
+
+<u>Because standard functions have no internal state to mutate or consume, they perfectly satisfy the strict requirements of the `Fn` trait.</u> Calling a standard function only requires an immutable, stateless execution.
+
+But what if an API requires `FnMut` or `FnOnce`? Can you pass a standard function? <u>Yes, absolutely.</u> This is due to Rust’s trait inheritance hierarchy:
+
+- `Fn` is a sub-trait of `FnMut`. This means `FnMut` is a super-trait of `Fn`, guaranteeing that <u>any function or closure that implements `Fn` automatically implements `FnMut` as well</u>.
+- `FnMut` is a sub-trait of `FnOnce`. This makes `FnOnce` a super-trait of `FnMut`, ensuring that <u>any function or closure that implements `FnMut` must also implement `FnOnce`</u>. By the transitive property, it naturally follows that <u>any function or closure implementing `Fn` inherently implements `FnOnce` too</u>.
+
+This hierarchy makes logical sense:
+
+- If a function can be called safely without mutating any internal state (`Fn`), it can trivially satisfy a requirement that allows mutation (`FnMut`), because zero mutation is perfectly acceptable.
+- If a function can be called multiple times (`FnMut`), it can trivially satisfy a requirement to be called at least once (`FnOnce`).
+
+Therefore, <u>standard function pointers (of type `fn`) implement all three closure traits</u>. <u>You can pass a standard function into any generic parameter that expects an `Fn`, an `FnMut`, or an `FnOnce` closure. They represent the ultimate level of reusability because they are completely stateless.</u>
+
+Special attention must be paid to the fact that <u>`Fn`, `FnMut`, and `FnOnce` are traits, not concrete types</u>!
+
+### Standard Function Types and Function Pointers
+
+When you define a standard function, the compiler creates a unique, unnameable, zero-sized type specifically for that function. However, <u>this unique type automatically coerces into a standard function pointer, which is a concrete, primitive type written with a lowercase `fn`</u>.
+
+Because `fn` is a concrete type with a known size at compile time (it is simply a memory address pointing to the instruction set), you can use it directly in variable assignments, struct fields, or parameters without needing generics. The syntax is written as `fn(parameter_types) -> return_type`.
+
+```rust Code 13.1.35
+fn add(a: i32, b: i32) -> i32 { a + b }
+
+// Here, `fn(i32, i32) -> i32` is the concrete function pointer type.
+let operation: fn(i32, i32) -> i32 = add;
+```
+
+### Closure Types (The Anonymous Structs)
+
+Unlike standard functions, <u>closures generally do not coerce into standard `fn` function pointers (with the sole exception of closures that capture absolutely nothing from their environment)</u>. As we established, a capturing closure is compiled into a hidden, anonymous struct that holds its captured variables.
+
+<p><u>Because this struct is entirely generated on the fly by the compiler, its true type is unnameable. You literally cannot type the concrete type of a capturing closure in your code.</u></p>
+
+### The Traits `Fn`, `FnMut`, `FnOnce`
+
+This is exactly why the uppercase traits exist. <u>Since you cannot name the concrete type of a closure struct, you must interact with it by specifying the callable behavior it implements.</u> `Fn`, `FnMut`, and `FnOnce` describe what the compiler is allowed to do with the internal struct during execution, but they are not the structs themselves.
+
+Because traits do not have a known size at compile time, <u>you cannot use them as standalone types like you do with `fn`</u>. <u>They must be used as generic trait bounds (e.g., `<F: Fn()>`) or behind a pointer as dynamic trait objects (e.g., `Box<dyn Fn()>`).</u>
+
+**The Syntax Side-by-Side**
+
+To clearly see the difference in how they are written, compare a function that strictly accepts a concrete function pointer (`fn`) versus a generic function that accepts any type implementing the `Fn` trait:
+
+```rust Code 13.1.36
+// 1. Accepting a concrete type (lowercase `fn`)
+// This only accepts standard functions or zero-capture closures.
+// It will REJECT any closure that captures variables.
+fn takes_pointer(f: fn(i32) -> i32) {
+    f(5);
+}
+
+// 2. Accepting a trait bound (uppercase `Fn`)
+// This accepts ANY unnameable closure struct OR function pointer 
+// that implements the callable behavior.
+fn takes_trait<F: Fn(i32) -> i32>(f: F) {
+    f(5);
+}
+```
+
+In summary: lowercase `fn` is a concrete function pointer type that you can write directly. Uppercase `Fn` is a behavioral trait. <u>The unnameable closure structs and the standard `fn` pointers are the concrete types that implement these traits.</u>
+
+### Why Choose Closures Over Standard Functions?
+
+At this point, a final question remains: If closures introduce strict rules, complex trait bounds, capture mechanics, and subtle lifetime dependencies—all while featuring a syntax that can sometimes be more cryptic than standard functions—<u>why do they even exist?</u>
+
+The answer is that despite the complexities we have explored, <u>closures are an indispensable tool that enables expressive, concise, and highly efficient code</u>. <u>They solve architectural problems that standard functions literally cannot handle on their own.</u>
+
+Here are the key reasons why you should choose closures over standard functions in Rust:
+
+- **Automatic Environment Capture**: Standard functions are completely isolated execution blocks; they cannot access local variables from their surrounding scope unless those variables are explicitly passed as parameters or stored in a global state. Closures bridge the gap between code and local data, capturing surrounding variables seamlessly without requiring manual parameter plumbing.
+- **Inline Ergonomics and Proximity of Logic**: When working with iterator adapters (like `.map()`, `.filter()`, or `.fold()`), <u>writing a separate `fn` definition elsewhere in your module breaks the flow of logic</u>. Closures allow you to write small, concise, ad-hoc blocks of logic right where they are executed, keeping the code readable and self-contained.
+- **Advanced Type Inference**: Unlike standard functions—which require explicit type annotations for parameters—closures benefit from the compiler's powerful local type inference. <u>The compiler looks at how the closure is used downstream and automatically determines the exact types, significantly reducing syntactic boilerplate.</u>
+- **Zero-Cost Abstractions**: Because every closure in Rust is compiled into a unique, anonymous struct, <u>the compiler treats them as concrete types and can optimize and inline them aggressively</u>. There is no hidden runtime overhead, virtual table lookup, or performance penalty for using closures over standard functions.
+- **Fine-Grained Ownership Control (`move` and Concurrency)**: Closures give you precise control over how data enters their scope. <u>By using the `move` keyword, you can easily transfer ownership of local variables into a background thread or asynchronous task (such as with `std::thread::spawn`), a pattern that standard functions cannot replicate cleanly without manually defining custom structs and implementing traits.</u>
+
+Ultimately, while standard functions are ideal for reusable, stateless, global logic, closures are designed for local context, state wrapping, and high-level functional programming patterns.
+
+## Practical Trait Bounds in Action: Analyzing `sort_by_key` and `FnMut`
+
+>The `unwrap_or_else` function has the additional generic type parameter `F`. The `F` type is the type of the parameter named `f`, which is the closure we provide when calling `unwrap_or_else`.
+
+>The trait bound specified on the generic type `F` is `FnOnce() -> T`, which means <u>`F` must be able to be called once, take no arguments, and return a `T`</u>. Using `FnOnce` in the trait bound expresses the constraint that `unwrap_or_else` will not call `f` more than once. Because all closures implement `FnOnce`, `unwrap_or_else` accepts all three kinds of closures and is as flexible as it can be.
+
+<Note>
+<u>If what we want to do doesn’t require capturing a value from the environment, we can use the name of a function rather than a closure where we need something that implements one of the `Fn` traits.</u> For example, on an `Option<Vec<T>>` value, we could call `unwrap_or_else(Vec::new)` to get a new, empty vector if the value is `None`. The compiler automatically implements whichever of the `Fn` traits is applicable for a function definition.
+</Note>
+
+>Now let’s look at the standard library method `sort_by_key`, to see how that differs from `unwrap_or_else` and why `sort_by_key` uses `FnMut` instead of `FnOnce` for the trait bound.
+
+In Rust's standard library, <u>`sort_by_key` is defined on slices (`[T]`)</u> with the following generic signature:
+
+```rust
+pub fn sort_by_key<F, K>(&mut self, f: F)
+where
+    F: FnMut(&T) -> K,
+    K: Ord,
+```
+
+Key signature details:
+
+- `&mut self`: The method requires mutable access to the slice because <u>it reorders elements in place</u>.
+- `F: FnMut(&T) -> K`: The closure `f` must implement `FnMut` (<u>because it is called multiple times, once per element</u>) and <u>accept an immutable reference to the slice's element type (`&T`), returning an ordered key type `K`</u>.
+- `K: Ord`: The returned key type must implement the `Ord` trait <u>so that elements can be compared and sorted</u>.
+
+>The closure gets one argument in the form of a reference to the current item in the slice being considered, and it returns a value of type `K` that can be ordered. <u>This function is useful when you want to sort a slice by a particular attribute of each item.</u> In Code 13.1.37, we have a list of `Rectangle` instances, and we use `sort_by_key` to order them by their `width` attribute from low to high.
+
+<CodeGroup>
+```rust Code 13.1.37
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10, height: 1 },
+        Rectangle { width: 3, height: 5 },
+        Rectangle { width: 7, height: 12 },
+    ];
+
+    list.sort_by_key(|r| r.width);
+    /* `r` is a reference (`&Rectangle`) to each element in `list`. 
+       Because there is no trailing semicolon, `r.width` acts as an 
+       implicit return expression. This allows the compiler to infer 
+       the closure's return type `K` as `u32`. Since `u32` implements 
+       the `Ord` trait, `sort_by_key` successfully uses `r.width` as 
+       the comparison key to sort the list in place. */
+   
+    println!("{list:#?}");
+}
+```
+```text E-Output 13.1.37
+[
+    Rectangle {
+        width: 3,
+        height: 5,
+    },
+    Rectangle {
+        width: 7,
+        height: 12,
+    },
+    Rectangle {
+        width: 10,
+        height: 1,
+    },
+]
+```
+</CodeGroup>
+
+>The reason `sort_by_key` is defined to take an `FnMut` closure is that it calls the closure multiple times: once for each item in the slice. The closure `|r| r.width` doesn’t capture, mutate, or move anything out from its environment, so it meets the trait bound requirements.
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>     To clear this up completely, we need to address <u>the exact difference</u> between capturing a variable from the environment versus <u>receiving a parameter</u> at call time, and the difference between moving a non-`Copy` resource versus returning a `Copy` primitive.<br /><br />
+>
+>     <b>Capturing vs. Parameters</b><br />
+>
+>     - <b>Captured Variables (The Environment)</b>: These are variables defined in the outer scope (like inside `main`) that the closure reaches out and grabs. <u>These are the variables that get stored inside the closure’s hidden, internal struct fields at definition time.</u>
+>     - <b>Parameters (The Argument List)</b>: <u>These are the variables declared inside the closure’s vertical pipes, like `|r|`. They are not captured from the environment. They are function arguments passed into the closure dynamically at call time, exactly like arguments passed to a standard `fn`.</u>
+>
+>     Let's dissect `list.sort_by_key(|r| r.width);` step by step to see why it does not trigger `FnOnce`, and why it comfortably satisfies `FnMut` (and even `Fn`).<br /><br />
+>
+>     <b>Phase 1: Zero Captures</b><br /><br />
+>
+>     Look closely at the closure body: `|r| r.width`. <u>The compiler does not generate any fields in the anonymous closure struct.</u> The internal struct is completely empty (a zero-sized type). Because there are no internal fields, there is no internal state to empty or destroy.<br /><br />
+>
+>     `r` is not a captured variable. It is a parameter passed into the closure by `sort_by_key` during each iteration of the sorting algorithm. Just like arguments passed to a standard function, <u>`r` lives on the call stack for that specific execution frame</u>. <u>It is handed to the closure fresh on every call, and it vanishes when that single call finishes. It never enters the closure's persistent struct.</u><br /><br />
+>
+>     <b>Phase 2: Why Doesn't Returning `r.width` Trigger `FnOnce`?</b><br /><br />
+>
+>     <u>In our previous examples (`returns_via_fn_once`), returning `s` forced `FnOnce` because `s` was a captured `String` owned by the closure's internal struct</u> (`self.s`), and returning it meant moving it out of that struct, leaving a hollow shell. <u>In `|r| r.width`, no internal struct fields are involved</u>: You are not moving anything out of a persistent closure struct.<br /><br />
+>
+>     <u>`u32` implements `Copy`: `r` is a reference (`&Rectangle`). `r.width` accesses the `width` field, which is a `u32`. Because `u32` implements the `Copy` trait, returning `r.width` hands a copy of the number back to `sort_by_key`. You aren't transferring sole ownership of a unique, non-`Copy` heap allocation</u>; you are simply returning a primitive value calculated from a parameter.<br /><br />
+>
+>      <b>Phase 3: Why Does It Implement `FnMut` (and `Fn`)?</b><br /><br />
+>
+>      <u>Because the closure captures nothing and alters no internal state, it actually qualifies for the highest level of flexibility: `Fn`.</u> When `sort_by_key` demands an `FnMut` closure (`F: FnMut(&T) -> K`), the compiler allows this closure because of trait inheritance: Since the closure implements `Fn`, it can be called multiple times without generating inconsistencies. Because `Fn` is a sub-trait of `FnMut`, <u>any closure that satisfies `Fn` can be safely passed to a function expecting `FnMut`</u>.
+>     </div>
+>   </div>
+
+>In contrast, Code 13.1.38 shows an example of a closure that implements just the `FnOnce` trait, because it moves a value out of the environment. The compiler won’t let us use this closure with `sort_by_key`.
+
+<CodeGroup>
+```rust Code 13.1.38
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10, height: 1 },
+        Rectangle { width: 3, height: 5 },
+        Rectangle { width: 7, height: 12 },
+    ];
+
+    let mut sort_operations = vec![];
+    let value = String::from("closure called");
+
+    list.sort_by_key(|r| {
+        sort_operations.push(value);
+        r.width
+    });
+    println!("{list:#?}");
+}
+```
+```text C-Output 13.1.38
+error[E0507]: cannot move out of `value`, a captured variable in an `FnMut` closure
+  --> src/main.rs:18:30
+   |
+15 |     let value = String::from("closure called");
+   |         -----   ------------------------------ move occurs because `value` has type `String`, which does not implement the `Copy` trait
+   |         |
+   |         captured outer variable
+16 |
+17 |     list.sort_by_key(|r| {
+   |                      --- captured by this `FnMut` closure
+18 |         sort_operations.push(value);
+   |                              ^^^^^ `value` is moved here
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+18 |         sort_operations.push(value.clone());
+   |                                   ++++++++
+
+For more information about this error, try `rustc --explain E0507`.
+```
+</CodeGroup>
+
+>   <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem', color: '#009B77' }}>
+>     <span>↳</span>
+>     <div>
+>     When you attempt to run this code, the Rust compiler immediately halts compilation with `Error E0507` (`cannot move out of value, a captured variable in an FnMut closure`). To understand why this happens, we must trace the closure through its definition, its execution, and the strict trait demands of `sort_by_key`.<br /><br />
+>
+>     <b>Phase 1: Definition and Environment Capture</b><br /><br />
+>
+>     When the compiler encounters this closure, it analyzes the variables from the outer `main` scope that the closure body references. It finds two variables:
+>
+>     - `sort_operations`: The closure calls `push` on it, meaning it mutates the vector. The compiler captures this variable by mutable reference (`&mut Vec`) because the `push` method on a `Vec<T>` has the following signature:
+>     
+>     ```rust
+>     pub fn push(&mut self, value: T) // It takes a (mutable) reference to `self`
+>                                      // BUT it takes ownership of `value`.
+>     ```
+>
+>     - `value`: The closure passes this string into the `push` method. <u>Because `String` does not implement `Copy`, passing it by value transfers ownership.</u> Therefore, the compiler captures `value` by value, moving absolute ownership of the string directly into the closure's hidden, anonymous struct field: `self.value`.
+>
+>     At definition time, <u>the closure struct is successfully created, and its internal field `self.value` holds the owned string `closure called`</u>.<br /><br />
+>
+>     <b>Phase 2: Execution and Internal Consumption (The Fatal Move)</b><br /><br />
+>
+>     `sort_by_key` is designed to sort a slice in place. To do this, it must iterate through the array, calling your closure once for every single element in the slice (in this case, three times).
+>
+>     - <b>The First Call</b>: The sorting algorithm invokes the closure for the first rectangle. Inside the body, `sort_operations.push(value);` is executed. <u>Under the hood, this translates to taking `self.value` and moving its ownership out of the closure's internal struct field, handing it over to the vector.</u>
+>     - <b>The Consequence</b>: <u>This operation permanently empties the closure's internal `self.value` field.</u> The closure's internal state is now depleted and hollowed out.
+>
+>     <b>Phase 3: The Trait Mismatch (`FnMut` vs. `FnOnce`)</b><br /><br />
+>
+>     This is where the compiler drops the hammer. If you check the signature of `sort_by_key`, its closure parameter is bounded strictly by `FnMut`. An `FnMut` closure carries a sacred contract: <u>it must be safe to call multiple times because the sorting algorithm needs to invoke it repeatedly across multiple elements</u>. For a closure to support multiple calls, its internal struct fields must remain valid, full, and consistent across every execution.<br /><br />
+>
+>     <u>However, the closure body explicitly destroys its internal state on the very first call by moving value out into the vector.</u> If the compiler allowed this, the sorting algorithm would loop around for the second element, call the closure a second time, and attempt to move `self.value` again—which is now an empty, non-existent shell. This would trigger a catastrophic use-after-free or double-move violation.<br /><br />
+>
+>     Because the closure consumes its internal state and can only ever run once, it mechanically qualifies as an `FnOnce` closure. But because `sort_by_key` strictly demands an `FnMut` closure, the compiler rejects the code with `Error E0507`.<br /><br />
+>
+>     <b>How to Fix It</b><br /><br />
+>
+>     To make the code compile, you must change what the closure does inside its body. Instead of moving a non-`Copy` heap allocation (`String`) out of the environment, you should capture a simple, stack-allocated counter (like `let mut num_sort_operations = 0;`) and mutate it using an operator like `+= 1`.<br />
+>
+>     <p><u>Because a primitive integer implements `Copy` and is only modified (not moved out of the struct), the internal state remains intact, perfectly satisfying `FnMut`.</u></p>
+>     </div>
+>   </div>
+
+```rust Code 13.1.39
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10, height: 1 },
+        Rectangle { width: 3, height: 5 },
+        Rectangle { width: 7, height: 12 },
+    ];
+
+    let mut num_sort_operations = 0;
+    list.sort_by_key(|r| {
+        num_sort_operations += 1;
+        r.width
+    });
+    println!("{list:#?}, sorted in {num_sort_operations} operations");
+}
+```
+
+>The `Fn` traits are important when defining or using functions or types that make use of closures. In the next section, we’ll discuss iterators. Many iterator methods take closure arguments, so keep these closure details in mind as we continue!

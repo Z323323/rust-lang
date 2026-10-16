@@ -349,7 +349,7 @@ hehe
  - <span style={{ color: "#008080" }}><b>A3</b>: The ultimate truth is that <u>we cannot</u>. <u>The string `hehe` is not stored on the heap.</u> Instead, <u>it is hardcoded into a distinct memory region known as `.rodata` (Read-Only Data)</u>. <u>This segment is physically baked into the compiled executable binary itself, meaning the data is loaded by the operating system at startup and persists for the entire duration of the program.</u></span>
  </li>
  <li>
- The expression `*ptr as *const u8` is necessary to analyze each byte of the string `hehe` individually, allowing us to perform the `.add(x)` pointer arithmetic intuitively, just as we did before. Had we not cast it to a 1-byte type, calling `.add(1)` would have shifted the address forward by 8 bytes from the starting letter '`h`'. This would have caused the pointer to overshoot the string entirely, resulting in the reading of garbage data in memory that does not belong to `hehe`.
+ The expression `*ptr as *const u8` is necessary to analyze each byte of the string `hehe` individually, allowing us to perform the `add(X)` pointer arithmetic intuitively, just as we did before. Had we not cast it to a 1-byte type, calling `add(1)` would have shifted the address forward by 8 bytes from the starting letter '`h`'. This would have caused the pointer to overshoot the string entirely, resulting in the reading of garbage data in memory that does not belong to `hehe`.
  </li>
 </ol>
 

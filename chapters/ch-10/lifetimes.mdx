@@ -227,7 +227,7 @@ If you think about it for a moment, this behavior makes perfect sense. In actual
 
 ## Relationships
 
-><u>The way in which you need to specify lifetime parameters depends on what your function is doing. For example, if we changed the implementation of the `longest` function to always return the first parameter rather than the `longest` string slice, we wouldn’t need to specify a lifetime on the `y` parameter.</u> The following code will compile:
+><u>The way in which you need to specify lifetime parameters depends on what your function is doing. For example, if we changed the implementation of the `longest` function to always return the first parameter rather than the `longest` string slice, we wouldn’t need to specify a lifetime on the `y` parameter.</u> The following code <u>will compile</u>:
 
 ```rust Code 10.4.9
 fn longest<'a>(x: &'a str, y: &str) -> &'a str {
@@ -306,7 +306,11 @@ Call me Ishmael
 
 Based on what we have observed so far, defining every reference in a struct with the exact same lifetime `'a` might seem like a foolproof solution.
 
-In reality, this approach is not always ideal. In fact, <u>understanding why a struct can have distinct lifetimes for different reference fields is the key to unlocking the very reason lifetimes exist for structs in the first place</u>. After all, if it were impossible to define independent lifetimes for a struct's fields, there would be no point in explicitly declaring identical lifetimes every single time—the compiler could easily infer them automatically and eliminate lifetime verbosity altogether.
+In reality, this approach is not always ideal.
+
+### Multiple Independent Lifetimes in Structs
+
+<u>Understanding why a struct can have distinct lifetimes for different reference fields is the key to unlocking the very reason lifetimes exist for structs in the first place</u>. After all, if it were impossible to define independent lifetimes for a struct's fields, there would be no point in explicitly declaring identical lifetimes every single time—the compiler could easily infer them automatically and eliminate lifetime verbosity altogether.
 
 Let us now consider Code 10.4.12 and Code 10.4.13.
 
@@ -314,7 +318,7 @@ Let us now consider Code 10.4.12 and Code 10.4.13.
 <Column>
 <CodeGroup>
 ```rust Code 10.4.12
-struct HolderSingle<'a> {
+struct Holder<'a> {
     permanent: &'a str,
     temporary: &'a str,
 }
@@ -326,7 +330,7 @@ fn main() {
     {
         let temp_string = String::from("I am temporary");
 
-        let holder = HolderSingle {
+        let holder = Holder {
             permanent: permanent_data,
             temporary: &temp_string,
         };
@@ -374,7 +378,7 @@ error: could not compile `ch_10_lab` (bin "ch_10_lab") due to 1 previous error; 
 <Column>
 <CodeGroup>
 ```rust Code 10.4.13
-struct HolderSingle<'a, 'b> {
+struct Holder<'a, 'b> {
     permanent: &'a str,
     temporary: &'b str,
 }
@@ -386,7 +390,7 @@ fn main() {
     {
         let temp_string = String::from("I am temporary");
 
-        let holder = HolderSingle {
+        let holder = Holder {
             permanent: permanent_data,
             temporary: &temp_string,
         };
@@ -428,11 +432,119 @@ When you write `'_`, you are asking the compiler: 'Please figure out the exact s
 
 Therefore, using `'_` on a reference does not bypass the rule that a single reference can only point to data bound by one specific lifetime at a time. <u>If a function or operation requires reconciling two independent lifetimes into a single return value, `'_` cannot resolve the conflict because it still resolves to one, and only one, concrete lifetime context.</u>
 
+### Multiple Independent Lifetimes in Functions and Methods
+
+The fundamental difference between structs and functions (or methods) lies in the role that lifetimes play:
+
+>- In structs, <u>lifetimes dictate how long the struct itself can exist in memory relative to the referenced data it holds, and viceversa</u>.
+>- In functions and methods, the function itself does not 'live' in memory; it is merely a sequence of instructions executed momentarily. <u>Here, lifetime parameters act as a contract between inputs and outputs. They tell the compiler exactly which input parameter the return value derives from, thereby determining how long the returned value can safely be used in the calling code.</u>
+
+**The Single Lifetime Problem in Functions**
+
+If you use a single lifetime parameter `<'a>` for multiple input parameters and the return value, you are enforcing a rigid rule: 'Take the lifetimes of all passed arguments, calculate their intersection (the shortest lifespan), and apply that artificial limit to the return value'.
+
+This means that <u>if your function returns a reference extracted from the longer-living argument, the borrow checker will artificially truncate the return value's lifetime</u>. <u>It will invalidate the returned reference as soon as the 'shortest' argument is dropped—even if the returned data has absolutely nothing to do with that dropped argument!</u>
+
+<CodeGroup>
+```rust Code 10.4.14
+// The compiler forces both inputs and the output to share the same lifetime 'a (the shortest one).
+fn return_first<'a>(x: &'a str, y: &'a str) -> &'a str {
+    x // We return the first, completely ignoring the second.
+}
+
+fn main() {
+    let long_string = String::from("Long life");
+    let result;
+
+    {
+        let short_string = String::from("Short life");
+        
+        // We pass both strings. 
+        // The compiler calculates 'a as the intersection: the lifespan of `short_string`.
+        result = return_first(&long_string, &short_string);
+        
+    } // short_string is dropped here. The lifetime 'a ends.
+
+    // COMPILATION ERROR! `result` has been artificially bound 
+    // to the end of the inner block, even though it actually points to `long_string`.
+    println!("{}", result); 
+}
+```
+```text C-Output 10.4.14
+error[E0597]: `short_string` does not live long enough
+  --> src/main.rs:15:45
+   |
+11 |         let short_string = String::from("Short life");
+   |             ------------ binding `short_string` declared here
+...
+15 |         result = return_first(&long_string, &short_string);
+   |                                             ^^^^^^^^^^^^^ borrowed value does not live long enough
+16 |         
+17 |     } // short_string is dropped here. The lifetime 'a ends.
+   |     - `short_string` dropped here while still borrowed
+...
+21 |     println!("{}", result); 
+   |                    ------ borrow later used here
+
+For more information about this error, try `rustc --explain E0597`.
+```
+</CodeGroup>
+
+**The Solution: Multiple Independent Lifetimes**
+
+<u>By decoupling the lifetimes (e.g., using `<'a, 'b>`), you explicitly tell the compiler exactly which input the output depends on.</u> If you specify that the function returns `&'a str`, the argument with the shorter lifespan (`'b`) can be safely dropped without 'infecting' and invalidating the returned value.
+
+<CodeGroup>
+```rust Code 10.4.15
+// We decouple! We tell the compiler that the return value is tied ONLY to the lifespan of x ('a).
+fn return_first_decoupled<'a, 'b>(x: &'a str, y: &'b str) -> &'a str {
+    x
+}
+
+fn main() {
+    let long_string = String::from("Long life");
+    let result;
+
+    {
+        let short_string = String::from("Short life");
+        
+        // The compiler binds 'a to long_string and 'b to short_string.
+        result = return_first_decoupled(&long_string, &short_string);
+        
+    } // short_string is dropped here. The lifetime 'b ends.
+
+    // WORKS PERFECTLY! 
+    // The compiler knows that `result` lives for 'a (long_string), 
+    // so it doesn't care at all that 'b has ended.
+    println!("{}", result); 
+}
+```
+```text E-Output 10.4.15
+Long life
+```
+</CodeGroup>
+
+**What About Methods?**
+
+The principle is exactly the same. In methods, the most classic scenario occurs when you pass a parameter to a struct's method and return a reference based on `&self`.
+
+If you were to write:
+
+- `fn get_data<'a>(&'a self, param: &'a str) -> &'a str`
+
+You would be forcing the lifespan of the returned data to last only as long as the temporary parameter passed to the method.
+
+If instead you write (which is exactly what the compiler does behind the scenes for us thanks to lifetime elision rules, which will be analyzed below):
+
+- `fn get_data<'a, 'b>(&'a self, param: &'b str) -> &'a str`
+
+You guarantee that <u>the value returned by the method will remain valid for the entire duration of the instance (`self`)</u>, remaining completely unaffected by how quickly the newly passed param is dropped.
+
 ## Lifetime Elision
 
->You’ve learned that every reference has a lifetime and that you need to specify lifetime parameters for functions or structs that use references. However, Code 10.4.14 compiles without lifetime annotations.
+>You’ve learned that every reference has a lifetime and that you need to specify lifetime parameters for functions or structs that use references. However, Code 10.4.16 compiles without lifetime annotations.
 
-```rust Code 10.4.14
+```rust Code 10.4.16
 fn first_word(s: &str) -> &str {
     let bytes = s.as_bytes();
 
@@ -468,7 +580,7 @@ fn first_word(s: &str) -> &str {
 
 <Steps>
 <Step>
->Let’s pretend we’re the compiler. We’ll apply these rules to figure out the lifetimes of the references in the signature of the `first_word` function in Code 10.4.14. The signature starts without any lifetimes associated with the references:
+>Let’s pretend we’re the compiler. We’ll apply these rules to figure out the lifetimes of the references in the signature of the `first_word` function in Code 10.4.16. The signature starts without any lifetimes associated with the references:
 
 >- `fn first_word(s: &str) -> &str`
 </Step>
@@ -523,7 +635,7 @@ fn first_word(s: &str) -> &str {
 
 >First, we’ll use a method named `level` whose only parameter is a reference to `self` and whose return value is an `i32`, which is not a reference to anything:
 
-```rust Code 10.4.15
+```rust Code 10.4.17
 impl<'a> ImportantExcerpt<'a> {
     fn level(&self) -> i32 {
         3
@@ -535,7 +647,7 @@ impl<'a> ImportantExcerpt<'a> {
 
 >Here is an example where the third lifetime elision rule applies:
 
-```rust Code 10.4.16
+```rust Code 10.4.18
 impl<'a> ImportantExcerpt<'a> {
     fn announce_and_return_part(&self, announcement: &str) -> &str {
         println!("Attention please: {announcement}");
@@ -560,7 +672,7 @@ impl<'a> ImportantExcerpt<'a> {
 
 >Let’s briefly look at the syntax of specifying generic type parameters, trait bounds, and lifetimes all in one function!
 
-```rust Code 10.4.17
+```rust Code 10.4.19
 use std::fmt::Display;
 
 fn longest_with_an_announcement<'a, T>(

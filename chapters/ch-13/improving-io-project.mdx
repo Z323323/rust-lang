@@ -1,109 +1,184 @@
 ---
-title: "Improving the Rust I/O Project with Iterator Adapters"
-sidebarTitle: "Iterator Refactor"
-description: "Refactor the minigrep CLI project using iterators instead of explicit loops. See how iterators make Rust code more expressive and idiomatic."
+title: "Improving Our I/O Project"
+sidebarTitle: "13.3 - Improving Our I/O Project"
 mode: "wide"
 ---
 
-Now that we understand closures and iterators, we can revisit minigrep and replace imperative loops with iterator-based equivalents. The result is code that is shorter, more declarative, and often easier to read once you're comfortable with the iterator vocabulary. The compiler generates identical machine code either way — this is a matter of style and expressiveness, not performance.
+>With this new knowledge about iterators, we can improve the I/O project in Ch. 12 by using iterators to make places in the code clearer and more concise. Let’s look at how iterators can improve our implementation of the `Config::build` function and the `search` function.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+## Removing a `clone` Using an Iterator
 
-## Replacing `Config::build` with an Iterator
+In Ch. 12, we added code that took a vector of `String` values and created an instance of the `Config` struct by indexing into the vector and cloning the values (through `String::from`), allowing the `Config` struct to own those values. In Code 13.3.1, we’ve reproduced the implementation of the `Config::build` function as it was in Ch. 12.
 
-The current `Config::build` takes a slice of strings and indexes into it:
-
-```rust
-// Before — imperative, uses cloning
+```rust Code 13.3.1
 impl Config {
-    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+    fn build(args: Vec<String>) -> Result<Config, &'static str> {
         if args.len() < 3 {
-            return Err("not enough arguments");
+            return Err("Not enough arguments.");
         }
         Ok(Config {
-            query: args[1].clone(),
-            file_path: args[2].clone(),
-            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+            query: String::from(&args[1]),
+            file_path: String::from(&args[2]),
+            ignore_case: match env::var("IGNORE_CASE") {
+                Ok(val) => match val.parse::<bool>() {
+                    Ok(t_or_f) => t_or_f,
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            },
         })
     }
 }
 ```
 
-We can accept the iterator directly from `env::args()` and avoid cloning:
+>With our new knowledge about iterators, <u>we can change the `build` function to take ownership of an iterator as its argument instead of a `Vec<String>`</u>. <u>We’ll use the iterator functionality instead of the code that checks the length of the slice and indexes into specific locations.</u> This will clarify what the `Config::build` function is doing because the iterator will access the values.
 
-```rust
-// After — takes ownership of the iterator
-impl Config {
-    pub fn build(
-        mut args: impl Iterator<Item = String>,
-    ) -> Result<Config, &'static str> {
-        args.next(); // discard the program name (args[0])
+><u>Once `Config::build` takes ownership of the iterator</u> and stops using indexing operations that borrow, <u>we can move the `String` values from the iterator into `Config` rather than calling `clone` and making a new allocation</u>.
 
-        let query = match args.next() {
-            Some(q) => q,
-            None => return Err("Didn't get a query string"),
-        };
+### Using the Returned Iterator Directly
 
-        let file_path = match args.next() {
-            Some(f) => f,
-            None => return Err("Didn't get a file path"),
-        };
+>Open your `minigrep` project’s _src/main.rs_ file and look at the `main` function; it should look like this:
 
-        Ok(Config {
-            query,
-            file_path,
-            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
-        })
-    }
-}
-```
-
-The key differences:
-1. We accept `impl Iterator<Item = String>` instead of `&[String]`, so no slice needed.
-2. We call `args.next()` three times: once to skip the binary name, once for the query, once for the file path.
-3. No `.clone()` — the `String` values are moved directly into `Config`.
-
-### Updating `main`
-
-Pass the iterator from `env::args()` directly:
-
-```rust
+```rust Code 13.3.2
 fn main() {
-    let config = Config::build(std::env::args()).unwrap_or_else(|err| {
+    let config = Config::build(env::args().collect::<Vec<String>>()).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {err}");
-        std::process::exit(1);
+        process::exit(1);
     });
 
-    if let Err(e) = minigrep::run(config) {
+    if let Err(e) = run(config) {
         eprintln!("Application error: {e}");
-        std::process::exit(1);
+        process::exit(1);
     }
 }
 ```
 
-`env::args()` returns `Args`, which implements `Iterator<Item = String>`. It's passed by value and consumed inside `Config::build`.
+>We’ll first change the start of the `main` function that we had in Ch. 12 (Code 13.3.2) to Code 13.3.3, which this time uses an iterator. This won’t compile until we update `Config::build` as well.
 
-## Refactoring the `search` Function
+```rust Code 13.3.3
+fn main() {
+    let config = Config::build(env::args()).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
 
-The current `search` uses a mutable `Vec` and an explicit `for` loop:
+    // --snip--
+}
+```
 
-```rust
-// Before
+>The `env::args` function returns an iterator! <u>Rather than collecting the iterator values into a vector and then passing it to `Config::build`, now we’re passing ownership of the iterator returned from `env::args` to `Config::build` directly.</u>
+
+>Next, we need to update the definition of `Config::build`. Let’s change the signature of `Config::build` to look like Code 13.3.4. 
+
+```rust Code 13.3.4
+impl Config {
+    fn build<T: Iterator<Item = String>>(mut args: T) -> Result<Config, &'static str> {
+        eprintln!("Running: {}.", args.next().unwrap());
+        
+        Ok(Config {
+            query: match args.next() {
+                Some(arg) => arg,
+                None => return Err("Didn't get a query string.")
+            },
+            file_path: match args.next() {
+                Some(arg) => arg,
+                None => return Err("Didn't get a file path.")
+            },
+            ignore_case: match env::var("IGNORE_CASE") {
+                Ok(val) => match val.parse::<bool>() {
+                    Ok(t_or_f) => t_or_f,
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            },
+        })
+    }
+}
+```
+
+>The standard library documentation for the `env::args` function shows that the type of <u>the iterator it returns is `std::env::Args`, and that type implements the `Iterator` trait and returns `String` values</u>.
+
+>We’ve updated the signature of the `Config::build` function so that the parameter `args` has a generic type `T` with the trait bound `: Iterator<Item = String>`, instead of `Vec<String>`. This syntax means that `args` can be any type that implements the `Iterator` trait and returns `String` items.
+
+>Because <u>we’re taking ownership of `args` and we’ll be mutating `args` by iterating over it</u>, we can add the `mut` keyword into the specification of the `args` parameter to make it mutable.
+
+It is important to remember that `args`, in Code 13.3.4, is an iterator. This means <u>it represents a struct containing pointers that track its position within the collection it is applied to</u>. <u>Iterating over the collection requires us to advance the pointer inside the struct to traverse the collection, and consequently, we must mutate `args`!</u>
+
+>Because `args` implements the `Iterator` trait, we know we can call the `next` method on it. The first value in the return value of `env::args` is the name of the program. Then, we call `next` to get the value we want to put in the `query` field of `Config`. If `next` returns `Some`, we use a `match` to extract the value. If it returns `None`, it means not enough arguments were given, and we return early with an `Err` value. We do the same thing for the `file_path` value.
+
+Command 13.3.1 runs `minigrep` following the latest modifications. The outputs demonstrate that it functions correctly in all cases.
+
+<CodeGroup>
+```bash Command 13.3.1
+# Output 13.3.1.1
+cargo run;
+# Output 13.3.1.2
+cargo run -- to;
+# Output 13.3.1.3-1
+cargo run -- to poem.txt > output.txt &&
+# Output 13.3.1.3-2
+cat output.txt &&
+# Output 13.3.1.4-1
+IGNORE_CASE=true cargo run -- to poem.txt > output.txt &&
+# Output 13.3.1.4-2
+cat output.txt
+```
+```text E-Output 13.3.1.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/minigrep`
+Running: target/debug/minigrep.
+Problem parsing arguments: Didn't get a query string.
+```
+```text Output 13.3.1.2
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/minigrep to`
+Running: target/debug/minigrep.
+Problem parsing arguments: Didn't get a file path.
+```
+```text Output 13.3.1.3-1
+   Compiling minigrep v0.1.0 (/var/home/z561/rust_projects/minigrep)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/minigrep to poem.txt`
+Running: target/debug/minigrep.
+```
+```text Output 13.3.1.3-2
+Are you nobody, too?
+How dreary to be somebody!
+```
+```text Output 13.3.1.4-1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running `target/debug/minigrep to poem.txt`
+Running: target/debug/minigrep.
+```
+```text Output 13.3.1.4-2
+Are you nobody, too?
+How dreary to be somebody!
+To tell your name the livelong day
+To an admiring bog!
+```
+</CodeGroup>
+
+## Clarifying Code with Iterator Adapters
+
+>We can also take advantage of iterators in the `search` function in our `minigrep` project, which is reproduced here in Code 13.3.5 as it was in Ch. 12.
+
+```rust Code 13.3.5
 pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     let mut results = Vec::new();
+
     for line in contents.lines() {
         if line.contains(query) {
             results.push(line);
         }
     }
+
     results
 }
 ```
 
-With iterator adaptors this becomes a one-liner:
+>We can write this code in a more concise way using iterator adapter methods. <u>Doing so also lets us avoid having a mutable intermediate results vector. The functional programming style prefers to minimize the amount of mutable state to make code clearer. Removing the mutable state might enable a future enhancement to make searching happen in parallel because we wouldn’t have to manage concurrent access to the results vector.</u> Code 13.3.6 shows this change.
 
-```rust
-// After
+```rust Code 13.3.6
 pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     contents
         .lines()
@@ -112,128 +187,213 @@ pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
 }
 ```
 
-The logic is identical: iterate over lines, keep those that contain the query, collect into a `Vec`. The iterator version eliminates the temporary mutable variable and makes the intent explicit at a glance.
+>Recall that the purpose of the `search` function is to return all lines in `contents` that contain the query. This code uses the `filter` adapter to keep only the lines for which `line.contains(query)` returns `true`. We then collect the matching lines into another vector with `collect`. Much simpler! Feel free to make the same change to use iterator methods in the `search_case_insensitive` function as well.
 
-### Case-Insensitive Version
+>For a further improvement, <u>return an iterator from the `search` function by removing the call to `collect` so that the function becomes an iterator adapter</u>. Search through a large file using your `minigrep` tool before and after making this change to observe the difference in behavior. <u>Before this change, the program won’t print any results until it has collected all of the results, but after the change, the results will be printed as each matching line is found.</u>
+
+This exercise has been completed for you below. Included are: the new versions of the `search` and `search_case_insensitive` functions in _lib.rs_ (Code 13.3.7) and the new version of the `run` function in _main.rs_ (Code 13.3.8).
+
+- _lib.rs_
+
+  ```rust Code 13.3.7
+  pub fn search<'a>(
+      query: &'a String,
+      contents: &'a str,
+  ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+      Box::new(contents.lines().filter(|&line| line.contains(&*query)))
+  }
+  
+  pub fn search_case_insensitive<'a>(
+      query: &'a mut String,
+      contents: &'a str,
+  ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+      *query = query.to_lowercase();
+  
+      Box::new(
+          contents
+              .lines()
+              .filter(|&line| line.to_lowercase().contains(&*query)),
+      )
+  }
+  ```
+
+  The `search` and  `search_case_insensitive` signatures leverage **type erasure**. <u>`dyn Iterator` hides the specific closure type behind a uniform interface</u>. <u>The `+ 'a` is a critical lifetime bound: it promises the compiler that whatever iterator is hidden inside the `Box`, it will not outlive the references (`query` and `contents`) it captured from the caller.</u>
+
+  The single `.filter(|&line| line.contains(&*query)))` line in the `search` function executes three complex compiler mechanics simultaneously:
+  
+  1. **Pattern Matching (`|&line|`)**: <u>The `filter` method yields a double pointer (`&&str`). By writing `&line` in the pattern, you explicitly instruct the compiler to peel off the outer reference.</u> The stack variable line becomes a clean, 16-byte `&str` (fat pointer).
+  2. **Deref Coercion (`&*query`)**: The query is a `&String`. <u>By dereferencing it (`*`) and immediately reborrowing it (`&`), you force the compiler to look at the inner string data. Rust then silently triggers deref coercion, converting the `&String` into a `&str` to satisfy the pattern trait required by the `contains` method.</u>
+  3. **Zero-Allocation Filtering**: Because no temporary strings are created in this closure, the memory footprint is practically zero. It strictly compares existing pointers.
+  
+  The lines `*query = query.to_lowercase();` and `.filter(|&line| line.to_lowercase().contains(&*query)))` in the `search_case_insensitive` function introduce safe mutations and temporary allocations without triggering the borrow checker:
+  
+  1. **In-place Mutation**: Because `query` is passed as a mutable reference (`&'a mut String`), `*query = query.to_lowercase()` safely overwrites the caller's string data in place before the iterator is even constructed.
+  2. **Temporary Lifetime Safety**: Inside the closure, <u>`line.to_lowercase()` allocates a brand-new `String` on the heap for every single line</u>. <u>However, because you immediately chain `.contains()`, that temporary `String` is evaluated into a `bool` and instantly destroyed.</u>
+  3. **Yielding the Original Reference**: <u>Because the temporary lowercase string is destroyed inside the closure, the iterator never attempts to return it. If the boolean evaluates to `true`, the filter adapter yields the original line (`&'a str`), which points safely to the long-lived contents string, preserving the exact original formatting for the terminal output.</u>
+
+- _main.rs_
+
+  ```rust Code 13.3.8
+  fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
+      let contents = fs::read_to_string(config.file_path)?;
+  
+      let mut iterator = if config.ignore_case {
+          search_case_insensitive(&mut config.query, &contents)
+      } else {
+          search(&config.query, &contents)
+      }; // #1
+  
+      while let Some(line) = iterator.next() {
+          println!("{line}");
+      } // #2
+  
+      Ok(())
+  }
+  ```
+
+  <ol className="list-comments">
+  <li>
+  <u>This block successfully bypasses the `E0308` (incompatible types) error through dynamic dispatch. Because closures have unique, unnameable types, a standard `impl Iterator` would cause the `if` and `else` branches to return two structurally different `Filter` objects. By calling functions that wrap their iterators in a `Box`, both branches now return the exact same type: a heap-allocated fat pointer (`Box<dyn Iterator>`).</u> The compiler is satisfied because the types are perfectly unified.
+  </li>
+  <li>
+  The `while let` loop safely consumes that single stateful iterator step-by-step.
+  </li>
+  </ol>
+
+Try running Command 13.3.1 again to verify that the new code works correctly!
+
+At this point, you are likely feeling a bit confused if you have carefully read the last two code snippets presented. This is entirely normal, as Rust is a genuinely complex language. To build a more solid mental model regarding the use of `&` in various distinct scenarios, we will now examine some rules that have been overlooked until now.
+  
+### Rule 1: Expressions (Building Pointers)
+
+<p><u>When you use `&` on the right side of an equals sign, in a function call, or in a type declaration (`&&str`), you are in **expression mode**.</u></p>
+
+- **The Action**: <u>You are creating pointers</u>.
+- **The Rule**: <u>They stack and accumulate</u>. <u>`&` applied to `&str` creates a double pointer (`&&str`). They never cancel each other out here; they just build a deeper chain of memory addresses.</u>
+
+### Rule 2: Patterns (Destroying Pointers)
+
+<p><u>When you use `&` on the left side of an equals sign, or in closure arguments like `|&&line|`, you are in **pattern matching mode**.</u></p>
+
+- **The Action**: <u>You are destroying pointers</u>.
+- **The Rule**: <u>The `&` in your pattern mechanically cancels out the `&` on the incoming type</u>.
+
+Here is the exact mathematical cancellation that happens:
+
+- **Incoming Type**: `&&str` (A pointer to a pointer to a string).
+- **Your Pattern**: `&&line` (Peel the first pointer, peel the second pointer).
+- **The Result**: <u>The `line` variable absorbs what is left: `str`.</u> By peeling off both pointers, you force the `line` variable to bind directly to `str`. In Rust, <u>local variables pushed onto the stack must have a statically known size at compile time (this is what the `Sized` trait guarantee)</u>. A `&str` (the fat pointer) is exactly 16 bytes. The compiler loves this. A bare `str` is just a raw sequence of UTF-8 text characters sitting somewhere in memory. It could be 5 bytes long, or 50 gigabytes long. The compiler has no idea how big it is, so it absolutely refuses to put it on the stack. If you write `|&&line|`, you successfully grab the raw text, but because the text has no fixed size, the compiler throws `E0277`. <u>You need to leave at least one pointer intact (by using `|&line|`) so the stack variable remains a predictable 16-byte `&str`.</u>
+
+### Rule 3: The Inverse of `&` is `ref`
+
+If `&` in a pattern strips a pointer away, <u>how do you add a pointer while inside a pattern</u>?
+
+<u>Rust uses the keyword `ref` for this.</u> If you had an incoming type of `&str` and you wanted your closure variable to become a double pointer (`&&str`), you would write `|ref line|`.
+
+- **Pattern `&`**: <u>Looks at a pointer and gives you the data</u>.
+- **Pattern `ref`**: <u>Looks at data and gives you a pointer</u>.
+
+## RFC 2005
+
+The reason the rules around `&` and `*` seem to change randomly is because of a massive update added to Rust in 2018 called **match ergonomics** (RFC 2005).
+
+<u>Before this update, you had to manually track and peel every single pointer perfectly.</u> If you messed up one `&`, it wouldn't compile. To make code cleaner, Rust added 'invisible magic' that automatically inserts or strips pointers when it thinks you need help.
+
+Here are the absolute, ironclad rules of what the compiler is doing behind your back.
+
+### Rule 1: Reference Value into a Naked Pattern (The Magic Shift)
+
+**Scenario**: <u>You have a reference `&T`, but your pattern is just a naked word like `x`</u>.
 
 ```rust
-// Before
-pub fn search_case_insensitive<'a>(
-    query: &str,
-    contents: &'a str,
-) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    let mut results = Vec::new();
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            results.push(line);
-        }
-    }
-    results
+let addr_data = &String::from("hello");
+let x = addr_data; // `x` is a naked pattern.
+```
+
+When you pass a reference into a naked pattern, the compiler realizes the types don't physically match. <u>To save you from writing boilerplate</u>, it triggers **default binding mode shifting**:
+
+1. It temporarily looks 'through' the reference (`&addr_data`) to see the data.
+2. To prevent you from accidentally moving and destroying the borrowed data, it secretly rewrites your pattern from `x` to `ref x` (`let ref x = addr_data`).
+3. **Result**: The variable `x` becomes a reference (`&String`). <u>You typed a naked variable, but the compiler quietly handed you a pointer.</u>
+
+### Rule 2: The Deep Penetration Rule (Structs and Enums)
+
+This is where the magic gets aggressive, and where most people lose their minds.
+
+```rust Code 13.3.9
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
 }
 
-// After
-pub fn search_case_insensitive<'a>(
-    query: &str,
-    contents: &'a str,
-) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    contents
-        .lines()
-        .filter(|line| line.to_lowercase().contains(&query))
-        .collect()
+fn main() {
+    let opt: &Option<String> = &Some(String::from("Rust"));
+
+    // Matching a reference against a naked enum pattern.
+    if let Some(text) = opt {
+        print_type(&text); // '&alloc::string::String'
+    }
 }
 ```
 
-## Full Refactored `src/lib.rs`
+You are matching `&Option<String>` against the naked pattern `Some(text)`.
 
-Putting it all together:
+1. The compiler sees you are trying to match a reference against an enum structure.
+2. It completely strips the outer `&` off the `Option`.
+3. It pushes that `&` down into the fields of the enum.
+4. **Result**: <u>The inner variable text automatically becomes `&String`.</u> The compiler magically pushed the pointer through the outer shell and onto the inner data so you could read it safely.
+
+This example allows you to truly understand the pattern matching algorithm in depth, along with the `|&&line|` scenario analyzed above. <u>Pattern matching is a strictly mechanical algorithm!</u>
+
+If an expression of type `&&&Some(Some(Some(String)))` is matched against the pattern `&&Some(Some(x))`, then `x` represents the exact mechanical result of the operation:
+
+```math
+\begin{aligned}
+\& && \& && \& && \text{Some}(\text{Some}( && \text{Some}(\text{String}) && )) && - \\
+&& \& && \& && \text{Some}(\text{Some}( && \  && )) && = \\
+\& && && && && \text{Some}(\text{String}) && &&
+\end{aligned}
+```
+
+meaning the type of `x` turns out to be precisely `&Some(String)`.
+
+```rust Code 13.3.10
+fn print_type<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+fn main() {
+    let t = Some(Some(Some(String::from("Z561"))));
+    if let &&Some(Some(x)) = &&&t {
+        print_type(&x); // '&core::option::Option<alloc::string::String>'
+                        // = &Some(String)
+    }
+}
+```
+
+### Rule 3: Value into a Reference Pattern (The Hard Crash)
+
+**Scenario**: You have an owned value `T`, but you write a reference pattern `&x`.
 
 ```rust
-use std::env;
-use std::error::Error;
-use std::fs;
-
-pub struct Config {
-    pub query: String,
-    pub file_path: String,
-    pub ignore_case: bool,
-}
-
-impl Config {
-    pub fn build(
-        mut args: impl Iterator<Item = String>,
-    ) -> Result<Config, &'static str> {
-        args.next(); // skip binary name
-
-        let query = args.next().ok_or("Didn't get a query string")?;
-        let file_path = args.next().ok_or("Didn't get a file path")?;
-
-        Ok(Config {
-            query,
-            file_path,
-            ignore_case: env::var("IGNORE_CASE").is_ok(),
-        })
-    }
-}
-
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(&config.file_path)?;
-
-    let results = if config.ignore_case {
-        search_case_insensitive(&config.query, &contents)
-    } else {
-        search(&config.query, &contents)
-    };
-
-    for line in results {
-        println!("{line}");
-    }
-
-    Ok(())
-}
-
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    contents.lines().filter(|l| l.contains(query)).collect()
-}
-
-pub fn search_case_insensitive<'a>(
-    query: &str,
-    contents: &'a str,
-) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    contents
-        .lines()
-        .filter(|l| l.to_lowercase().contains(&query))
-        .collect()
-}
+let data = String::from("hello");
+let &x = data; // ERROR
 ```
 
-Notice we also used `Option::ok_or` to convert `None` into a `Result::Err` inline, then `?` to propagate — a compact pattern for turning iterator `None` into an error.
+The compiler's magic only works to save you from pointers. <u>It cannot invent pointers that don't exist.</u>
 
-## Tests Still Pass
+- The pattern `&x` is a command: 'I expect a pointer to arrive here. Peel the pointer off, and give me the raw data'.
+- But the incoming data is just a `String`. There is no pointer to peel.
+- **Result**: The compiler instantly throws a type mismatch error. You cannot destruct a reference out of a flat value.
 
-The refactored code doesn't change any observable behavior:
-
-```bash
-cargo test
+```math
+\begin{aligned}
+\text{String} && - && \\
+\& && = && \text{ERROR}
+\end{aligned}
 ```
 
-```
-test tests::case_insensitive ... ok
-test tests::case_sensitive ... ok
-test tests::no_results ... ok
-test tests::one_result ... ok
+## Choosing Between Loops and Iterators
 
-test result: ok. 4 passed; 0 failed
-```
+>The next logical question is which style you should choose in your own code and why: the original implementation in Ch. 12 or the version using iterators in Ch. 13 (assuming we’re collecting all the results before returning them rather than returning the iterator). <u>Most Rust programmers prefer to use the iterator style.</u> It’s a bit tougher to get the hang of at first, but once you get a feel for the various iterator adapters and what they do, iterators can be easier to understand. <u>Instead of fiddling with the various bits of looping and building new vectors, the code focuses on the high-level objective of the loop. This abstracts away some of the commonplace code so that it’s easier to see the concepts that are unique to this code, such as the filtering condition each element in the iterator must pass.</u>
 
-## Summary
-
-- `Config::build` now accepts `impl Iterator<Item = String>`, avoiding both indexing and cloning.
-- The `search` functions collapse to a `.lines().filter(...).collect()` chain.
-- `Option::ok_or` + `?` is a clean way to convert iterator exhaustion into a `Result` error.
-- Behavior is unchanged; tests confirm correctness of the refactoring.
-- Iterator-based code is more declarative and removes the need for mutable intermediate `Vec`s.
-
-Next we'll examine whether iterators actually perform as well as hand-written loops.
+>But are the two implementations truly equivalent? The intuitive assumption might be that the lower-level loop will be faster. Let’s talk about performance.

@@ -1,176 +1,485 @@
 ---
-title: "Comparing Loops and Iterators for Performance in Rust"
-sidebarTitle: "Performance"
-description: "Rust iterators and loops compile to the same machine code—zero-cost abstractions. Benchmark data showing iterators match or beat manual loops."
+title: "Performance in Loops vs. Iterators"
+sidebarTitle: "13.4 - Performance in Loops vs. Iterators"
 mode: "wide"
 ---
 
-A common concern when adopting functional-style iterator chains is: "Does all this abstraction hurt performance?" The answer in Rust is a resounding no. The Rust compiler, through a combination of inlining, monomorphization, and LLVM optimizations, compiles iterator chains to the same (or better) machine code as equivalent hand-written loops. This property is called **zero-cost abstractions** — you pay for no more than what you use, and the abstraction itself has no runtime overhead.
+>To determine whether to use loops or iterators, you need to know which implementation is faster: the version of the `search` function with an explicit `for` loop or the version with iterators.
 
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+>We ran a benchmark by loading the entire contents of 'The Adventures of Sherlock Holmes' by Sir Arthur Conan Doyle into a `String` and looking for the word `the` in the contents. Here are the results of the benchmark on the version of search using the `for` loop and the version using iterators:
 
-## What "Zero-Cost" Means
-
-The phrase comes from Bjarne Stroustrup's description of C++ philosophy:
-
-> "What you don't use, you don't pay for. And further: What you do use, you couldn't hand code any better."
-
-Rust inherits this principle. An iterator chain like:
-
-```rust
-let sum: u32 = (0..1_000_000)
-    .filter(|x| x % 2 == 0)
-    .map(|x| x * x)
-    .sum();
+```text
+test bench_search_for  ... bench:  19,620,300 ns/iter (+/- 915,700)
+test bench_search_iter ... bench:  19,234,900 ns/iter (+/- 657,200)
 ```
 
-…compiles to a tight loop with no heap allocation, no dynamic dispatch, and no overhead compared to:
+>The two implementations have similar performance! We won’t explain the benchmark code here because the point is not to prove that the two versions are equivalent but to get a general sense of how these two implementations compare performance-wise.
 
-```rust
-let mut sum: u32 = 0;
-for x in 0..1_000_000 {
-    if x % 2 == 0 {
-        sum += x * x;
+>For a more comprehensive benchmark, you should check using various texts of various sizes as the contents, different words and words of different lengths as the query, and all kinds of other variations. The point is this: <u>Iterators, although a high-level abstraction, get compiled down to roughly the same code as if you’d written the lower-level code yourself</u>. Iterators are one of Rust’s **zero-cost abstractions**, by which <u>we mean that using the abstraction imposes no additional runtime overhead</u>. This is analogous to how Bjarne Stroustrup, the original designer and implementor of C++, defines zero-overhead in his 2012 ETAPS keynote presentation 'Foundations of C++':
+
+<Info>
+In general, C++ implementations obey the zero-overhead principle: What you don’t use, you don’t pay for. And further: What you do use, you couldn’t hand code any better.
+</Info>
+
+><u>In many cases, Rust code using iterators compiles to the same assembly you’d write by hand. Optimizations such as loop unrolling and eliminating bounds checking on array access apply and make the resultant code extremely efficient.</u> Now that you know this, you can use iterators and closures without fear! They make code seem like it’s higher level but don’t impose a runtime performance penalty for doing so.
+
+## Benchmark Tests
+
+We will dive into benchmark tests right here, as they are a fundamental concept in Rust and any performance-oriented language. To analyze them, we'll head over to [[doc.rust-lang.org/unstable-book/library-features/test.html](https://doc.rust-lang.org/unstable-book/library-features/test.html)], because the Rust Book doesn't cover them directly—<u>they are an unstable feature</u>.
+
+### Native Benchmarking with Rust's Unstable Test Library
+
+>The internals of the test crate are unstable, behind the `test` flag. The most widely used part of the `test` crate are benchmark tests, which can test the performance of your code. Let’s make our _src/lib.rs_ look like this (comments elided):
+
+```rust Code 13.4.1
+#![feature(test)]
+
+extern crate test;
+
+pub fn add_two(a: i32) -> i32 {
+    a + 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(4, add_two(2));
+    }
+
+    #[bench]
+    fn bench_add_two(b: &mut Bencher) {
+        b.iter(|| add_two(2));
     }
 }
 ```
 
-LLVM sees both as the same sequence of arithmetic and branch instructions.
+>Note the `test` feature gate, which enables this unstable feature.
 
-## Why Iterators Can Be *Faster* Than Loops
+>We’ve imported the `test` crate, which contains our benchmarking support. We have a new function as well, with the `bench` attribute. Unlike regular tests, which take no arguments, <u>benchmark tests take a `&mut Bencher`</u>. <u>This `Bencher` provides an `iter` method, which takes a closure. This closure contains the code we’d like to benchmark.</u>
 
-Iterator chains over fixed-size slices can actually be *faster* than index-based loops because:
+><p><u>We can run benchmark tests with `cargo bench`.</u></p>
 
-1. **No bounds checking**: `iter()` on a slice uses a pointer pair internally; the compiler knows iteration is bounded.
-2. **SIMD vectorization**: LLVM can auto-vectorize iterator chains more readily because there are no explicit indices to trip alias analysis.
-3. **Loop unrolling**: When iterator element counts are compile-time known (e.g., arrays), the compiler can unroll the loop entirely.
-
-### The Audio Decoder Example
-
-The Rust Book cites an audio processing benchmark. An iterator-based decoder using `zip` and `map` over fixed-length arrays compiled to this kind of assembly:
-
+<CodeGroup>
+```bash Command 13.4.1
+cargo bench
 ```
-; 12 iterations unrolled — no loop counter needed
-vmovss  xmm0, [buffer + 0]
-vfmadd132ss xmm0, xmm1, [coefficients + 0]
-vmovss  xmm2, [buffer + 4]
-vfmadd132ss xmm2, xmm3, [coefficients + 4]
-; ... and so on for all 12 elements
+```text Output 13.4.1
+   Compiling adder v0.0.1 (file:///home/steve/tmp/adder)
+     Running target/release/adder-91b3e234d4ed382a
+
+running 2 tests
+test tests::it_works ... ignored
+test tests::bench_add_two ... bench:         1 ns/iter (+/- 0)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 1 measured
+```
+</CodeGroup>
+
+><u>Our non-benchmark test was ignored.</u> You may have noticed that <u>`cargo bench` takes a bit longer than `cargo test`</u>. <u>This is because Rust runs our benchmark a number of times, and then takes the average. Because we’re doing so little work in this example, we have a `1 ns/iter (+/- 0)`, but this would show the variance if there was one.</u>
+
+>Advice on writing benchmarks:
+
+>- Move setup code outside the `iter` loop; only put the part you want to measure inside.
+>- Make the code do 'the same thing' on each iteration; do not accumulate or change state.
+>- Make the outer function idempotent too; the benchmark runner is likely to run it many times.
+>- Make the inner `iter` loop short and fast so benchmark runs are fast and the calibrator can adjust the run-length at fine resolution.
+>- Make the code in the `iter` loop do something simple, to assist in pinpointing performance improvements (or regressions).
+
+>There’s another tricky part to writing benchmarks: benchmarks compiled with optimizations activated can be dramatically changed by the optimizer so that the benchmark is no longer benchmarking what one expects. <u>For example, the compiler might recognize that some calculation has no external effects and remove it entirely.</u>
+
+<CodeGroup>
+```rust Code 13.4.2
+#![feature(test)]
+
+extern crate test;
+use test::Bencher;
+
+#[bench]
+fn bench_xor_1000_ints(b: &mut Bencher) {
+    b.iter(|| {
+        (0..1000).fold(0, |old, new| old ^ new);
+    });
+}
+```
+```text B-Output 13.4.2
+running 1 test
+test bench_xor_1000_ints ... bench:         0 ns/iter (+/- 0)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured
+```
+</CodeGroup>
+
+>The benchmarking runner offers two ways to avoid this. Either, <u>the closure that the `iter` method receives can return an arbitrary value which forces the optimizer to consider the result used and ensures it cannot remove the computation entirely</u>. This could be done for the example above by adjusting the `b.iter` call to
+
+```rust
+b.iter(|| {
+    // Note lack of `;` (could also use an explicit `return`).
+    (0..1000).fold(0, |old, new| old ^ new)
+});
 ```
 
-No loop overhead, no bounds checks — just the arithmetic. A hand-written loop over the same data would generate nearly identical output.
+>Or, <u>the other option is to call the generic `test::black_box` function, which is an opaque 'black box' to the optimizer and so forces it to consider any argument as used</u>.
 
-## Benchmarking in Rust
+<CodeGroup>
+```rust Code 13.4.3
+#![feature(test)]
 
-Use the `criterion` crate for stable, statistically-sound benchmarking:
+extern crate test;
 
-```toml
-# Cargo.toml
+b.iter(|| {
+    let n = test::black_box(1000);
+
+    (0..n).fold(0, |a, b| a ^ b)
+})
+```
+```text B-Output 13.4.3
+running 1 test
+test bench_xor_1000_ints ... bench:       131 ns/iter (+/- 3)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured
+```
+</CodeGroup>
+
+><p><u>Neither of these read or modify the value, and are very cheap for small values. Larger values can be passed indirectly to reduce overhead (e.g. `black_box(&huge_struct)`).</u></p>
+
+>Performing either of the above changes gives B-Output 13.4.3. However, the optimizer can still modify a testcase in an undesirable manner even when using either of the above.
+
+### Production-Grade Benchmarking with Criterion
+
+Let's write a couple of benchmark tests to see if the `minigrep` implementation using iterators and closures is faster than a traditional loop-based approach—one that uses a `for` loop inside `search` and `search_case_insensitive` and returns an `Vec<String>`.
+
+Before we can do that, we need to code this alternative implementation and set up our project structure. Below, you will find the modifications required to put the loop-based solution in place.
+
+First, create a new directory named _bin_ inside _src_ and move your _main.rs_ file there. You will need to split the two implementations into separate binaries; for instance, I named mine _main_no_closures.rs_ and _main_with_closures.rs_ so the outputs make it clear what we are testing.
+
+```bash Command 13.4.2
+cd ~/rust_projects/minigrep/src &&
+mkdir bin &&
+mv main.rs bin/main_with_closures.rs &&
+cd bin &&
+cp main_with_closures.rs ./main_no_closures.rs &&
+gedit main_no_closures.rs
+```
+
+Next, we can keep a single _lib.rs_ file while providing two different versions of both `search` and `search_case_insensitive` (I named the loop-based variants `search_no_cl` and `search_case_insensitive_no_cl`).
+
+- _src/bin/main_no_closures.rs_
+
+  ```rust main_no_closures.rs
+  use minigrep::*;
+  
+  // --snip--
+  
+  fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
+      let contents = fs::read_to_string(config.file_path)?;
+  
+      let result = if config.ignore_case {
+          search_case_insensitive_no_cl(&mut config.query, &contents)
+      } else {
+          search_no_cl(&config.query, &contents)
+      };
+  
+      for line in result.iter() {
+          println!("{line}");
+      }
+  
+      Ok(())
+  }
+  ```
+  
+- _src/lib.rs_
+
+  ```rust lib.rs
+  pub fn search<'a>(query: &'a String, contents: &'a str) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+      Box::new(contents.lines().filter(|&line| line.contains(&*query)))
+  }
+
+  pub fn search_no_cl(query: &String, contents: &str) -> Vec<String> {
+      let mut vec: Vec<String> = vec![];
+  
+      for line in contents.lines() {
+          if line.contains(&*query) {
+              vec.push(String::from(line));
+          }
+      }
+  
+      vec
+  }
+
+  pub fn search_case_insensitive<'a>(
+      query: &'a mut String,
+      contents: &'a str,
+  ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+      *query = query.to_lowercase();
+  
+      Box::new(
+          contents
+              .lines()
+              .filter(|&line| line.to_lowercase().contains(&*query)),
+      )
+  }
+
+  pub fn search_case_insensitive_no_cl(query: &mut String, contents: &str) -> Vec<String> {
+      let mut vec: Vec<String> = vec![];
+      *query = query.to_lowercase();
+  
+      for line in contents.lines() {
+          if line.to_lowercase().contains(&*query) {
+              vec.push(String::from(line));
+          }
+      }
+  
+      vec
+  }
+  ```
+ 
+Run Command 13.4.3 to ensure everything works correctly.
+
+<CodeGroup>
+```bash Command 13.4.3
+cd ~/rust_projects/minigrep &&
+# Output 13.4.3.1-1
+cargo run --bin main_no_closures -- to poem.txt > output.txt &&
+# Output 13.4.3.1-2
+cat output.txt &&
+# Output 13.4.3.1-3
+IGNORE_CASE=true cargo run --bin main_no_closures -- to poem.txt > output.txt &&
+# Output 13.4.3.1-4
+cat output.txt &&
+# Output 13.4.3.2-1
+cargo run --bin main_with_closures -- to poem.txt > output.txt &&
+# Output 13.4.3.2-2
+cat output.txt &&
+# Output 13.4.3.2-3
+IGNORE_CASE=true cargo run --bin main_with_closures -- to poem.txt > output.txt &&
+# Output 13.4.3.2-4
+cat output.txt
+```
+```text Output 13.4.3.1-1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/main_no_closures to poem.txt`
+Running: target/debug/main_no_closures.
+```
+```text Output 13.4.3.1-2
+Are you nobody, too?
+How dreary to be somebody!
+```
+```text Output 13.4.3.1-3
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/main_no_closures to poem.txt`
+Running: target/debug/main_no_closures.
+```
+```text Output 13.4.3.1-4
+Are you nobody, too?
+How dreary to be somebody!
+To tell your name the livelong day
+To an admiring bog!
+```
+```text Output 13.4.3.2-1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/main_with_closures to poem.txt`
+Running: target/debug/main_with_closures.
+```
+```text Output 13.4.3.2-2
+Are you nobody, too?
+How dreary to be somebody!
+```
+```text Output 13.4.3.2-3
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/main_with_closures to poem.txt`
+Running: target/debug/main_with_closures.
+```
+```text Output 13.4.3.2-4
+Are you nobody, too?
+How dreary to be somebody!
+To tell your name the livelong day
+To an admiring bog!
+```
+</CodeGroup>
+
+Now let's write our benchmark tests. Be sure to modify your _Cargo.toml_ file to match the configuration shown below.
+
+We are doing this because the native benchmarking features we looked at earlier require an unstable (nightly) version of Rust, which we aren't using right now. However, <u>this is actually an advantage: the `criterion` crate is designed specifically for robust, professional-grade benchmarking and works seamlessly on stable Rust, making it a much more reliable solution than the built-in unstable alternative</u>.
+  
+  
+```toml minigrep/Cargo.toml
+[package]
+name = "minigrep"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = "0.5"
 
 [[bench]]
-name = "search_bench"
+name = "benchmark_tests"
 harness = false
 ```
 
-```rust
-// benches/search_bench.rs
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+Setting `harness = false` in your _Cargo.toml_ file disables the language's default, built-in test and benchmark runner. This configuration is essential when using third-party benchmarking libraries like `Criterion`.
 
-fn search_loop(query: &str, contents: &str) -> Vec<&str> {
-    let mut results = Vec::new();
-    for line in contents.lines() {
-        if line.contains(query) {
-            results.push(line);
-        }
-    }
-    results
-}
+You will also need to create a _benches_ directory at the root of your project (alongside _src_) and place the _benchmark_tests.rs_ file inside it. I have also included a _setup_ directory within _benches_ containing a _mod.rs_ file to demonstrate a common configuration mechanism for tests and benchmarks—something the Rust Book doesn't provide a working example of in Ch. 11.
 
-fn search_iter(query: &str, contents: &str) -> Vec<&str> {
-    contents.lines().filter(|l| l.contains(query)).collect()
-}
-
-fn bench_search(c: &mut Criterion) {
-    let contents = "line one\nline two\nline three\n".repeat(10_000);
-    let query = "two";
-
-    c.bench_function("loop search", |b| {
-        b.iter(|| search_loop(black_box(query), black_box(&contents)))
-    });
-    c.bench_function("iter search", |b| {
-        b.iter(|| search_iter(black_box(query), black_box(&contents)))
-    });
-}
-
-criterion_group!(benches, bench_search);
-criterion_main!(benches);
+```bash Command 13.4.4
+cd ~/rust_projects/minigrep &&
+mkdir benches &&
+touch benches/benchmark_tests.rs &&
+cd benches &&
+mkdir setup &&
+touch setup/mod.rs
 ```
 
-Run with:
+Insert the following contents into the _benchmark_tests.rs_ and _setup/mod.rs_ files, respectively.
 
-```bash
-cargo bench
+- _benchmark_tests.rs_
+
+  ```rust benches/benchmark_tests.rs
+  use criterion::{Criterion, criterion_group, criterion_main};
+  
+  mod setup;
+  
+  fn bench_no_closures(c: &mut Criterion) {
+      let mut no_cl_binary = setup::command(
+          "/var/home/z561/rust_projects/minigrep/target/debug/main_no_closures",
+          vec![
+              String::from("target/debug/main_no_closures"),
+              String::from("to"),
+              String::from("poem.txt"),
+          ],
+      );
+  
+      c.bench_function("no_closures solution", |b| {
+          b.iter(|| {
+              no_cl_binary
+                  .output()
+                  .expect("Execution error on main_no_closures")
+          })
+      });
+  }
+  
+  fn bench_closures(c: &mut Criterion) {
+      let mut cl_binary = setup::command(
+          "/var/home/z561/rust_projects/minigrep/target/debug/main_with_closures",
+          vec![
+              String::from("target/debug/main_with_closures"),
+              String::from("to"),
+              String::from("poem.txt"),
+          ],
+      );
+  
+      c.bench_function("closures solution", |b| {
+          b.iter(|| {
+              cl_binary
+                  .output()
+                  .expect("Execution error on main_with_closures")
+          })
+      });
+  }
+  
+  criterion_group!(benches, bench_no_closures, bench_closures);
+  criterion_main!(benches);
+  ```
+
+- _setup/mod.rs_
+
+  ```rust setup/mod.rs
+  use std::process::Command;
+  
+  pub fn command(path: &str, args: Vec<String>) -> Command {
+      let mut command = Command::new(path);
+  
+      command.args(args);
+  
+      command
+  }
+  ```
+  
+The code snippets above simply execute the two project binaries (generated via `cargo run` or `cargo build`) within `criterion`'s benchmark function. However, before you can finally run `cargo bench`, you need to make one more modification to _src/lib.rs_. It currently still contains the tests from the unmodified Ch. 12 project. I recommend removing them entirely to save time; otherwise, you will need to refactor them to match the new code structure. You must complete this final step because <u>`cargo bench` runs all standard tests before executing the benchmarks</u>. Once you have done either of these, execute Command 13.4.5 to see `criterion`'s benchmark tests in action.
+
+<CodeGroup>
+```bash Command 13.4.5
+cd ~/rust_projects/minigrep &&
+# Output 13.4.5.1
+cargo bench &&
+# Output 13.4.5.2
+IGNORE_CASE=true cargo bench
 ```
+```text Output 13.4.5.1
+    Finished `bench` profile [optimized] target(s) in 0.05s
+     Running unittests src/lib.rs (target/release/deps/minigrep-1ed61a9c5f523877)
 
-In practice you'll see results within statistical noise of each other — typically within 1–2% — confirming the zero-cost property.
+running 0 tests
 
-## When Iterators Are Slower (Rare Edge Cases)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-There are a handful of situations where iterators can theoretically be slower:
+     Running unittests src/bin/main_no_closures.rs (target/release/deps/main_no_closures-69a8735133573147)
 
-1. **Complex closures that don't inline**: If a closure calls a trait method through a vtable (`dyn Fn`), there is dynamic dispatch overhead. Use `impl Fn` (static dispatch) whenever possible.
-2. **Collecting into an oversized `Vec`**: Every `.collect()` call allocates. If you chain many `.map().filter().collect()` calls instead of one unified chain, you pay for each intermediate allocation.
-3. **Short iterators with high setup cost**: For a 2-element array, an explicit `if` statement is clearer and equally fast.
+running 0 tests
 
-The solution to point 2 is to chain adaptors before a single terminal `.collect()`:
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-```rust
-// Bad: three allocations
-let step1: Vec<_> = data.iter().map(|x| x * 2).collect();
-let step2: Vec<_> = step1.iter().filter(|&&x| x > 5).collect();
-let step3: Vec<_> = step2.iter().map(|x| x + 1).collect();
+     Running unittests src/bin/main_with_closures.rs (target/release/deps/main_with_closures-5d2bbb16449f3b0c)
 
-// Good: one allocation
-let result: Vec<_> = data.iter()
-    .map(|x| x * 2)
-    .filter(|&x| x > 5)
-    .map(|x| x + 1)
-    .collect();
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/benchmark_tests.rs (target/release/deps/benchmark_tests-997a7676376b2e0b)
+Gnuplot not found, using plotters backend
+Benchmarking no_closures solution: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.1s, enable flat sampling, or reduce sample count to 70.
+Benchmarking no_closures solution: Collecting 100 samples in estimated 5.0759 s (5050 iteratino_closures solution    time:   [1.0266 ms 1.0971 ms 1.1689 ms]
+                        change: [-7.6259% -1.0989% +5.9843%] (p = 0.75 > 0.05)
+                        No change in performance detected.
+
+Benchmarking closures solution: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.3s, enable flat sampling, or reduce sample count to 60.
+Benchmarking closures solution: Collecting 100 samples in estimated 5.2646 s (5050 iterationsclosures solution       time:   [959.71 µs 1.0350 ms 1.1132 ms]
+                        change: [-13.134% -6.7688% -0.3600%] (p = 0.06 > 0.05)
+                        No change in performance detected.
 ```
+```text Output 13.4.5.2
+    Finished `bench` profile [optimized] target(s) in 0.04s
+     Running unittests src/lib.rs (target/release/deps/minigrep-1ed61a9c5f523877)
 
-## The `#[inline]` Attribute
+running 0 tests
 
-Rust inlines small closures automatically. For non-trivial functions passed as iterators you can hint at inlining:
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-```rust
-#[inline]
-fn expensive_transform(x: i32) -> i32 {
-    // ... complex logic
-    x * 3 + 1
-}
+     Running unittests src/bin/main_no_closures.rs (target/release/deps/main_no_closures-69a8735133573147)
 
-let result: Vec<i32> = (0..100).map(expensive_transform).collect();
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/main_with_closures.rs (target/release/deps/main_with_closures-5d2bbb16449f3b0c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/benchmark_tests.rs (target/release/deps/benchmark_tests-997a7676376b2e0b)
+Gnuplot not found, using plotters backend
+Benchmarking no_closures solution: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.0s, enable flat sampling, or reduce sample count to 70.
+Benchmarking no_closures solution: Collecting 100 samples in estimated 5.0123 s (5050 iteratino_closures solution    time:   [976.44 µs 1.0487 ms 1.1246 ms]
+                        change: [-1.1300% +5.1907% +12.951%] (p = 0.16 > 0.05)
+                        No change in performance detected.
+
+closures solution       time:   [1.0401 ms 1.0991 ms 1.1580 ms]
+                        change: [+3.1241% +10.322% +18.858%] (p = 0.01 < 0.05)
+                        Performance has regressed.
 ```
+</CodeGroup>
 
-## Checking Assembly with `cargo asm`
+At this point, it is important to make one final observation. <u>The benchmark tests presented in this section are meant purely for educational purposes.</u> Running them a few times is enough to see that the performance difference between the two implementations is practically negligible.
 
-To see the machine code generated for a specific function, install `cargo-asm`:
+Furthermore, <u>you would normally benchmark code in a much more granular manner than what we did in _benchmark_tests.rs_</u>. <u>Benchmarking the execution of an entire binary is not idiomatic</u>; we took this approach here simply to demonstrate additional capabilities offered by Rust and Cargo.
 
-```bash
-cargo install cargo-asm
-cargo asm minigrep::search
-```
-
-Compare the loop and iterator versions side-by-side to convince yourself they produce the same output.
-
-## Summary
-
-- **Zero-cost abstraction**: iterator chains compile to the same machine code as equivalent loops.
-- Iterators can be *faster* than loops on slices due to no bounds checks and better vectorization.
-- Avoid collecting intermediate `Vec`s; chain all adaptors before a single `.collect()`.
-- Use `impl Fn` (not `dyn Fn`) to keep closures statically dispatched and inlineable.
-- Benchmark with `criterion`; inspect assembly with `cargo-asm` if you're skeptical.
-
-This concludes Chapter 13. Closures and iterators together form the backbone of idiomatic Rust — expressive, readable, and as fast as anything you could write by hand.
+Finally, please exercise caution when using `Command`. In a real-world production environment, spawning external processes via `Command` can be extremely dangerous if not handled securely.
