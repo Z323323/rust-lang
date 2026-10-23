@@ -1,177 +1,196 @@
 ---
-title: "Creating and Using Custom Cargo Subcommand Extensions"
-sidebarTitle: "Custom Commands"
-description: "Add custom subcommands to Cargo using the cargo-<name> binary naming convention. Discover all installed Cargo extensions with cargo --list."
+title: "Extending Cargo with Custom Commands"
+sidebarTitle: "14.5 - Extending Cargo with Custom Commands"
 mode: "wide"
 ---
 
-Cargo's functionality can be extended beyond its built-in commands by following a simple naming convention: any executable named `cargo-<name>` that is available on your system `PATH` becomes callable as `cargo <name>`. This design means the community can ship new Cargo subcommands as ordinary binary crates, and you install them with the familiar `cargo install` workflow.
-
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
-
-## The `cargo-<name>` Naming Convention
-
-When you run `cargo foo`, Cargo looks for an executable named `cargo-foo` in your `PATH`. If found, it invokes it, passing any remaining arguments through. From the user's perspective, `cargo foo` feels like a native Cargo command.
-
-This design principle means:
-- No plugin registry or special registration is required.
-- Any language could ship a Cargo extension — it doesn't have to be written in Rust.
-- Security model: you explicitly install extensions; Cargo never silently downloads or runs third-party code.
-
-## Discovering Available Extensions
-
-```bash
-cargo --list
-```
-
-This lists all built-in commands plus every `cargo-*` binary found in your `PATH`:
-
-```
-Installed Commands:
-    add                  Add dependencies to a Cargo.toml manifest file
-    bench                Execute all benchmarks of a local package
-    build                Compile a local package and all of its dependencies
-    ...
-    edit                 Edit dependencies (from cargo-edit)
-    expand               Show result of macro expansion (from cargo-expand)
-    fmt                  Formats all bin and lib files of the current crate (from rustfmt)
-    watch                Watch the current directory for changes (from cargo-watch)
-```
-
-Items contributed by third-party extensions appear alongside built-in commands.
+>Cargo is designed so that you can extend it with new subcommands without having to modify it. <u>If a binary in your `$PATH` is named `cargo-something`, you can run it as if it were a Cargo subcommand by running `cargo something`. Custom commands like this are also listed when you run `cargo --list`.</u> Being able to use `cargo install` to install extensions and then run them just like the built-in Cargo tools is a super-convenient benefit of Cargo’s design!
 
 ## Popular Custom Subcommands
 
-### `cargo-edit`
+- ### `cargo-watch`
 
-Adds `cargo add`, `cargo rm`, and `cargo upgrade` for managing dependencies without manually editing `Cargo.toml`:
+  <p><u>Recompiles (or runs tests) automatically when source files change.</u></p>
+  ```math
+  -
+  ```
+  
+  **Installing**
+  
+  ```bash Command 14.5.1
+  cargo install cargo-watch
+  ```
+  
+  **Ex. 1**
+  
+  ```bash Command 14.5.2
+  cargo watch -x test    # Rerun tests on every save.
+  ```
+  
+  **Ex. 2**
+  
+  ```bash Command 14.5.3
+  cargo watch -x "run -- arg1"    # Rerun the binary with arguments.
+  ```
+  ```math
+  -
+  ```
 
-```bash
-cargo install cargo-edit
+- ### `cargo-expand`
 
-cargo add serde --features derive
-cargo add tokio --features full
-cargo rm serde
-cargo upgrade                    # upgrades all dependencies to latest SemVer-compatible
-```
+  Shows the fully expanded output of Rust macros — invaluable for debugging `derive` macros.
+  ```math
+  -
+  ```
 
-### `cargo-watch`
+  **Installing**
 
-Recompiles (or runs tests) automatically when source files change:
+  ```bash Command 14.5.4
+  cargo install cargo-expand
+  ```
+  
+  **Ex. 1**
+  
+  ```bash Command 14.5.5
+  cargo expand    # Expand all macros in the crate.
+  ```
+  
+  **Ex. 2**
+  
+  ```bash Command 14.5.6
+  cargo expand my_module::MyStruct    # Expand a specific item.
+  ```
+  ```math
+  -
+  ```
 
-```bash
-cargo install cargo-watch
+- ### `cargo-audit`
 
-cargo watch -x test              # rerun tests on every save
-cargo watch -x "run -- arg1"     # rerun the binary with arguments
-```
+  Checks your dependencies against a database of known security vulnerabilities (from [[rustsec.org](https://rustsec.org)]).
+  ```math
+  -
+  ```
+  
+  **Installing**
 
-### `cargo-expand`
+  ```bash Command 14.5.7
+  cargo install cargo-audit
+  ```
+  
+  **Ex.**
+  
+  ```bash Command 14.5.8
+  cargo audit
+  ```
+  ```math
+  -
+  ```
 
-Shows the fully expanded output of Rust macros — invaluable for debugging `derive` macros:
+- ### `cargo-nextest`
 
-```bash
-cargo install cargo-expand
+  A faster, better-formatted test runner.
+  ```math
+  -
+  ```
 
-cargo expand                     # expand all macros in the crate
-cargo expand my_module::MyStruct # expand a specific item
-```
+  **Installing**
 
-### `cargo-audit`
-
-Checks your dependencies against a database of known security vulnerabilities (from [RustSec](https://rustsec.org)):
-
-```bash
-cargo install cargo-audit
-cargo audit
-```
-
-### `cargo-flamegraph`
-
-Generates flame graphs from perf data for profiling:
-
-```bash
-cargo install flamegraph
-cargo flamegraph --bin my_app
-```
-
-### `cargo-nextest`
-
-A faster, better-formatted test runner:
-
-```bash
-cargo install cargo-nextest
-cargo nextest run
-```
+  ```bash Command 14.5.9
+  cargo install cargo-nextest
+  ```
+  
+  **Ex.**
+  
+  ```bash Command 14.5.10
+  cargo nextest run
+  ```
+  ```math
+  -
+  ```
 
 ## Writing Your Own Cargo Extension
 
-Any binary named `cargo-mytool` works. Here's a minimal example:
+Any binary named `cargo-mytool` works. Here's a minimal example.
 
-```bash
+<Steps>
+<Step title="Initializing the Extension Package">
+```bash Command 14.5.11
 cargo new cargo-hello --name cargo-hello
 ```
-
-`src/main.rs`:
-
-```rust
+</Step>
+<Step title="Implementing Argument Parsing">
+```rust cargo-hello/src/main.rs
 fn main() {
-    // Cargo passes the subcommand name as the first argument, so skip it
+    // Cargo passes the subcommand name as the first argument, so skip it.
     let args: Vec<String> = std::env::args().skip(1).collect();
     println!("Hello from cargo-hello! Args: {:?}", args);
 }
 ```
-
-Install it:
-
-```bash
-cargo install --path .
+</Step>
+<Step title="Installing and Registering the Subcommand">
+```bash Command 14.5.12
+cargo install --path .    # It appears in `cargo --list` immediately.
 ```
-
-Now run it:
-
-```bash
+</Step>
+<Step title="Executing and Testing the Custom Subcommand">
+<CodeGroup>
+```bash Command 14.5.13
 cargo hello --name world
-# Hello from cargo-hello! Args: ["--name", "world"]
 ```
-
-It appears in `cargo --list` immediately.
+```text Output 14.5.13
+Hello from cargo-hello! Args: ["--name", "world"]
+```
+</CodeGroup>
+</Step>
+</Steps>
 
 ## Passing Cargo Metadata to Extensions
 
-Extensions often need to know about the current workspace. The `cargo_metadata` crate parses the output of `cargo metadata --format-version 1`:
+When you build a custom Cargo extension, <u>your tool often needs to inspect the project it is running inside</u>. It might need to know about workspace members, dependency trees, target directories, or the exact file paths of source code.
 
-```toml
-# Cargo.toml
+Reading and parsing _Cargo.toml_ files manually across an entire workspace is complex and error-prone. Fortunately, Cargo has a built-in feature for this: `cargo metadata`.
+
+When executed, Cargo outputs a comprehensive JSON structure detailing everything about the workspace graph via `--format-version 1`. To save you from parsing raw JSON strings yourself, the community provides the `cargo_metadata` crate, which wraps this command into clean, strongly-typed Rust structures.
+
+### Adding the Dependency
+
+First, <u>add the crate to your extension's _Cargo.toml_</u>:
+
+```toml Cargo.toml
 [dependencies]
 cargo_metadata = "0.18"
 ```
 
-```rust
+### Querying the Workspace Metadata
+
+Here is how you can use it in your code to inspect every package in the current workspace:
+
+```rust Code
 fn main() {
+    // Executes `cargo metadata --format-version 1` under the hood.
     let metadata = cargo_metadata::MetadataCommand::new()
         .exec()
         .expect("Failed to get cargo metadata");
 
+    // Iterate through every package present in the workspace.
     for package in &metadata.packages {
-        println!("{} v{}", package.name, package.version);
+        println!("Found package: {} v{}", package.name, package.version);
+        println!("Manifest path: {}", package.manifest_path);
     }
 }
 ```
 
-This gives your extension access to every crate in the workspace, their dependencies, and their file paths.
+What This Gives You Access To:
+
+By leveraging `cargo_metadata`, your extension gains complete programmatic awareness of:
+
+- Every crate in the workspace, including their names, versions, and unique IDs.
+- Exact file paths, allowing your tool to locate source files (_src/lib.rs_, _src/main.rs_) and configuration files on disk.
+- The complete dependency graph, letting you see which packages depend on what internal or external crates, along with their active features.
 
 ## Best Practices for Extension Authors
 
-1. **Prefix the binary with `cargo-`** even inside the crate name: `cargo-mytool`.
-2. **Skip `argv[0]`** — Cargo passes the full subcommand name (e.g., `"mytool"`) as the first argument to your binary.
-3. **Use `--` to separate Cargo flags from your own flags** in documentation: `cargo mytool -- --my-flag`.
-4. **Read `CARGO` env var** for the path to the current Cargo executable if you need to invoke Cargo from within your extension.
-
-## Summary
-
-- Any `cargo-<name>` binary in `PATH` becomes `cargo <name>` — no registration needed.
-- `cargo --list` shows all available built-in and third-party subcommands.
-- Popular extensions: `cargo-edit`, `cargo-watch`, `cargo-expand`, `cargo-audit`, `cargo-nextest`.
-- Write your own extension: create a binary named `cargo-<name>`, install it, and it just works.
-- Use the `cargo_metadata` crate to inspect workspace structure from inside an extension.
+1. <u>Prefix the binary with `cargo-` even inside the crate name</u>: `cargo-mytool`.
+2. Skip `argv[0]` — Cargo passes the full subcommand name (e.g., `"mytool"`) as the first argument to your binary.
+3. <u>Use `--` to separate Cargo flags from your own flags</u> in documentation: `cargo mytool -- --my-flag`.
+4. Read `CARGO` env var for the path to the current Cargo executable if you need to invoke Cargo from within your extension.

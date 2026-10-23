@@ -1,68 +1,196 @@
 ---
-title: "Cargo Workspaces: Managing Multiple Crates Together"
-sidebarTitle: "Workspaces"
-description: "Use Cargo workspaces to manage multiple related crates in one repository. Share dependencies, run tests across crates, and maintain a single Cargo.lock."
+title: "Cargo Workspaces"
+sidebarTitle: "14.3 - Cargo Workspaces"
 mode: "wide"
 ---
 
-As a Rust project grows, you'll often want to split it into multiple crates — a library crate for core logic, a binary crate for the CLI, and perhaps additional helper crates. A **Cargo workspace** groups these crates into one repository, giving them a single `Cargo.lock` file, a shared `target/` directory, and the ability to cross-reference each other with simple path dependencies.
-
-<Note>This chapter is part of The Rust Book – Almond Version, currently being written. For reference, see the [official Rust Book](https://doc.rust-lang.org/stable/book/).</Note>
+>In Ch. 12, we built a package that included a binary crate and a library crate. <u>As your project develops, you might find that the library crate continues to get bigger and you want to split your package further into multiple library crates. Cargo offers a feature called workspaces that can help manage multiple related packages that are developed in tandem.</u>
 
 ## Creating a Workspace
 
-Start with a root `Cargo.toml` that has only a `[workspace]` section (no `[package]`):
+><u>A workspace is a set of packages that share the same _Cargo.lock_ and output directory.</u> Let’s make a project using a workspace—we’ll use trivial code so that we can concentrate on the structure of the workspace. There are multiple ways to structure a workspace, so we’ll just show one common way. We’ll have a workspace containing <u>a binary and two libraries</u>. The binary, which will provide the main functionality, will depend on the two libraries. One library will provide an `add_one` function and the other library an `add_two` function. These three crates will be part of the same workspace. We’ll start by creating a new directory for the workspace:
 
-```toml
-# /Cargo.toml  (workspace root)
+```bash Command 14.3.1
+cd ~/rust_projects &&
+mkdir add &&
+cd add
+```
+
+>Next, <u>in the _add_ directory, we create the _Cargo.toml_ file that will configure the entire workspace</u>. <u>This file won’t have a `[package]` section. Instead, it will start with a `[workspace]` section that will allow us to add members to the workspace.</u> We also make a point to use the latest and greatest version of Cargo’s resolver algorithm in our workspace by setting the `resolver` value to `3`:
+
+```toml Cargo.toml
 [workspace]
-members = [
-    "adder",
-    "add_one",
-]
+resolver = "3"
 ```
 
-Then create the member crates:
+>Next, we’ll create the `adder` binary crate by running `cargo new` within the _add_ directory:
 
-```bash
-cargo new adder          # binary crate
-cargo new add_one --lib  # library crate
+```bash Command 14.3.2
+cargo new adder
 ```
 
-Your directory layout:
+><u>Running `cargo new` inside a workspace also automatically adds the newly created package to the members key in the `[workspace]` definition in the workspace _Cargo.toml_</u>, like this:
 
+```toml Cargo.toml
+[workspace]
+resolver = "3"
+members = ["adder"]
 ```
-my_workspace/
-├── Cargo.toml          ← workspace root
-├── Cargo.lock          ← single shared lock file
-├── target/             ← single shared build directory
-├── adder/
+
+>At this point, we can build the workspace by running `cargo build`. The files in your _add_ directory should look like this:
+
+```text ~/rust_projects/add
+├── Cargo.lock
+├── Cargo.toml
+├── adder
 │   ├── Cargo.toml
-│   └── src/
+│   └── src
 │       └── main.rs
-└── add_one/
-    ├── Cargo.toml
-    └── src/
-        └── lib.rs
+└── target
 ```
 
-## Adding a Path Dependency
+><u>The workspace has one _target_ directory at the top level that the compiled artifacts will be placed into; the `adder` package doesn’t have its own _target_ directory.</u> Even if we were to run `cargo build` from inside the _adder_ directory, the compiled artifacts would still end up in _add/target_ rather than _add/adder/target_. Cargo structures the _target_ directory in a workspace like this because <u>the crates in a workspace are meant to depend on each other</u>. <u>If each crate had its own _target_ directory, each crate would have to recompile each of the other crates in the workspace to place the artifacts in its own _target_ directory.</u> By sharing one _target_ directory, the crates can avoid unnecessary rebuilding.
 
-`adder` depends on `add_one`. In `adder/Cargo.toml`:
+## Creating the Second Package in the Workspace
 
-```toml
-[package]
-name = "adder"
-version = "0.1.0"
-edition = "2021"
+>Next, let’s create another member package in the workspace and call it `add_one`. Generate a new library crate named `add_one`:
 
+```bash Command 14.3.3
+cargo new add_one --lib
+```
+
+>The top-level _Cargo.toml_ will now include the _add_one_ path in the `members` list:
+
+```toml Cargo.toml
+[workspace]
+resolver = "3"
+members = ["adder", "add_one"]
+```
+
+>Your _add_ directory should now have these directories and files:
+
+```text ~/rust_projects/add
+├── Cargo.lock
+├── Cargo.toml
+├── add_one
+│   ├── Cargo.toml
+│   └── src
+│       └── lib.rs
+├── adder
+│   ├── Cargo.toml
+│   └── src
+│       └── main.rs
+└── target
+```
+
+>In the _add_one/src/lib.rs_ file, let’s add an `add_one` function:
+
+```rust add_one/src/lib.rs
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+```
+
+>Now we can have the `adder` package with our binary depend on the `add_one` package that has our library. First, we’ll need to add a path dependency on `add_one` to _adder/Cargo.toml_.
+
+```toml add/adder/Cargo.toml
 [dependencies]
 add_one = { path = "../add_one" }
 ```
 
-`add_one/src/lib.rs`:
+><p><u>Cargo doesn’t assume that crates in a workspace will depend on each other, so we need to be explicit about the dependency relationships.</u></p>
 
-```rust
+>Next, let’s use the `add_one` function (from the `add_one` crate) in the `adder` crate. Open the _adder/src/main.rs_ file and change the `main` function to call the `add_one` function.
+
+```rust add/adder/src/main.rs
+fn main() {
+    let num = 10;
+    println!("Hello, world! {num} plus one is {}!", add_one::add_one(num));
+}
+```
+
+>Let’s build the workspace by running `cargo build` in the top-level _add_ directory!
+
+```bash Command 14.3.4
+cargo build
+```
+
+>To run the binary crate from the _add_ directory, we can specify which package in the workspace we want to run by using the `-p` argument and the package name with `cargo run`:
+
+<CodeGroup>
+```bash Command 14.3.5
+cargo run -p adder
+```
+```text Output 14.3.5
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running `target/debug/adder`
+Hello, world! 10 plus one is 11!
+```
+</CodeGroup>
+
+>This runs the code in _adder/src/main.rs_, which depends on the `add_one` crate.
+
+## Depending on an External Package
+
+>Notice that <u>the workspace has only one _Cargo.lock_ file at the top level, rather than having a _Cargo.lock_ in each crate’s directory</u>. <u>This ensures that all crates are using the same version of all dependencies.</u> If we add the `rand` package to the _adder/Cargo.toml_ and _add_one/Cargo.toml_ files, Cargo will resolve both of those to one version of `rand` and record that in the one _Cargo.lock_. Making all crates in the workspace use the same dependencies means the crates will always be compatible with each other. Let’s add the `rand` crate to the `[dependencies]` section in the _add_one/Cargo.toml_ file so that we can use the `rand` crate in the `add_one` crate:
+
+```toml add_one/Cargo.toml
+[dependencies]
+rand = "0.10.1"
+```
+
+>We can now add `use rand;` to the _add_one/src/lib.rs_ file, and building the whole workspace by running `cargo build` in the _add_ directory will bring in and compile the `rand` crate. We will get one warning because we aren’t referring to the `rand` we brought into scope:
+
+<CodeGroup>
+```bash Command 14.3.6
+cargo build
+```
+```text Output 14.3.6
+    Updating crates.io index
+  Downloaded rand v0.10.1
+   --snip--
+   Compiling rand v0.10.1
+   Compiling add_one v0.1.0 (file:///projects/add/add_one)
+warning: unused import: `rand`
+ --> add_one/src/lib.rs:1:5
+  |
+1 | use rand;
+  |     ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `add_one` (lib) generated 1 warning (run `cargo fix --lib -p add_one` to apply 1 suggestion)
+   Compiling adder v0.1.0 (file:///projects/add/adder)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.95s
+```
+</CodeGroup>
+
+>The top-level _Cargo.lock_ now contains information about the dependency of `add_one` on `rand`. <u>However, even though `rand` is used somewhere in the workspace, we can’t use it in other crates in the workspace unless we add `rand` to their _Cargo.toml_ files as well.</u> For example, if we add `use rand;` to the _adder/src/main.rs_ file for the `adder` package, we’ll get an error:
+
+<CodeGroup>
+```bash Command 14.3.7
+cargo build
+```
+```text Output 14.3.7
+  --snip--
+   Compiling adder v0.1.0 (file:///projects/add/adder)
+error[E0432]: unresolved import `rand`
+ --> adder/src/main.rs:2:5
+  |
+2 | use rand;
+  |     ^^^^ no external crate `rand`
+```
+</CodeGroup>
+
+>To fix this, edit the _Cargo.toml_ file for the `adder` package and indicate that `rand` is a dependency for it as well. Building the `adder` package will add `rand` to the list of dependencies for `adder` in _Cargo.lock_, but <u>no additional copies of `rand` will be downloaded</u>. Cargo will ensure that every crate in every package in the workspace using the `rand` package will use the same version as long as they specify compatible versions of `rand`, saving us space and ensuring that the crates in the workspace will be compatible with each other.
+
+>If crates in the workspace specify incompatible versions of the same dependency, Cargo will resolve each of them but will still try to resolve as few versions as possible.
+
+## Adding a Test to a Workspace
+
+>For another enhancement, let’s add a test of the `add_one::add_one` function within the `add_one` crate:
+
+```rust add_one/src/lib.rs
 pub fn add_one(x: i32) -> i32 {
     x + 1
 }
@@ -73,123 +201,113 @@ mod tests {
 
     #[test]
     fn it_works() {
-        assert_eq!(add_one(5), 6);
+        assert_eq!(3, add_one(2));
     }
 }
 ```
 
-`adder/src/main.rs`:
+>Now run `cargo test` in the top-level `add` directory. <u>Running `cargo test` in a workspace structured like this one will run the tests for all the crates in the workspace</u>:
 
-```rust
-use add_one::add_one;
-
-fn main() {
-    let num = 10;
-    println!("{num} plus one is {}!", add_one(num));
-}
-```
-
-Build and run from the workspace root:
-
-```bash
-cargo build
-cargo run -p adder    # -p selects a specific package
-```
-
-## Shared `Cargo.lock`
-
-All member crates share a single `Cargo.lock` at the workspace root. This means if `adder` and `add_one` both depend on `rand`, Cargo ensures they use the **same version**, preventing the "diamond dependency" problem that would arise if each had its own lock file.
-
-However, each crate still has its own `Cargo.toml` — dependency *specifications* are per-crate, but *resolved versions* are shared.
-
-## External Dependencies in Member Crates
-
-Add an external dependency to `add_one/Cargo.toml`:
-
-```toml
-[dependencies]
-rand = "0.8"
-```
-
-`adder` does not automatically get `rand` in scope — it must add it to its own `Cargo.toml` if needed. But both crates will resolve to the same version of `rand` because of the shared lock file.
-
-## Running Tests Across the Workspace
-
-Run all tests in all member crates:
-
-```bash
+<CodeGroup>
+```bash Command 14.3.8
 cargo test
 ```
+```text Output 14.3.8
+   Compiling add_one v0.1.0 (file:///projects/add/add_one)
+   Compiling adder v0.1.0 (file:///projects/add/adder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running unittests src/lib.rs (target/debug/deps/add_one-93c49ee75dc46543)
 
-Run tests in a specific crate:
-
-```bash
-cargo test -p add_one
-```
-
-The output clearly labels which crate each test result comes from:
-
-```
-Running tests/integration_test.rs (target/debug/deps/add_one-...)
+running 1 test
 test tests::it_works ... ok
 
-Running src/main.rs (target/debug/adder-...)
-(no tests)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/adder-3a47283c568d2b6a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests add_one
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+</CodeGroup>
 
-## Shared `target/` Directory
+>The first section of the output shows that the `it_works` test in the `add_one` crate passed. The next section shows that zero tests were found in the `adder` crate, and then the last section shows that zero documentation tests were found in the `add_one` crate.
 
-All build artifacts land in the workspace root's `target/` directory. This means:
+>We can also run tests for one particular crate in a workspace from the top-level directory by using the `-p` flag and specifying the name of the crate we want to test:
 
-1. You don't have multiple `target/` directories consuming disk space.
-2. Incremental compilation is shared — if `add_one` is already compiled, `adder` doesn't recompile it.
-
-## Workspace-wide Settings
-
-Since Cargo 1.64, you can define shared dependency versions in the workspace root to keep member crates in sync:
-
-```toml
-# Workspace root Cargo.toml
-[workspace]
-members = ["adder", "add_one"]
-
-[workspace.dependencies]
-rand = "0.8"
-serde = { version = "1", features = ["derive"] }
+<CodeGroup>
+```bash Command 14.3.9
+cargo test -p add_one
 ```
+```text Output 14.3.9
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/add_one-93c49ee75dc46543)
 
-Member crates inherit these with:
+running 1 test
+test tests::it_works ... ok
 
-```toml
-# add_one/Cargo.toml
-[dependencies]
-rand = { workspace = true }
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests add_one
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+</CodeGroup>
 
-This prevents version drift across crates in the workspace.
+>This output shows `cargo test` only ran the tests for the `add_one` crate and didn’t run the `adder` crate tests.
 
-## Publishing Workspace Crates
+><u>If you publish the crates in the workspace to [[crates.io](https://crates.io)], each crate in the workspace will need to be published separately.</u> Like `cargo test`, <u>we can publish a particular crate in our workspace by using the `-p` flag and specifying the name of the crate we want to publish</u>.
 
-Workspace crates are published individually — there is no "publish workspace" command. Each crate must have its own complete `Cargo.toml` with `description`, `license`, etc.
+>As your project grows, consider using a workspace: It enables you to work with smaller, easier-to-understand components than one big blob of code. Furthermore, keeping the crates in a workspace can make coordination between crates easier if they are often changed at the same time.
 
-```bash
-cd add_one && cargo publish
-cd ../adder && cargo publish
-```
+## Demystifying Cargo Workspaces: Real-World Scenarios
 
-Publish dependencies first (e.g., `add_one` before `adder`), or use path-plus-version dependencies:
+<p><u>In a real-world workspace, the vast majority of packages do not have a _main.rs_; they have a _lib.rs_.</u></p>
 
-```toml
-add_one = { path = "../add_one", version = "0.1.0" }
-```
+You are not creating 'two thousand applications with two thousand `main` functions'. Instead, <u>you are either breaking down a monolith into one `main` application and several small internal libraries, or you are creating a suite of standalone applications that share the same codebase</u>.
 
-This allows `adder` to work locally via the path and from crates.io in published form.
+Here are the two primary real-world scenarios where workspaces are essential.
 
-## Summary
+### Scenario 1: One Main, Many Libraries (Modular Architecture)
 
-- A workspace root `Cargo.toml` lists `members`; it has no `[package]`.
-- All members share one `Cargo.lock` (consistent dependency versions) and one `target/` (shared build cache).
-- Add member-to-member dependencies with `{ path = "../crate_name" }`.
-- `cargo test` runs all workspace tests; `cargo test -p name` targets one crate.
-- `cargo run -p name` and `cargo build -p name` scope commands to a single member.
-- Workspace dependencies (`[workspace.dependencies]`) centralize version management.
+Imagine building a highly complex backend, such as a Discord clone. If you put everything into a single package, you will end up with a massive codebase, endless compilation times, and zero separation of concerns.
+
+With a workspace, you split the project into internal libraries:
+
+- `user-auth` - Library package, containing only _lib.rs_.
+- `database-layer` - Library package.
+- `chat-engine` - Library package.
+- `discord-server` - The single binary package, containing _main.rs_.
+
+The _main.rs_ inside `discord-server` will import the other workspace libraries.
+
+**The Advantages**:
+
+- **Faster Compilation**: <u>If you modify the chat logic, Cargo recompiles only `chat-engine` and the final binary, leaving the database and authentication modules untouched.</u> This drastically reduces compile times in large projects.
+- **Enhanced Maintainability**: Beyond performance, <u>strict code isolation vastly improves overall project manageability and code organization</u>. It forces a clear separation of concerns, making the codebase much easier to navigate, debug, and maintain as it grows.
+
+### Scenario 2: Multiple _main.rs_ Files (Application Suites and Ecosystems)
+
+<p><u>When a workspace contains multiple _main.rs_ files, they are indeed standalone applications (intended to run as separate system processes). They are not 'fused' into a single super-application.</u></p>
+
+However, these standalone applications are part of the same 'ecosystem' and need to share code. Classic examples include:
+
+- **Client and Server**: You are writing a database system. You will have a `db-server` package (running in the background) and a `db-cli` package (the terminal client users use to make queries). <u>They will both share a `db-core` library package containing the data types and networking logic.</u>
+- **Microservices**: You are building different microservices (e.g., cart, payments, notifications). Each has its own _main.rs_. Thanks to the workspace, they can all share the same internal `company-models` crate that defines what a `User` or an `Order` struct looks like.
+- **Auxiliary Tools**: You have your main application alongside a second binary called `data-importer` that you only run once a month to load CSV files into the database. <u>Both need access to the same database connection logic.</u>
+
+### The Real 'Superpower' of Workspaces for Cargo
+
+Why use a workspace instead of simply creating different Cargo projects?
+
+1. **A Single `target` Directory**: If you have five separate projects using a heavy external library like `serde`, Cargo will download and compile `serde` five times. In a workspace, `serde` is compiled only once for all packages, <u>saving massive amounts of time and storage</u>.
+2. **A Single _Cargo.lock_**: This guarantees that all packages in the workspace use exactly the same versions of external dependencies. There is no risk of the client using an outdated cryptographic library while the server uses a newer one.
+3. **Global Commands**: By running `cargo test` or `cargo build` in the root directory, Cargo intelligently tests and compiles the entire dependency tree of your whole system in one go.
