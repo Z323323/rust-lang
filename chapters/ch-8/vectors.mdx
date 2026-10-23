@@ -224,9 +224,13 @@ Earlier, I pointed out that tuple-struct variants introduce a certain degree of 
 
 Despite appearing as just another basic example, this snippet underscores one of Rust's shortcomings: the absence of concise syntax for such scenarios. This 'weakness', which is practically limited to code verbosity, is a direct result of Rust's lack of classical inheritance. Bypassing inheritance and the standard Object-Oriented (OO) paradigm is actually a major strength for Rust; it prevents the deep architectural complexities of OO design while still preserving its core capabilities, as shown in Code 8.1.8.
 
-Regarding Code 8.1.8, another critical observation must be made regarding memory layout. <u>An enum can represent different types because it reserves STACK memory equal to its largest variant (plus a small discriminant tag). If one variant holds a massive struct while the others are tiny, every single record in an array or vector will consume the memory of that massive struct, leading to severe memory bloat and redundancy.</u>
+Regarding Code 8.1.8, another critical observation must be made regarding memory layout. <u>An enum can represent different types because it reserves STACK memory equal to its largest variant (plus a small discriminant tag). If one variant holds a massive struct while the others are tiny, every single record in an array or vector will consume the memory of that massive struct, leading to severe memory bloat and redundancy ($\star$).</u>
 
-The alternative approach—using traits and the `dyn` keyword (e.g., `Vec<Box<dyn Trait>>`)—solves this specific memory bloat. It ensures that every record in the array occupies a uniform, small size on the stack (a 16-byte fat pointer), leaving the actual dynamically sized data on the HEAP.
+Generally speaking, if you were to use <u>a fixed-size array</u> of an enum type (such as `SpreadsheetCell`), the data would be stored entirely on the stack (barring any heap-allocated data within the variants). However, <u>when using a `Vec<T>`, the enum (`T`) data is stored directly on the heap</u>.
+
+<u>Even though this requires an extra indirection hop (from the stack metadata to the heap buffer), the enum instances themselves are still laid out contiguously in memory, one after the other.</u> That said, if your enum variants contain pointers (such as `String` or another `Vec`), accessing those inner fields will still involve pointer chasing, which can cause cache misses and impact CPU performance.
+
+The alternative approach—using traits and the `dyn` keyword (e.g., `Vec<Box<dyn Trait>>`)—solves this specific memory bloat ($\star$). <u>If a vector is used</u>, it ensures that every record occupies a uniform, small size (a 16-byte fat pointer) stored within the vector's <u>heap</u> buffer, leaving the actual dynamically sized data further down on the HEAP. If you use a fixed-size array instead (e.g., `[Box<dyn Trait>; N]`), it ensures that every record occupies a uniform, small size <u>directly on the stack</u> (as a 16-byte fat pointer pointing to the HEAP).
 
 However, this architectural shift introduces strict performance trade-offs:
 
@@ -234,7 +238,7 @@ However, this architectural shift introduces strict performance trade-offs:
 - **Allocation Overhead**: Every single record requires an individual heap allocation when created, whereas an array of enums allocates everything in one fast, contiguous block.
 - **Dynamic Dispatch (Vtable)**: `dyn Trait` forces the program to look up method addresses in a virtual method table at runtime, adding execution overhead compared to the direct, static dispatch used by enums.
 
-Ultimately, neither approach is universally superior. Enums guarantee blistering speed through contiguous memory but risk stack bloat if variant sizes are mismatched. **Trait objects** offer stack memory efficiency and unlimited extensibility at the cost of heap indirection. <u>The choice must be rigorously evaluated based on whether your specific application is bottlenecked by memory footprint or CPU execution speed.</u>
+Ultimately, neither approach is universally superior. Enums guarantee blistering speed through contiguous memory but risk stack bloat if variant sizes are mismatched. **Trait objects** offer stack memory efficiency and unlimited extensibility at the cost of heap indirection.
 
 >Rust needs to know what types will be in the vector at compile time so that it knows exactly how much memory on the heap will be needed to store each element. We must also be explicit about what types are allowed in this vector. If Rust allowed a vector to hold any type, there would be a chance that one or more of the types would cause errors with the operations performed on the elements of the vector. Using an enum plus a `match` expression means that Rust will ensure at compile time that every possible case is handled, as discussed in Ch. 6.
 
